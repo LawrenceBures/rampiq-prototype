@@ -19,7 +19,7 @@ export type ScanSource = 'camera_jsqr' | 'datawedge_keystroke' | 'manual_entry';
 // ============================================================
 
 export interface QrTarget {
-  id: string;                 // QR-encoded value (e.g. "LAX-GATE-G42B")
+  id: string;                 // QR-encoded value (e.g. "LAX-GATE-52A")
   target_type: QrTargetType;
   station: string;
   gate_id: string | null;
@@ -483,3 +483,38 @@ export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 };
+
+// Live pressure for an active assignment — computed from events, not stored
+export interface AssignmentPressure {
+  assignment_id: string;
+  open_events: number;
+  critical_high_count: number;
+  oldest_unresolved_age: string | null; // eventAge format
+  time_since_assignment: string;        // eventAge format
+}
+
+// Explainable operational suggestion — no ML, no opaque scoring
+export interface OperationalSuggestion {
+  suggested_team_id: string;
+  suggested_team_label: string;
+  reasons: string[];
+  confidence_factors: {
+    cert_match: number;        // 0-100
+    zone_familiarity: number;  // 0-100
+    availability: number;      // 0-100
+    equip_coverage: number;    // 0-100
+    workload: number;          // 0-100
+  };
+}
+
+export type TransitionType = 'REASSIGN' | 'HANDOFF' | 'ESCALATION';
+
+export interface AssignmentTransition {
+  id: string;
+  created_at: string;
+  from_assignment_id: string;
+  to_assignment_id: string;
+  transition_type: TransitionType;
+  reason: string | null;
+  initiated_by: string;
+}

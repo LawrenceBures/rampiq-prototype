@@ -167,9 +167,15 @@ const LS_QR_TARGETS = 'rampiq_qr_targets';
 
 // Fallback QR targets for localStorage mode
 const FALLBACK_QR_TARGETS: QrTarget[] = [
-  { id: 'LAX-GATE-G42B', target_type: 'GATE', station: 'LAX', gate_id: 'G42B', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate G42B', active: true, created_at: '' },
-  { id: 'LAX-GATE-G47A', target_type: 'GATE', station: 'LAX', gate_id: 'G47A', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate G47A', active: true, created_at: '' },
-  { id: 'LAX-GATE-G50', target_type: 'GATE', station: 'LAX', gate_id: 'G50', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate G50', active: true, created_at: '' },
+  { id: 'LAX-GATE-52A', target_type: 'GATE', station: 'LAX', gate_id: '52A', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52A · Alpha', active: true, created_at: '' },
+  { id: 'LAX-GATE-52B', target_type: 'GATE', station: 'LAX', gate_id: '52B', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52B · Bravo', active: true, created_at: '' },
+  { id: 'LAX-GATE-52C', target_type: 'GATE', station: 'LAX', gate_id: '52C', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52C · Charlie', active: true, created_at: '' },
+  { id: 'LAX-GATE-52D', target_type: 'GATE', station: 'LAX', gate_id: '52D', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52D · Delta', active: true, created_at: '' },
+  { id: 'LAX-GATE-52E', target_type: 'GATE', station: 'LAX', gate_id: '52E', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52E · Echo', active: true, created_at: '' },
+  { id: 'LAX-GATE-52F', target_type: 'GATE', station: 'LAX', gate_id: '52F', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52F · Foxtrot', active: true, created_at: '' },
+  { id: 'LAX-GATE-52G', target_type: 'GATE', station: 'LAX', gate_id: '52G', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52G · Golf', active: true, created_at: '' },
+  { id: 'LAX-GATE-52H', target_type: 'GATE', station: 'LAX', gate_id: '52H', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52H · Hotel', active: true, created_at: '' },
+  { id: 'LAX-GATE-52I', target_type: 'GATE', station: 'LAX', gate_id: '52I', equipment_id: null, equipment_kind: null, flight_id: null, label: 'Gate 52I · India', active: true, created_at: '' },
   { id: 'LAX-EQUIP-TUG-042', target_type: 'EQUIPMENT', station: 'LAX', gate_id: null, equipment_id: 'TUG-042', equipment_kind: 'TUG', flight_id: null, label: 'Tug #42', active: true, created_at: '' },
   { id: 'LAX-EQUIP-BELT-007', target_type: 'EQUIPMENT', station: 'LAX', gate_id: null, equipment_id: 'BELT-007', equipment_kind: 'BELT_LOADER', flight_id: null, label: 'Belt Loader #7', active: true, created_at: '' },
   { id: 'LAX-EQUIP-GPU-031', target_type: 'EQUIPMENT', station: 'LAX', gate_id: null, equipment_id: 'GPU-031', equipment_kind: 'GPU', flight_id: null, label: 'GPU #31', active: true, created_at: '' },
@@ -372,10 +378,90 @@ export function useQrTargets(): QrTarget[] {
   return targets;
 }
 
-export function useUsers(): UserLite[] {
+export function useUsers(): {
+  users: UserLite[];
+  loading: boolean;
+  error: string | null;
+  usingFallback: boolean;
+  timedOut: boolean;
+  retry: () => void;
+} {
   const [users, setUsers] = useState<UserLite[]>([]);
-  useEffect(() => { fetchUsers().then(setUsers); }, []);
-  return users;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+
+  const doFetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setTimedOut(false);
+
+    console.log('[useUsers] Fetching users...');
+    const sb = getSupabase();
+
+    if (!sb) {
+      console.log('[useUsers] No Supabase client — fallback activated');
+      setUsers(FALLBACK_USERS);
+      setUsingFallback(true);
+      setLoading(false);
+      return;
+    }
+
+    // Race the Supabase query against a 5-second timeout
+    let resolved = false;
+    const timeout = new Promise<'TIMEOUT'>((resolve) => {
+      setTimeout(() => { if (!resolved) resolve('TIMEOUT'); }, 5000);
+    });
+
+    const query = (async () => {
+      try {
+        const { data, error: sbErr } = await sb
+          .from('users_lite')
+          .select('*')
+          .eq('active', true)
+          .order('role_type');
+        if (resolved) return 'LATE'; // timeout already fired
+        if (sbErr) {
+          console.error('[useUsers] Supabase error:', sbErr.message);
+          return { error: `Supabase: ${sbErr.message}` };
+        }
+        console.log('[useUsers] Supabase response received:', data?.length, 'users');
+        return { data: data as UserLite[] };
+      } catch (err) {
+        if (resolved) return 'LATE';
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[useUsers] Fetch exception:', msg);
+        return { error: `Network: ${msg}` };
+      }
+    })();
+
+    const result = await Promise.race([query, timeout]);
+    resolved = true;
+
+    if (result === 'TIMEOUT') {
+      console.warn('[useUsers] Fetch timeout after 5s — fallback activated');
+      setTimedOut(true);
+      setError('Supabase fetch timed out after 5s');
+      setUsers(FALLBACK_USERS);
+      setUsingFallback(true);
+    } else if (result === 'LATE') {
+      // query resolved after timeout — ignore
+    } else if ('error' in result) {
+      console.warn('[useUsers] Fetch failed —', result.error);
+      setError(result.error || 'Unknown error');
+      setUsers(FALLBACK_USERS);
+      setUsingFallback(true);
+    } else {
+      setUsers(result.data);
+      setUsingFallback(false);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { doFetch(); }, [doFetch]);
+
+  return { users, loading, error, usingFallback, timedOut, retry: doFetch };
 }
 
 // ============================================================
@@ -442,9 +528,9 @@ const FALLBACK_TEAM_MEMBERS: TeamMember[] = [
 ];
 
 const FALLBACK_ZONES: Zone[] = [
-  { id: 'T7-NORTH', label: 'Terminal 7 North', station: 'LAX', gate_ids: ['G42B', 'G47A'], active: true },
-  { id: 'T7-SOUTH', label: 'Terminal 7 South', station: 'LAX', gate_ids: ['G50'], active: true },
-  { id: 'TBIT-WEST', label: 'TBIT West', station: 'LAX', gate_ids: [], active: true },
+  { id: 'EAGLE-NORTH', label: 'Eagle North', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+  { id: 'EAGLE-MID', label: 'Eagle Mid', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+  { id: 'EAGLE-SOUTH', label: 'Eagle South', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
 ];
 
 const FALLBACK_SHIFT_STATUSES: ShiftStatusRecord[] = [
@@ -859,24 +945,24 @@ const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
   {
     id: 'seed-alpha-am', created_at: new Date(Date.now() - 7200000).toISOString(),
     team_id: 'ALPHA-AM', assigned_user_ids: ['CM','TC12','BR01','LD03'],
-    zone_id: 'T7-NORTH', gate_ids: ['G42B','G47A'], equipment_ids: ['TUG-042','BELT-007'],
+    zone_id: 'EAGLE-NORTH', gate_ids: ['52A','52B','52C'], equipment_ids: ['TUG-042','BELT-007'],
     assigned_by: 'LD03', shift_window: 'AM',
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
     status: 'ACTIVE', completed_at: null, completed_by: null,
-    notes: 'Standard AM assignment — Alpha covers Terminal 7 North gates',
-    team_label: 'Alpha Team', zone_label: 'Terminal 7 North', assigned_by_name: 'Lead 3',
+    notes: 'Standard AM assignment — Alpha covers Eagle North cluster',
+    team_label: 'Alpha Team', zone_label: 'Eagle North', assigned_by_name: 'Lead 3',
   },
   {
     id: 'seed-bravo-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
     team_id: 'BRAVO-PM', assigned_user_ids: ['TC14'],
-    zone_id: 'T7-SOUTH', gate_ids: ['G50'], equipment_ids: ['GPU-031'],
+    zone_id: 'EAGLE-SOUTH', gate_ids: ['52G','52H','52I'], equipment_ids: ['GPU-031'],
     assigned_by: 'TC14', shift_window: 'PM',
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
     status: 'ACTIVE', completed_at: null, completed_by: null,
-    notes: 'Standard PM assignment — Bravo covers Terminal 7 South',
-    team_label: 'Bravo Team', zone_label: 'Terminal 7 South', assigned_by_name: 'Tug Crew 14',
+    notes: 'Standard PM assignment — Bravo covers Eagle South cluster',
+    team_label: 'Bravo Team', zone_label: 'Eagle South', assigned_by_name: 'Tug Crew 14',
   },
 ];
 
@@ -1009,6 +1095,207 @@ export async function computeAssignmentOutcome(assignment: CrewAssignment): Prom
     high_severity_count: highSev.length,
     resolved_count: resolved.length,
   };
+}
+
+// ---- Assignment pressure (live, from events) ----
+
+import type {
+  AssignmentPressure,
+  OperationalSuggestion,
+  AssignmentTransition,
+  TransitionType,
+} from './rampiq-types';
+import { eventAge } from './rampiq-types';
+
+export function computeAssignmentPressure(
+  assignment: CrewAssignment,
+  events: RampiqEvent[],
+): AssignmentPressure {
+  const zoneEvents = events.filter(e => {
+    const isOpen = e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED';
+    const matchGate = e.gate_id && assignment.gate_ids.includes(e.gate_id);
+    const matchEquip = e.equipment_id && assignment.equipment_ids.includes(e.equipment_id);
+    return isOpen && (matchGate || matchEquip);
+  });
+
+  const critHigh = zoneEvents.filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH');
+  const oldest = zoneEvents.length > 0
+    ? zoneEvents.reduce((o, e) => e.created_at < o.created_at ? e : o)
+    : null;
+
+  return {
+    assignment_id: assignment.id,
+    open_events: zoneEvents.length,
+    critical_high_count: critHigh.length,
+    oldest_unresolved_age: oldest ? eventAge(oldest.created_at) : null,
+    time_since_assignment: eventAge(assignment.created_at),
+  };
+}
+
+// ---- Explainable suggestion engine (no ML) ----
+
+export async function computeSuggestion(
+  zoneId: string,
+  shift: ShiftWindow,
+  liveEvents: RampiqEvent[],
+): Promise<OperationalSuggestion | null> {
+  const [teams, allShifts, zones] = await Promise.all([
+    fetchTeams(),
+    fetchAllShiftStatuses(),
+    fetchZones(),
+  ]);
+
+  const zone = zones.find(z => z.id === zoneId);
+  if (!zone) return null;
+
+  const shiftTeams = teams.filter(t => t.shift === shift);
+  if (shiftTeams.length === 0) return null;
+
+  const shiftMap = new Map(allShifts.map(s => [s.user_id, s]));
+
+  // Score each team
+  const scored = await Promise.all(shiftTeams.map(async (team) => {
+    const members = await fetchTeamMembers(team.id);
+    const memberIds = members.map(m => m.user_id);
+    const total = memberIds.length || 1;
+
+    // Availability: how many are on shift
+    const onShiftCount = memberIds.filter(uid => shiftMap.get(uid)?.on_shift).length;
+    const availability = Math.round((onShiftCount / total) * 100);
+
+    // Zone familiarity: how many have prior zone assignments here
+    let familiarCount = 0;
+    for (const uid of memberIds) {
+      const assignments = await fetchUserZoneAssignments(uid);
+      if (assignments.some(a => a.zone_id === zoneId)) familiarCount++;
+    }
+    const zone_familiarity = Math.round((familiarCount / total) * 100);
+
+    // Equipment coverage: how many zone equipment types are covered
+    const zoneEquipTypes = new Set<string>();
+    // Infer equipment types from zone's gate equipment assignments
+    const activeAssignments = await fetchCrewAssignments({ status: 'ACTIVE' });
+    activeAssignments.forEach(a => {
+      if (a.zone_id === zoneId) a.equipment_ids.forEach(eq => zoneEquipTypes.add(eq.split('-')[0]));
+    });
+    const equipTypesNeeded = zoneEquipTypes.size || 1;
+    let coveredTypes = 0;
+    for (const uid of memberIds) {
+      const quals = await fetchUserEquipmentQuals(uid);
+      quals.forEach(q => { if (q.status === 'ACTIVE') zoneEquipTypes.delete(q.equip_code); });
+    }
+    coveredTypes = equipTypesNeeded - zoneEquipTypes.size;
+    const equip_coverage = Math.round((coveredTypes / equipTypesNeeded) * 100);
+
+    // Cert match: how many members have certs matching zone needs
+    let certMatchCount = 0;
+    for (const uid of memberIds) {
+      const certs = await fetchUserCertifications(uid);
+      const activeCerts = certs.filter(c => c.status === 'ACTIVE').length;
+      if (activeCerts >= 3) certMatchCount++; // simplified: 3+ active certs = qualified
+    }
+    const cert_match = Math.round((certMatchCount / total) * 100);
+
+    // Workload: inverse of open events currently assigned to this team
+    const teamAssignments = activeAssignments.filter(a => a.team_id === team.id);
+    let teamOpenEvents = 0;
+    teamAssignments.forEach(a => {
+      liveEvents.forEach(e => {
+        const isOpen = e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED';
+        if (isOpen && ((e.gate_id && a.gate_ids.includes(e.gate_id)) || (e.equipment_id && a.equipment_ids.includes(e.equipment_id)))) {
+          teamOpenEvents++;
+        }
+      });
+    });
+    const workload = Math.max(0, 100 - teamOpenEvents * 20);
+
+    return { team, availability, zone_familiarity, equip_coverage, cert_match, workload, onShiftCount, familiarCount, certMatchCount, total };
+  }));
+
+  // Pick best team by sum of factors
+  const best = scored.reduce((a, b) => {
+    const aScore = a.availability + a.zone_familiarity + a.equip_coverage + a.cert_match + a.workload;
+    const bScore = b.availability + b.zone_familiarity + b.equip_coverage + b.cert_match + b.workload;
+    return bScore > aScore ? b : a;
+  });
+
+  // Build human-readable reasons
+  const reasons: string[] = [];
+  if (best.availability >= 75) reasons.push(`${best.onShiftCount}/${best.total} members on shift`);
+  if (best.cert_match >= 75) reasons.push(`${best.certMatchCount}/${best.total} members cert-qualified`);
+  if (best.zone_familiarity > 0) reasons.push(`${best.familiarCount}/${best.total} familiar with zone`);
+  if (best.workload >= 80) reasons.push('lowest active workload');
+  if (best.equip_coverage >= 50) reasons.push('equipment qualification coverage');
+  if (reasons.length === 0) reasons.push('best available match');
+
+  return {
+    suggested_team_id: best.team.id,
+    suggested_team_label: best.team.label,
+    reasons,
+    confidence_factors: {
+      cert_match: best.cert_match,
+      zone_familiarity: best.zone_familiarity,
+      availability: best.availability,
+      equip_coverage: best.equip_coverage,
+      workload: best.workload,
+    },
+  };
+}
+
+// ---- Reassignment (immutable history) ----
+
+export async function reassignCrew(
+  fromAssignmentId: string,
+  newAssignment: Parameters<typeof createCrewAssignment>[0],
+  reason: string,
+  initiatedBy: string,
+  transitionType: TransitionType = 'REASSIGN',
+): Promise<{ newAssignment: CrewAssignment; transition: AssignmentTransition } | null> {
+  // Complete old assignment
+  await completeCrewAssignment(fromAssignmentId, initiatedBy);
+
+  // Create new assignment
+  const created = await createCrewAssignment(newAssignment);
+  if (!created) return null;
+
+  // Log transition
+  const sb = getSupabase();
+  const transRow = {
+    from_assignment_id: fromAssignmentId,
+    to_assignment_id: created.id,
+    transition_type: transitionType,
+    reason,
+    initiated_by: initiatedBy,
+  };
+
+  let transition: AssignmentTransition;
+  if (sb) {
+    const { data, error } = await sb.from('assignment_transitions').insert(transRow).select().single();
+    if (error) {
+      console.error('[store] transition log error:', error.message);
+      transition = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...transRow };
+    } else {
+      transition = data as AssignmentTransition;
+    }
+  } else {
+    transition = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...transRow };
+  }
+
+  return { newAssignment: created, transition };
+}
+
+export async function fetchTransitions(assignmentId: string): Promise<AssignmentTransition[]> {
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb
+      .from('assignment_transitions')
+      .select('*')
+      .or(`from_assignment_id.eq.${assignmentId},to_assignment_id.eq.${assignmentId}`)
+      .order('created_at', { ascending: false });
+    if (!error && data) return data as AssignmentTransition[];
+    console.error('[store] transitions fetch error:', error?.message);
+  }
+  return [];
 }
 
 // ---- Crew assignment hooks ----

@@ -9,7 +9,7 @@ import type { ShiftWindow } from '@/lib/rampiq-types';
 export default function WorkforceReadinessPage() {
   const [shift, setShift] = useState<ShiftWindow>('AM');
   const readiness = useOperationalReadiness('LAX', shift);
-  const users = useUsers();
+  const { users } = useUsers();
 
   return (
     <div className="rq-ops-board">

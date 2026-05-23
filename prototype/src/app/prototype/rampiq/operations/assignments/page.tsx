@@ -11,21 +11,27 @@ import {
   completeCrewAssignment,
   cancelCrewAssignment,
   computeAssignmentOutcome,
+  computeAssignmentPressure,
+  computeSuggestion,
+  reassignCrew,
   useLiveEvents,
 } from '@/lib/store';
 import {
   eventAge, durationLabel,
-  ASSIGNMENT_STATUS_LABELS,
 } from '@/lib/rampiq-types';
-import type { ShiftWindow, Team, Zone, CrewAssignment, AssignmentOutcome } from '@/lib/rampiq-types';
+import type {
+  ShiftWindow, Team, Zone, CrewAssignment,
+  AssignmentOutcome, AssignmentPressure, OperationalSuggestion,
+} from '@/lib/rampiq-types';
 
-export default function CrewAssignmentsPage() {
+export default function OperationalAssignmentsPage() {
   const [shift, setShift] = useState<ShiftWindow>('AM');
   const { assignments, loading, refresh } = useCrewAssignments(shift);
   const { events } = useLiveEvents(5000);
   const [teams, setTeams] = useState<Team[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [outcomes, setOutcomes] = useState<Map<string, AssignmentOutcome>>(new Map());
+  const [suggestion, setSuggestion] = useState<OperationalSuggestion | null>(null);
 
   // Form state
   const [formTeam, setFormTeam] = useState('');
@@ -54,6 +60,12 @@ export default function CrewAssignmentsPage() {
     });
   }, [assignments]);
 
+  // Compute suggestion when zone is selected
+  useEffect(() => {
+    if (!formZone) { setSuggestion(null); return; }
+    computeSuggestion(formZone, shift, events).then(setSuggestion);
+  }, [formZone, shift, events]);
+
   // Update available gates when zone changes
   const selectedZone = zones.find(z => z.id === formZone);
   useEffect(() => {
@@ -64,18 +76,24 @@ export default function CrewAssignmentsPage() {
   // KPIs
   const active = assignments.filter(a => a.status === 'ACTIVE');
   const completed = assignments.filter(a => a.status === 'COMPLETED');
-  const overridesToday = assignments.filter(a => a.override_used).length;
+  const overrides = assignments.filter(a => a.override_used).length;
   const openEvents = events.filter(e => e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED');
+
+  // Compute pressure for active assignments
+  const pressureMap = new Map<string, AssignmentPressure>();
+  active.forEach(a => {
+    pressureMap.set(a.id, computeAssignmentPressure(a, events));
+  });
 
   async function handleCreate() {
     if (!formTeam || !formZone) return;
     setSubmitting(true);
 
-    // Snapshot team members
     const members = await fetchTeamMembers(formTeam);
     const userIds = members.map(m => m.user_id);
-
     const equipIds = formEquipment.trim() ? formEquipment.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+    const isOverride = formOverride && suggestion && formTeam !== suggestion.suggested_team_id;
 
     await createCrewAssignment({
       team_id: formTeam,
@@ -83,15 +101,16 @@ export default function CrewAssignmentsPage() {
       zone_id: formZone,
       gate_ids: formGates,
       equipment_ids: equipIds,
-      assigned_by: 'CM', // TODO: use actual identity
+      assigned_by: 'CM',
       shift_window: shift,
-      override_used: formOverride,
-      override_reason: formOverride ? formOverrideReason : undefined,
-      override_by: formOverride ? 'CM' : undefined,
+      recommended_team_id: suggestion?.suggested_team_id,
+      recommendation_reason: suggestion?.reasons.join(' · '),
+      override_used: isOverride || false,
+      override_reason: isOverride ? formOverrideReason : undefined,
+      override_by: isOverride ? 'CM' : undefined,
       notes: formNotes || undefined,
     });
 
-    // Reset form
     setFormTeam('');
     setFormZone('');
     setFormGates([]);
@@ -100,6 +119,7 @@ export default function CrewAssignmentsPage() {
     setFormOverride(false);
     setFormOverrideReason('');
     setSubmitting(false);
+    setSuggestion(null);
     refresh();
   }
 
@@ -122,9 +142,9 @@ export default function CrewAssignmentsPage() {
       <Link href="/prototype/rampiq" className="rq-back">&larr; Back</Link>
 
       <div className="rq-gate-header">
-        <div className="rq-gate-id" style={{ fontSize: 20 }}>Crew Assignments</div>
+        <div className="rq-gate-id" style={{ fontSize: 20 }}>Operational Assignments</div>
         <div className="rq-gate-meta">
-          LAX &middot; <b>Crew Chief</b> &middot; Operational Decision Trail
+          LAX &middot; <b>Coordination</b> &middot; Decision Trail
         </div>
       </div>
 
@@ -146,7 +166,7 @@ export default function CrewAssignmentsPage() {
         </div>
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Overrides</div>
-          <div className={`rq-kpi-val${overridesToday > 0 ? ' rq-v-a' : ''}`}>{overridesToday}</div>
+          <div className={`rq-kpi-val${overrides > 0 ? ' rq-v-a' : ''}`}>{overrides}</div>
         </div>
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Completed</div>
@@ -158,27 +178,73 @@ export default function CrewAssignmentsPage() {
         </div>
       </div>
 
-      {/* Active Assignments */}
+      {/* Active Assignments with Pressure */}
       <div className="rq-eyebrow">Active Assignments</div>
       {loading && <div className="rq-quiet">Loading...</div>}
       {!loading && active.length === 0 && (
         <div className="rq-quiet">No active assignments for {shift} shift</div>
       )}
-      {active.map(a => (
-        <AssignmentCard key={a.id} a={a} actionId={actionId}
-          onComplete={() => handleComplete(a.id)}
-          onCancel={() => handleCancel(a.id)} />
-      ))}
+      {active.map(a => {
+        const pressure = pressureMap.get(a.id);
+        return (
+          <ActiveAssignmentCard key={a.id} a={a} pressure={pressure || null}
+            actionId={actionId}
+            onComplete={() => handleComplete(a.id)}
+            onCancel={() => handleCancel(a.id)} />
+        );
+      })}
 
       {/* New Assignment Form */}
       <div className="rq-eyebrow">New Assignment</div>
+
+      {/* Suggestion display */}
+      {suggestion && formZone && (
+        <div className="rq-suggestion">
+          <div className="rq-suggestion-label">Suggested because</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700 }}>
+              {suggestion.suggested_team_label}
+            </span>
+          </div>
+          <div className="rq-suggestion-reasons">
+            {suggestion.reasons.join(' · ')}
+          </div>
+          {/* Factor breakdown */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            {Object.entries(suggestion.confidence_factors).map(([key, val]) => (
+              <span key={key} style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                padding: '1px 4px', border: '1px solid var(--rq-line)',
+                color: val >= 75 ? 'var(--rq-green)' : val >= 50 ? 'var(--rq-amber)' : 'var(--rq-ink-3)',
+              }}>
+                {key.replace(/_/g, ' ')} {val}%
+              </span>
+            ))}
+          </div>
+          <button className="rq-btn-secondary" style={{ marginTop: 8, padding: '8px', fontSize: 9 }}
+            onClick={() => { setFormTeam(suggestion.suggested_team_id); setFormOverride(false); }}>
+            Accept Suggestion
+          </button>
+        </div>
+      )}
+
       <div style={{ padding: '0 16px 14px' }}>
         <div className="rq-field" style={{ padding: 0, marginBottom: 10 }}>
           <label className="rq-label">Team</label>
-          <select className="rq-select" value={formTeam} onChange={e => setFormTeam(e.target.value)}>
+          <select className="rq-select" value={formTeam} onChange={e => {
+            setFormTeam(e.target.value);
+            if (suggestion && e.target.value !== suggestion.suggested_team_id) {
+              setFormOverride(true);
+            } else {
+              setFormOverride(false);
+            }
+          }}>
             <option value="">Select team...</option>
             {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.label} ({t.shift})</option>
+              <option key={t.id} value={t.id}>
+                {t.label} ({t.shift})
+                {suggestion && t.id === suggestion.suggested_team_id ? ' — suggested' : ''}
+              </option>
             ))}
           </select>
         </div>
@@ -226,35 +292,22 @@ export default function CrewAssignmentsPage() {
             placeholder="Assignment context..." style={{ minHeight: 50 }} />
         </div>
 
-        {/* Override controls */}
-        <div style={{
-          padding: '10px', border: '1px dashed var(--rq-line-2)', marginBottom: 10,
-          background: formOverride ? 'rgba(245,177,61,.03)' : 'transparent',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => setFormOverride(!formOverride)}>
-            <div style={{
-              width: 16, height: 16, border: `1.5px solid ${formOverride ? 'var(--rq-amber)' : 'var(--rq-ink-4)'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, color: 'var(--rq-amber)',
-              background: formOverride ? 'rgba(245,177,61,.08)' : 'transparent',
-            }}>
-              {formOverride ? '\u2713' : ''}
+        {/* Override controls — auto-activated when choosing a different team than suggested */}
+        {formOverride && suggestion && formTeam && formTeam !== suggestion.suggested_team_id && (
+          <div style={{
+            padding: '10px', border: '1px solid var(--rq-amber-dim)',
+            background: 'rgba(245,177,61,.03)', marginBottom: 10,
+          }}>
+            <div className="rq-override-tag" style={{ marginBottom: 6 }}>
+              Override — different from suggestion
             </div>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-2)' }}>
-              Override recommendation
-            </span>
+            <label className="rq-label">Override reason</label>
+            <textarea className="rq-textarea" value={formOverrideReason}
+              onChange={e => setFormOverrideReason(e.target.value)}
+              placeholder="Why are you choosing a different team?"
+              style={{ minHeight: 40 }} />
           </div>
-          {formOverride && (
-            <div style={{ marginTop: 8 }}>
-              <label className="rq-label">Override reason</label>
-              <textarea className="rq-textarea" value={formOverrideReason}
-                onChange={e => setFormOverrideReason(e.target.value)}
-                placeholder="Why are you overriding the recommendation?"
-                style={{ minHeight: 40 }} />
-            </div>
-          )}
-        </div>
+        )}
 
         <button className="rq-btn-primary" onClick={handleCreate}
           disabled={submitting || !formTeam || !formZone}
@@ -279,6 +332,11 @@ export default function CrewAssignmentsPage() {
                     {a.zone_label || a.zone_id}
                   </span>
                 </div>
+                {a.override_used && (
+                  <span className="rq-override-tag" style={{ marginTop: 4 }}>
+                    Override: {a.override_reason || 'no reason given'}
+                  </span>
+                )}
                 {outcome && (
                   <div className="rq-kpis rq-kpis-4" style={{ margin: '8px 0 0', border: '1px solid var(--rq-line)' }}>
                     <div className="rq-kpi" style={{ padding: '6px 4px' }}>
@@ -312,11 +370,12 @@ export default function CrewAssignmentsPage() {
 }
 
 // ============================================================
-// Assignment Card Component
+// Active Assignment Card with Pressure
 // ============================================================
 
-function AssignmentCard({ a, actionId, onComplete, onCancel }: {
+function ActiveAssignmentCard({ a, pressure, actionId, onComplete, onCancel }: {
   a: CrewAssignment;
+  pressure: AssignmentPressure | null;
   actionId: string | null;
   onComplete: () => void;
   onCancel: () => void;
@@ -325,7 +384,7 @@ function AssignmentCard({ a, actionId, onComplete, onCancel }: {
 
   return (
     <div className={`rq-assign-card${a.override_used ? ' has-override' : ''}`}>
-      {/* Header: team + zone + age */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700 }}>
           {a.team_label || a.team_id}
@@ -338,7 +397,33 @@ function AssignmentCard({ a, actionId, onComplete, onCancel }: {
         </span>
       </div>
 
-      {/* Crew members + gates + equipment */}
+      {/* Pressure bar */}
+      {pressure && (
+        <div className="rq-pressure-bar">
+          <div className="rq-pressure-cell">
+            <div className="rq-pressure-val" style={{ color: pressure.open_events > 0 ? 'var(--rq-amber)' : 'var(--rq-ink-4)' }}>
+              {pressure.open_events}
+            </div>
+            <div className="rq-pressure-lbl">Open</div>
+          </div>
+          <div className="rq-pressure-cell">
+            <div className="rq-pressure-val" style={{ color: pressure.critical_high_count > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>
+              {pressure.critical_high_count}
+            </div>
+            <div className="rq-pressure-lbl">Crit/High</div>
+          </div>
+          <div className="rq-pressure-cell">
+            <div className="rq-pressure-val">{pressure.oldest_unresolved_age || '--'}</div>
+            <div className="rq-pressure-lbl">Oldest</div>
+          </div>
+          <div className="rq-pressure-cell">
+            <div className="rq-pressure-val">{pressure.time_since_assignment}</div>
+            <div className="rq-pressure-lbl">Assigned</div>
+          </div>
+        </div>
+      )}
+
+      {/* Crew + gates + equipment chips */}
       <div className="rq-assign-chips">
         {a.assigned_user_ids.map(uid => (
           <span className="rq-assign-chip" key={uid}>{uid}</span>
@@ -367,17 +452,16 @@ function AssignmentCard({ a, actionId, onComplete, onCancel }: {
         Assigned by {a.assigned_by_name || a.assigned_by} &middot; {a.shift_window}
       </div>
 
-      {/* Recommendation / Override indicators */}
+      {/* Recommendation / Override */}
       <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
         {a.recommendation_reason && (
-          <span className="rq-rec-tag">Recommended: {a.recommendation_reason}</span>
+          <span className="rq-rec-tag">Suggested: {a.recommendation_reason}</span>
         )}
         {a.override_used && (
           <span className="rq-override-tag">Override: {a.override_reason || 'no reason given'}</span>
         )}
       </div>
 
-      {/* Notes */}
       {a.notes && (
         <div style={{ fontSize: 12, color: 'var(--rq-ink-2)', marginTop: 6, lineHeight: 1.4 }}>
           {a.notes}

@@ -41,11 +41,11 @@ export default function RampIQLanding() {
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
-      <Link href="/prototype/rampiq/manager/crews" className="rq-module">
-        <div className="rq-module-icon">CA</div>
+      <Link href="/prototype/rampiq/operations/assignments" className="rq-module">
+        <div className="rq-module-icon">OA</div>
         <div>
-          <div className="rq-module-name">Crew Assignments</div>
-          <div className="rq-module-desc">Assign crews &middot; override controls &middot; decision trail</div>
+          <div className="rq-module-name">Operational Assignments</div>
+          <div className="rq-module-desc">Coordination &middot; suggestions &middot; override controls &middot; decision trail</div>
         </div>
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>

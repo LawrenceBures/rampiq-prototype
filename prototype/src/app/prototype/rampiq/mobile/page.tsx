@@ -9,7 +9,7 @@ import { isOnline } from '@/lib/offline-queue';
 import type { AgentIdentity, ShiftWindow, RoleType } from '@/lib/rampiq-types';
 
 export default function AgentMobile() {
-  const users = useUsers();
+  const { users, loading, error, usingFallback, timedOut, retry } = useUsers();
   const [identity, setId] = useState<AgentIdentity | null>(null);
   const [queueDepth, setQueueDepth] = useState(0);
   const [online, setOnline] = useState(true);
@@ -61,6 +61,47 @@ export default function AgentMobile() {
 
         <div className="rq-eyebrow">Who are you?</div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="rq-quiet" style={{ padding: '24px 16px' }}>Loading identities...</div>
+        )}
+
+        {/* Error state */}
+        {error && (
+          <div style={{
+            margin: '0 16px 8px', padding: '10px 12px',
+            border: '1px solid var(--rq-red-dim)',
+            background: 'rgba(255,92,92,.04)',
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+              color: 'var(--rq-red)', marginBottom: 4,
+            }}>
+              Fetch error
+            </div>
+            <div style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+              color: 'var(--rq-ink-3)', wordBreak: 'break-all',
+            }}>
+              {error}
+            </div>
+          </div>
+        )}
+
+        {/* Debug info */}
+        <div style={{
+          margin: '0 16px 8px', padding: '6px 10px',
+          border: '1px solid var(--rq-line)',
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+          color: 'var(--rq-ink-4)',
+        }}>
+          {loading ? 'fetching...' : `${users.length} identities loaded`}
+          {timedOut && <> &middot; <span style={{ color: 'var(--rq-red)' }}>timeout</span></>}
+          {usingFallback && <> &middot; <span style={{ color: 'var(--rq-amber)' }}>fallback</span></>}
+          {!usingFallback && !loading && users.length > 0 && <> &middot; <span style={{ color: 'var(--rq-green)' }}>supabase</span></>}
+        </div>
+
+        {/* User list */}
         <div style={{ padding: '0 16px' }}>
           {users.map(u => (
             <button
@@ -76,6 +117,13 @@ export default function AgentMobile() {
               </div>
             </button>
           ))}
+        </div>
+
+        {/* Retry button */}
+        <div style={{ padding: '8px 16px' }}>
+          <button className="rq-btn-secondary" onClick={retry} style={{ fontSize: 10 }}>
+            Refresh Identities
+          </button>
         </div>
 
         <div className="rq-quiet">RampIQ &middot; Phase 1</div>

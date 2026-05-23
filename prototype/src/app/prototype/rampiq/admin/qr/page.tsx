@@ -4,14 +4,20 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 
 const QR_CODES = [
-  { payload: 'LAX-GATE-G42B',       label: 'Gate G42B',        type: 'Gate' },
-  { payload: 'LAX-GATE-G47A',       label: 'Gate G47A',        type: 'Gate' },
-  { payload: 'LAX-GATE-G50',        label: 'Gate G50',         type: 'Gate' },
-  { payload: 'LAX-EQUIP-TUG-042',   label: 'Tug #42',          type: 'Equipment' },
-  { payload: 'LAX-EQUIP-BELT-007',  label: 'Belt Loader #7',   type: 'Equipment' },
-  { payload: 'LAX-EQUIP-GPU-031',   label: 'GPU #31',          type: 'Equipment' },
-  { payload: 'LAX-EQUIP-LAV-003',   label: 'Lav Truck #3',     type: 'Equipment' },
-  { payload: 'LAX-CHECK-RAMPCTL',   label: 'Ramp Control',     type: 'Checkpoint' },
+  { payload: 'LAX-GATE-52A',        label: '52A · Alpha',       type: 'Gate' },
+  { payload: 'LAX-GATE-52B',        label: '52B · Bravo',       type: 'Gate' },
+  { payload: 'LAX-GATE-52C',        label: '52C · Charlie',     type: 'Gate' },
+  { payload: 'LAX-GATE-52D',        label: '52D · Delta',       type: 'Gate' },
+  { payload: 'LAX-GATE-52E',        label: '52E · Echo',        type: 'Gate' },
+  { payload: 'LAX-GATE-52F',        label: '52F · Foxtrot',     type: 'Gate' },
+  { payload: 'LAX-GATE-52G',        label: '52G · Golf',        type: 'Gate' },
+  { payload: 'LAX-GATE-52H',        label: '52H · Hotel',       type: 'Gate' },
+  { payload: 'LAX-GATE-52I',        label: '52I · India',       type: 'Gate' },
+  { payload: 'LAX-EQUIP-TUG-042',   label: 'Tug #42',           type: 'Equipment' },
+  { payload: 'LAX-EQUIP-BELT-007',  label: 'Belt Loader #7',    type: 'Equipment' },
+  { payload: 'LAX-EQUIP-GPU-031',   label: 'GPU #31',           type: 'Equipment' },
+  { payload: 'LAX-EQUIP-LAV-003',   label: 'Lav Truck #3',      type: 'Equipment' },
+  { payload: 'LAX-CHECK-RAMPCTL',   label: 'Ramp Control',      type: 'Checkpoint' },
 ];
 
 export default function QrAdminPage() {

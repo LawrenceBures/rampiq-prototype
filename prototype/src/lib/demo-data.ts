@@ -17,15 +17,15 @@ export interface GateDefinition {
 }
 
 export const GATE_DEFS: GateDefinition[] = [
-  { id: 'Alpha',   flight: 'AA1318', aircraft: 'B737', route: 'DFW → ORD' },
-  { id: 'Bravo',   flight: 'AA1350', aircraft: 'A321', route: 'DFW → LAX' },
-  { id: 'Charlie', flight: 'WN1334', aircraft: 'B738', route: 'DFW → DEN' },
-  { id: 'Delta',   flight: 'AA2201', aircraft: 'B739', route: 'DFW → SFO' },
-  { id: 'Echo',    flight: 'UA0418', aircraft: 'A319', route: 'DFW → EWR' },
-  { id: 'Foxtrot', flight: 'AA0917', aircraft: 'B738', route: 'DFW → MIA' },
-  { id: 'Golf',    flight: 'DL1144', aircraft: 'A321', route: 'DFW → ATL' },
-  { id: 'Hotel',   flight: 'WN2280', aircraft: 'B737', route: 'DFW → PHX' },
-  { id: 'India',   flight: 'AA1042', aircraft: 'B738', route: 'DFW → SEA' },
+  { id: '52A', flight: 'AA1318', aircraft: 'B737', route: 'DFW → ORD' },
+  { id: '52B', flight: 'AA1350', aircraft: 'A321', route: 'DFW → LAX' },
+  { id: '52C', flight: 'WN1334', aircraft: 'B738', route: 'DFW → DEN' },
+  { id: '52D', flight: 'AA2201', aircraft: 'B739', route: 'DFW → SFO' },
+  { id: '52E', flight: 'UA0418', aircraft: 'A319', route: 'DFW → EWR' },
+  { id: '52F', flight: 'AA0917', aircraft: 'B738', route: 'DFW → MIA' },
+  { id: '52G', flight: 'DL1144', aircraft: 'A321', route: 'DFW → ATL' },
+  { id: '52H', flight: 'WN2280', aircraft: 'B737', route: 'DFW → PHX' },
+  { id: '52I', flight: 'AA1042', aircraft: 'B738', route: 'DFW → SEA' },
 ];
 
 // ——————————————————————————————

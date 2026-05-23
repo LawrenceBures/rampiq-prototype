@@ -330,7 +330,7 @@ export default function ScanPage() {
         <input
           type="text"
           className="rq-select"
-          placeholder="e.g. LAX-GATE-G42B"
+          placeholder="e.g. LAX-GATE-52A"
           value={manualInput}
           onChange={e => setManualInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleManualSubmit(); }}
@@ -346,7 +346,7 @@ export default function ScanPage() {
       <div className="rq-explainer">
         <div className="rq-explainer-h">Supported QR values</div>
         <div className="rq-explainer-msg" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
-          LAX-GATE-G42B &mdash; Gate<br />
+          LAX-GATE-52A &mdash; Gate (52A–52I)<br />
           LAX-EQUIP-TUG-042 &mdash; Equipment<br />
           LAX-CHECK-RAMPCTL &mdash; Checkpoint
         </div>
