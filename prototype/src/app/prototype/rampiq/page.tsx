@@ -41,6 +41,15 @@ export default function RampIQLanding() {
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
+      <Link href="/prototype/rampiq/manager/crews" className="rq-module">
+        <div className="rq-module-icon">CA</div>
+        <div>
+          <div className="rq-module-name">Crew Assignments</div>
+          <div className="rq-module-desc">Assign crews &middot; override controls &middot; decision trail</div>
+        </div>
+        <span className="rq-module-arrow">&rsaquo;</span>
+      </Link>
+
       <div className="rq-explainer">
         <div className="rq-explainer-h">How to demo</div>
         <div className="rq-explainer-msg">

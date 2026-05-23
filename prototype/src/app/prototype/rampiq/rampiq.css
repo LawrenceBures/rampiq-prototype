@@ -1442,3 +1442,76 @@
   color: var(--rq-ink-3);
   margin-left: auto;
 }
+
+/* ================================================
+   CREW ASSIGNMENTS
+   ================================================ */
+
+/* Assignment card */
+.rq-assign-card {
+  margin: 0 16px 8px;
+  border: 1px solid var(--rq-line);
+  border-left: 3px solid var(--rq-green);
+  background: var(--rq-bg-1);
+  padding: 12px;
+}
+
+.rq-assign-card.has-override {
+  border-left-color: var(--rq-amber);
+}
+
+.rq-assign-card.status-completed {
+  border-left-color: var(--rq-ink-4);
+  opacity: .7;
+}
+
+.rq-assign-card.status-cancelled {
+  border-left-color: var(--rq-red-dim);
+  opacity: .5;
+}
+
+/* Override indicator */
+.rq-override-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid var(--rq-amber-dim);
+  color: var(--rq-amber);
+  background: rgba(245,177,61,.04);
+}
+
+/* Recommendation tag */
+.rq-rec-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px dashed rgba(201,255,58,.2);
+  color: var(--rq-accent);
+  background: rgba(201,255,58,.03);
+}
+
+/* Gate/equipment chips in assignment */
+.rq-assign-chips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.rq-assign-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 2px 6px;
+  border: 1px solid var(--rq-line-2);
+  color: var(--rq-ink-2);
+}

@@ -844,3 +844,187 @@ export function useOperationalReadiness(station: string, shift: ShiftWindow): Op
   }, [station, shift]);
   return readiness;
 }
+
+// ============================================================
+// CREW ASSIGNMENTS
+// ============================================================
+
+import type {
+  CrewAssignment,
+  AssignmentOutcome,
+  AssignmentStatus,
+} from './rampiq-types';
+
+const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
+  {
+    id: 'seed-alpha-am', created_at: new Date(Date.now() - 7200000).toISOString(),
+    team_id: 'ALPHA-AM', assigned_user_ids: ['CM','TC12','BR01','LD03'],
+    zone_id: 'T7-NORTH', gate_ids: ['G42B','G47A'], equipment_ids: ['TUG-042','BELT-007'],
+    assigned_by: 'LD03', shift_window: 'AM',
+    recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
+    override_used: false, override_reason: null, override_by: null,
+    status: 'ACTIVE', completed_at: null, completed_by: null,
+    notes: 'Standard AM assignment — Alpha covers Terminal 7 North gates',
+    team_label: 'Alpha Team', zone_label: 'Terminal 7 North', assigned_by_name: 'Lead 3',
+  },
+  {
+    id: 'seed-bravo-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
+    team_id: 'BRAVO-PM', assigned_user_ids: ['TC14'],
+    zone_id: 'T7-SOUTH', gate_ids: ['G50'], equipment_ids: ['GPU-031'],
+    assigned_by: 'TC14', shift_window: 'PM',
+    recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
+    override_used: false, override_reason: null, override_by: null,
+    status: 'ACTIVE', completed_at: null, completed_by: null,
+    notes: 'Standard PM assignment — Bravo covers Terminal 7 South',
+    team_label: 'Bravo Team', zone_label: 'Terminal 7 South', assigned_by_name: 'Tug Crew 14',
+  },
+];
+
+export async function fetchCrewAssignments(filters?: {
+  status?: AssignmentStatus;
+  shift?: ShiftWindow;
+  team_id?: string;
+}): Promise<CrewAssignment[]> {
+  const sb = getSupabase();
+  if (sb) {
+    let query = sb.from('crew_assignments').select('*').order('created_at', { ascending: false });
+    if (filters?.status) query = query.eq('status', filters.status);
+    if (filters?.shift) query = query.eq('shift_window', filters.shift);
+    if (filters?.team_id) query = query.eq('team_id', filters.team_id);
+    const { data, error } = await query;
+    if (!error && data) {
+      // Join labels
+      const [teams, zones, users] = await Promise.all([fetchTeams(), fetchZones(), fetchUsers()]);
+      return (data as CrewAssignment[]).map(a => ({
+        ...a,
+        team_label: teams.find(t => t.id === a.team_id)?.label,
+        zone_label: a.zone_id ? zones.find(z => z.id === a.zone_id)?.label : undefined,
+        assigned_by_name: users.find(u => u.id === a.assigned_by)?.display_name || a.assigned_by,
+      }));
+    }
+    console.error('[store] crew_assignments fetch error:', error?.message);
+  }
+  let result = FALLBACK_CREW_ASSIGNMENTS;
+  if (filters?.status) result = result.filter(a => a.status === filters.status);
+  if (filters?.shift) result = result.filter(a => a.shift_window === filters.shift);
+  if (filters?.team_id) result = result.filter(a => a.team_id === filters.team_id);
+  return result;
+}
+
+export async function createCrewAssignment(assignment: {
+  team_id: string;
+  assigned_user_ids: string[];
+  zone_id?: string;
+  gate_ids?: string[];
+  equipment_ids?: string[];
+  assigned_by: string;
+  shift_window: ShiftWindow;
+  recommendation_id?: string;
+  recommended_team_id?: string;
+  recommendation_reason?: string;
+  override_used?: boolean;
+  override_reason?: string;
+  override_by?: string;
+  notes?: string;
+}): Promise<CrewAssignment | null> {
+  const sb = getSupabase();
+  const row = {
+    team_id: assignment.team_id,
+    assigned_user_ids: assignment.assigned_user_ids,
+    zone_id: assignment.zone_id || null,
+    gate_ids: assignment.gate_ids || [],
+    equipment_ids: assignment.equipment_ids || [],
+    assigned_by: assignment.assigned_by,
+    shift_window: assignment.shift_window,
+    recommendation_id: assignment.recommendation_id || null,
+    recommended_team_id: assignment.recommended_team_id || null,
+    recommendation_reason: assignment.recommendation_reason || null,
+    override_used: assignment.override_used || false,
+    override_reason: assignment.override_reason || null,
+    override_by: assignment.override_by || null,
+    notes: assignment.notes || null,
+    status: 'ACTIVE',
+  };
+
+  if (sb) {
+    const { data, error } = await sb.from('crew_assignments').insert(row).select().single();
+    if (error) {
+      console.error('[store] crew_assignment create error:', error.message);
+      return null;
+    }
+    return data as CrewAssignment;
+  }
+  return { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...row, completed_at: null, completed_by: null } as CrewAssignment;
+}
+
+export async function completeCrewAssignment(id: string, completedBy: string): Promise<CrewAssignment | null> {
+  const sb = getSupabase();
+  const updates = { status: 'COMPLETED', completed_at: new Date().toISOString(), completed_by: completedBy };
+  if (sb) {
+    const { data, error } = await sb.from('crew_assignments').update(updates).eq('id', id).select().single();
+    if (error) { console.error('[store] crew_assignment complete error:', error.message); return null; }
+    return data as CrewAssignment;
+  }
+  return null;
+}
+
+export async function cancelCrewAssignment(id: string): Promise<CrewAssignment | null> {
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb.from('crew_assignments').update({ status: 'CANCELLED' }).eq('id', id).select().single();
+    if (error) { console.error('[store] crew_assignment cancel error:', error.message); return null; }
+    return data as CrewAssignment;
+  }
+  return null;
+}
+
+export async function computeAssignmentOutcome(assignment: CrewAssignment): Promise<AssignmentOutcome> {
+  const sb = getSupabase();
+  let events: RampiqEvent[] = [];
+
+  if (sb) {
+    // Find events overlapping with this assignment's time window and gates
+    let query = sb.from('rampiq_events').select('*')
+      .gte('created_at', assignment.created_at);
+    if (assignment.completed_at) query = query.lte('created_at', assignment.completed_at);
+    const { data } = await query;
+    if (data) {
+      // Filter to events matching this assignment's gates or zone
+      events = (data as RampiqEvent[]).filter(e =>
+        (e.gate_id && assignment.gate_ids.includes(e.gate_id)) ||
+        (e.equipment_id && assignment.equipment_ids.includes(e.equipment_id))
+      );
+    }
+  }
+
+  const resolved = events.filter(e => e.operational_status === 'RESOLVED');
+  const highSev = events.filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH');
+  const resTimes = resolved.map(e => e.event_duration_seconds).filter((d): d is number => d != null && d > 0);
+  const avgRes = resTimes.length > 0 ? Math.round(resTimes.reduce((s, v) => s + v, 0) / resTimes.length) : null;
+
+  return {
+    assignment_id: assignment.id,
+    events_during: events.length,
+    avg_resolution_seconds: avgRes,
+    high_severity_count: highSev.length,
+    resolved_count: resolved.length,
+  };
+}
+
+// ---- Crew assignment hooks ----
+
+export function useCrewAssignments(shift: ShiftWindow): { assignments: CrewAssignment[]; loading: boolean; refresh: () => void } {
+  const [assignments, setAssignments] = useState<CrewAssignment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(() => {
+    fetchCrewAssignments({ shift }).then(data => {
+      setAssignments(data);
+      setLoading(false);
+    });
+  }, [shift]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  return { assignments, loading, refresh };
+}

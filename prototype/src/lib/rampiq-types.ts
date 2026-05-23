@@ -436,3 +436,50 @@ export const LEARNING_STATUS_LABELS: Record<LearningStatus, string> = {
   IN_PROGRESS: 'In Progress',
   COMPLETED: 'Completed',
 };
+
+// ============================================================
+// CREW ASSIGNMENTS & RECOMMENDATION INFRASTRUCTURE
+// ============================================================
+
+export type AssignmentStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+
+export interface CrewAssignment {
+  id: string;
+  created_at: string;
+  team_id: string;
+  assigned_user_ids: string[];
+  zone_id: string | null;
+  gate_ids: string[];
+  equipment_ids: string[];
+  assigned_by: string;
+  shift_window: ShiftWindow;
+  recommendation_id: string | null;
+  recommended_team_id: string | null;
+  recommendation_reason: string | null;
+  override_used: boolean;
+  override_reason: string | null;
+  override_by: string | null;
+  status: AssignmentStatus;
+  completed_at: string | null;
+  completed_by: string | null;
+  notes: string | null;
+  // joined
+  team_label?: string;
+  zone_label?: string;
+  assigned_by_name?: string;
+}
+
+// Computed at query time from rampiq_events — not stored
+export interface AssignmentOutcome {
+  assignment_id: string;
+  events_during: number;
+  avg_resolution_seconds: number | null;
+  high_severity_count: number;
+  resolved_count: number;
+}
+
+export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
+  ACTIVE: 'Active',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
