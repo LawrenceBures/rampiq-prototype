@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>RampIQ Mobile · Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12;
+    --bg-1:#0f1319;
+    --bg-2:#141922;
+    --bg-3:#1a212c;
+    --line:#1f2733;
+    --line-2:#2a3442;
+    --ink:#e8ecf2;
+    --ink-2:#aab3c0;
+    --ink-3:#6b7585;
+    --ink-4:#454e5d;
+    --green:#3ed598;
+    --amber:#f5b13d;
+    --red:#ff5c5c;
+    --blue:#5aa9ff;
+    --accent:#c9ff3a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter Tight',sans-serif;
+    font-size:14px;
+    line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body{
+    background-image:
+      linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+    padding-bottom:80px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+
+  /* PHONE FRAME (preview only — page renders edge-to-edge on actual mobile) */
+  .device-context{
+    max-width:430px;margin:0 auto;
+    border-left:1px solid var(--line);border-right:1px solid var(--line);
+    min-height:100vh;
+  }
+
+  /* TOP STATUS BAR (fake iOS) */
+  .status-bar{
+    height:38px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 22px 0 26px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;font-weight:600;
+    color:var(--ink);
+  }
+  .status-icons{display:flex;gap:5px;align-items:center;font-size:11px}
+
+  /* APP HEADER */
+  .app-head{
+    padding:8px 16px 14px;
+    border-bottom:1px solid var(--line);
+    background:var(--bg);
+    position:sticky;top:0;z-index:30;
+    backdrop-filter:blur(8px);
+  }
+  .app-head-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .brand-mark-sm{
+    width:28px;height:28px;border:1.5px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;position:relative;
+  }
+  .brand-mark-sm::before{content:'';position:absolute;inset:3px;border:1px solid var(--accent);opacity:.4}
+  .brand-mark-sm::after{content:'';position:absolute;width:5px;height:5px;background:var(--accent);border-radius:50%;box-shadow:0 0 6px var(--accent)}
+  .brand-text{font-weight:700;font-size:15px;letter-spacing:-.005em}
+  .brand-text .iq{color:var(--accent)}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);margin-left:auto;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .live-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3);letter-spacing:.16em}
+
+  .app-head-greet{font-size:13px;color:var(--ink-3)}
+  .app-head-greet b{color:var(--ink);font-weight:600}
+
+  /* TOP KPI ROW */
+  .kpi-row{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .kpi{background:var(--bg);padding:10px 8px;text-align:left}
+  .kpi-lbl{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+  .kpi-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;line-height:1;letter-spacing:-.01em}
+  .kpi-val.r{color:var(--red)}
+  .kpi-val.a{color:var(--amber)}
+  .kpi-val.g{color:var(--green)}
+
+  /* SECTION */
+  .sec{padding:18px 16px 6px;border-bottom:1px solid var(--line)}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+  .sec-eyebrow{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .sec-title{font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .sec-action{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase}
+
+  /* ATTENTION BANNER */
+  .attn{
+    margin:14px 16px 0;
+    border:1px solid var(--red);
+    background:linear-gradient(180deg, rgba(255,92,92,.06), rgba(255,92,92,.02));
+    padding:14px 14px;
+    position:relative;
+  }
+  .attn::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--red);
+    box-shadow:0 0 12px var(--red);
+  }
+  .attn-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .attn-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--red);font-weight:700}
+  .attn-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3)}
+  .attn-msg{font-size:14px;color:var(--ink);line-height:1.4;margin-bottom:10px}
+  .attn-msg b{color:var(--red);font-weight:600}
+  .attn-actions{display:flex;gap:8px}
+  .attn-btn{
+    flex:1;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+    padding:10px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);
+  }
+  .attn-btn.ghost{background:transparent;border-color:var(--line-2);color:var(--ink-2)}
+
+  /* FILTER PILLS */
+  .pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin:0 -16px;padding-left:16px;padding-right:16px;-webkit-overflow-scrolling:touch}
+  .pills::-webkit-scrollbar{display:none}
+  .pill{
+    flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:.06em;padding:6px 10px;border:1px solid var(--line-2);
+    color:var(--ink-2);background:transparent;white-space:nowrap;
+  }
+  .pill.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .pill .dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:4px;vertical-align:1px}
+  .pill .dot.r{background:var(--red)}
+  .pill .dot.a{background:var(--amber)}
+  .pill .dot.g{background:var(--green)}
+
+  /* FLIGHT CARD MOBILE */
+  .fcard{
+    border:1px solid var(--line);
+    background:var(--bg-1);
+    margin-bottom:10px;
+    padding:14px;
+    position:relative;
+    border-left-width:3px;
+  }
+  .fcard.crit{border-left-color:var(--red)}
+  .fcard.watch{border-left-color:var(--amber)}
+  .fcard.ok{border-left-color:var(--green)}
+
+  .fc-row1{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .fc-num{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;letter-spacing:-.01em}
+  .fc-route{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-3)}
+  .fc-cd{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+  .fc-cd.crit{color:var(--red)}
+  .fc-cd.watch{color:var(--amber)}
+
+  .fc-meta{display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-2);margin-bottom:10px}
+  .fc-meta b{color:var(--ink);font-weight:600}
+
+  .fc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-bottom:10px}
+  .fc-stat{background:var(--bg-1);padding:6px 8px}
+  .fc-stat-l{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+  .fc-stat-v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700}
+  .fc-stat-v.r{color:var(--red)}.fc-stat-v.a{color:var(--amber)}.fc-stat-v.g{color:var(--green)}
+
+  .fc-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:10px}
+  .fc-bar-l{color:var(--ink-3);font-size:9px;letter-spacing:.08em;text-transform:uppercase;width:70px}
+  .fc-bar{flex:1;height:4px;background:var(--bg-3);overflow:hidden}
+  .fc-bar-fill{height:100%;background:var(--green)}
+  .fc-bar-fill.a{background:var(--amber)}
+  .fc-bar-fill.r{background:var(--red)}
+  .fc-bar-pct{color:var(--ink);font-weight:600;width:30px;text-align:right}
+
+  .fc-team{display:flex;align-items:center;gap:6px;padding-top:10px;border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:10.5px}
+  .fc-team-dot{width:7px;height:7px;border-radius:50%;background:var(--blue)}
+  .fc-team-name{color:var(--ink-2)}
+  .fc-team-status{margin-left:auto;color:var(--ink-3);font-size:9.5px}
+
+  /* MAP MINI */
+  .map-mini{
+    margin:0 16px 18px;
+    border:1px solid var(--line);
+    background:var(--bg-1);
+    overflow:hidden;
+    position:relative;
+    height:240px;
+  }
+  .map-mini svg{width:100%;height:100%;display:block}
+  .map-mini-overlay{
+    position:absolute;left:10px;top:10px;
+    background:rgba(10,13,18,.92);
+    border:1px solid var(--line-2);
+    padding:6px 10px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--ink-2);letter-spacing:.05em;
+    display:flex;gap:10px;align-items:center;
+  }
+  .map-mini-overlay .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+
+  /* ALERT FEED MOBILE */
+  .alert{
+    border:1px solid var(--line);background:var(--bg-1);
+    margin-bottom:10px;padding:12px;
+    position:relative;border-left-width:3px;
+  }
+  .alert.crit{border-left-color:var(--red)}
+  .alert.warn{border-left-color:var(--amber)}
+  .alert.smart{border-left-color:var(--accent)}
+  .alert.info{border-left-color:var(--blue)}
+  .alert-row1{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .alert-tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .alert.crit .alert-tag{color:var(--red)}
+  .alert.warn .alert-tag{color:var(--amber)}
+  .alert.smart .alert-tag{color:var(--accent)}
+  .alert.info .alert-tag{color:var(--blue)}
+  .alert-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-3)}
+  .alert-msg{font-size:13px;color:var(--ink);line-height:1.45;margin-bottom:6px}
+  .alert-msg b{color:var(--accent);font-weight:600}
+  .alert.crit .alert-msg b{color:var(--red)}
+  .alert-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);margin-bottom:8px}
+  .alert-actions{display:flex;gap:6px}
+  .alert-btn{
+    flex:1;font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+    padding:8px;border:1px solid var(--line-2);background:transparent;color:var(--ink-2);
+  }
+  .alert-btn.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+
+  /* TEAM ROW */
+  .trow{
+    display:flex;align-items:center;gap:12px;
+    padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--bg-1);
+    margin-bottom:8px;
+  }
+  .tr-mark{
+    width:36px;height:36px;flex-shrink:0;
+    border:1.5px solid var(--line-2);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+  }
+  .tr-mark.delta{border-color:var(--accent);color:var(--accent)}
+  .tr-mark.echo{border-color:var(--blue);color:var(--blue)}
+  .tr-mark.foxtrot{border-color:var(--amber);color:var(--amber)}
+  .tr-mark.golf{border-color:var(--green);color:var(--green)}
+  .tr-info{flex:1;min-width:0}
+  .tr-name{font-size:14px;font-weight:600;letter-spacing:-.005em;margin-bottom:2px}
+  .tr-name span{font-family:'JetBrains Mono',monospace;color:var(--ink-3);font-size:10px;font-weight:400;margin-left:5px}
+  .tr-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-2);display:flex;gap:8px}
+  .tr-meta b{color:var(--ink);font-weight:600}
+  .tr-suit{
+    text-align:right;font-family:'JetBrains Mono',monospace;
+  }
+  .tr-suit-v{font-size:18px;font-weight:700;line-height:1}
+  .tr-suit-v.g{color:var(--green)}.tr-suit-v.a{color:var(--amber)}.tr-suit-v.r{color:var(--red)}
+  .tr-suit-l{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
+
+  /* DELAY ROW */
+  .delay-row{
+    display:grid;grid-template-columns:1fr auto;
+    gap:10px;padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--bg-1);
+    margin-bottom:8px;border-left-width:3px;
+  }
+  .delay-row.crit{border-left-color:var(--red)}
+  .delay-row.watch{border-left-color:var(--amber)}
+  .dr-l-row1{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+  .dr-flight{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+  .dr-route{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3)}
+  .dr-cause{font-size:12px;color:var(--ink-2);line-height:1.4;margin-bottom:6px}
+  .dr-window{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--amber);letter-spacing:.08em;text-transform:uppercase}
+  .dr-window.crit{color:var(--red)}
+  .dr-prob{
+    text-align:right;font-family:'JetBrains Mono',monospace;
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  .dr-prob-v{font-size:18px;font-weight:700;line-height:1}
+  .dr-prob-v.r{color:var(--red)}.dr-prob-v.a{color:var(--amber)}
+  .dr-prob-l{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
+
+  /* SCENARIO */
+  .scn{
+    border:1px solid var(--line);background:var(--bg-1);
+    padding:12px;margin-bottom:8px;
+  }
+  .scn-r1{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .scn-id{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3);letter-spacing:.1em}
+  .scn-impact{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700}
+  .scn-impact.g{color:var(--green)}.scn-impact.a{color:var(--amber)}.scn-impact.r{color:var(--red)}
+  .scn-text{font-size:12px;color:var(--ink);line-height:1.45;margin-bottom:8px}
+  .scn-text b{color:var(--accent)}
+  .scn-foot{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3)}
+  .scn-foot b{color:var(--ink)}
+
+  /* BOTTOM TAB BAR */
+  .tabbar{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+    width:100%;max-width:430px;
+    background:rgba(10,13,18,.96);
+    backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(5,1fr);
+    padding:8px 0 22px;z-index:50;
+  }
+  .tab{
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:6px 4px;cursor:pointer;color:var(--ink-3);
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  }
+  .tab svg{width:20px;height:20px;display:block}
+  .tab.active{color:var(--accent)}
+  .tab .badge{
+    position:absolute;top:8px;background:var(--red);color:#fff;
+    font-size:8px;font-weight:700;padding:1px 5px;
+    border-radius:8px;margin-left:18px;
+  }
+
+  /* SECTION SPLITTER */
+  .splitter{
+    padding:32px 16px 14px;
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-4);
+  }
+  .splitter::before, .splitter::after{
+    content:'';display:inline-block;width:30px;height:1px;
+    background:var(--line-2);vertical-align:middle;margin:0 12px;
+  }
+
+  /* SUMMARY PILLS for screen 4 */
+  .summary-pills{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
+    background:var(--line);
+    margin-bottom:14px;border:1px solid var(--line);
+  }
+  .sp-cell{background:var(--bg);padding:14px;position:relative}
+  .sp-cell::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px}
+  .sp-cell.crit::before{background:var(--red)}
+  .sp-cell.warn::before{background:var(--amber)}
+  .sp-cell.ok::before{background:var(--green)}
+  .sp-cell.info::before{background:var(--blue)}
+  .sp-l{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+  .sp-v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;line-height:1;letter-spacing:-.01em}
+  .sp-v.r{color:var(--red)}.sp-v.a{color:var(--amber)}.sp-v.g{color:var(--green)}
+  .sp-s{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-2);margin-top:5px}
+
+</style>
+</head>
+<body>
+
+<div class="device-context">
+
+  <!-- iOS status bar -->
+  <div class="status-bar">
+    <span>14:42</span>
+    <span class="status-icons">●●●●● 5G ▮▮▮▮</span>
+  </div>
+
+  <!-- APP HEADER -->
+  <header class="app-head">
+    <div class="app-head-row">
+      <div class="brand-mark-sm"></div>
+      <div class="brand-text">Ramp<span class="iq">IQ</span></div>
+      <span class="live-tag">DFW · MGR</span>
+      <span class="pulse"></span>
+    </div>
+    <div class="app-head-greet">Hub status — <b>14:42 CST</b> · Shift 14:00–22:00</div>
+  </header>
+
+  <!-- TOP KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-lbl">Active</div><div class="kpi-val">142</div></div>
+    <div class="kpi"><div class="kpi-lbl">At-Risk</div><div class="kpi-val r">8</div></div>
+    <div class="kpi"><div class="kpi-lbl">OTP</div><div class="kpi-val g">94.3%</div></div>
+    <div class="kpi"><div class="kpi-lbl">Crews</div><div class="kpi-val">22/24</div></div>
+  </div>
+
+  <!-- ATTENTION BANNER -->
+  <div class="attn">
+    <div class="attn-row">
+      <span class="attn-tag">⚠ Needs you</span>
+      <span class="attn-time">just now</span>
+    </div>
+    <div class="attn-msg"><b>AA2201</b> — no pushback-certified crew assigned · departure in <b>14 min</b>.</div>
+    <div class="attn-actions">
+      <button class="attn-btn">Auto-fix</button>
+      <button class="attn-btn ghost">Open</button>
+    </div>
+  </div>
+
+  <!-- ============================ -->
+  <!-- SCREEN 1 — LIVE OPS         -->
+  <!-- ============================ -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">01 · Live ops</div>
+        <div class="sec-title">Active flights</div>
+      </div>
+      <span class="sec-action">View all →</span>
+    </div>
+
+    <div class="pills">
+      <button class="pill active">All · 142</button>
+      <button class="pill"><span class="dot r"></span>Critical · 3</button>
+      <button class="pill"><span class="dot a"></span>Watch · 5</button>
+      <button class="pill"><span class="dot g"></span>Stable · 134</button>
+    </div>
+
+    <!-- FLIGHT 1 CRIT -->
+    <div class="fcard crit">
+      <div class="fc-row1">
+        <span class="fc-num">AA2201</span>
+        <span class="fc-route">DFW→LAX · B12</span>
+        <span class="fc-cd crit">T-14:22</span>
+      </div>
+      <div class="fc-meta">
+        <span><b>738</b></span>
+        <span>Bags <b>147</b></span>
+        <span>Pax <b>172</b></span>
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-l">Risk</div><div class="fc-stat-v r">87</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Delay%</div><div class="fc-stat-v r">71</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Turn</div><div class="fc-stat-v r">38%</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Equip</div><div class="fc-stat-v a">65%</div></div>
+      </div>
+      <div class="fc-team">
+        <span class="fc-team-dot" style="background:var(--accent)"></span>
+        <span class="fc-team-name">Team Bravo</span>
+        <span class="fc-team-status">no pushback ⚠</span>
+      </div>
+    </div>
+
+    <!-- FLIGHT 2 CRIT -->
+    <div class="fcard crit">
+      <div class="fc-row1">
+        <span class="fc-num">AA0917</span>
+        <span class="fc-route">DFW→SFO · D22</span>
+        <span class="fc-cd crit">T-09:07</span>
+      </div>
+      <div class="fc-meta">
+        <span><b>321</b></span>
+        <span>Bags <b>189</b></span>
+        <span>Pax <b>183</b></span>
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-l">Risk</div><div class="fc-stat-v r">94</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Delay%</div><div class="fc-stat-v r">82</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Turn</div><div class="fc-stat-v r">24%</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Equip</div><div class="fc-stat-v r">42%</div></div>
+      </div>
+      <div class="fc-team">
+        <span class="fc-team-dot" style="background:var(--amber)"></span>
+        <span class="fc-team-name">Team Foxtrot</span>
+        <span class="fc-team-status">fatigue 78</span>
+      </div>
+    </div>
+
+    <!-- FLIGHT 3 WATCH -->
+    <div class="fcard watch">
+      <div class="fc-row1">
+        <span class="fc-num">UA0418</span>
+        <span class="fc-route">DFW→ORD · C7</span>
+        <span class="fc-cd watch">T-21:40</span>
+      </div>
+      <div class="fc-meta">
+        <span><b>739</b></span>
+        <span>Bags <b>98</b></span>
+        <span>Pax <b>158</b></span>
+      </div>
+      <div class="fc-stats">
+        <div class="fc-stat"><div class="fc-stat-l">Risk</div><div class="fc-stat-v a">52</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Delay%</div><div class="fc-stat-v a">34</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Turn</div><div class="fc-stat-v a">62%</div></div>
+        <div class="fc-stat"><div class="fc-stat-l">Equip</div><div class="fc-stat-v g">88%</div></div>
+      </div>
+      <div class="fc-team">
+        <span class="fc-team-dot"></span>
+        <span class="fc-team-name">Team Echo</span>
+        <span class="fc-team-status">on track</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- MINI MAP -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">Live · Heatmap</div>
+        <div class="sec-title">DFW gate activity</div>
+      </div>
+      <span class="sec-action">Full map →</span>
+    </div>
+  </section>
+  <div class="map-mini">
+    <div class="map-mini-overlay">
+      <span class="dot"></span> 142 active · 3 critical · Concourse C congested
+    </div>
+    <svg viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="mg" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,.025)" stroke-width="1"/>
+        </pattern>
+        <radialGradient id="cg" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ff5c5c" stop-opacity=".5"/>
+          <stop offset="100%" stop-color="#ff5c5c" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="wg" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#f5b13d" stop-opacity=".4"/>
+          <stop offset="100%" stop-color="#f5b13d" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#mg)"/>
+
+      <!-- runways -->
+      <line x1="20" y1="40" x2="380" y2="40" stroke="#2a3442" stroke-width="1.5"/>
+      <line x1="20" y1="200" x2="380" y2="200" stroke="#2a3442" stroke-width="1.5"/>
+
+      <!-- congestion -->
+      <ellipse cx="180" cy="120" rx="80" ry="38" fill="url(#cg)"/>
+      <ellipse cx="290" cy="100" rx="60" ry="30" fill="url(#wg)"/>
+
+      <!-- terminals -->
+      <rect x="40" y="80" width="28" height="80" fill="#141922" stroke="#2a3442"/>
+      <text x="54" y="124" text-anchor="middle" fill="#454e5d" font-family="JetBrains Mono" font-size="10" font-weight="700">A</text>
+      <rect x="115" y="65" width="28" height="110" fill="#141922" stroke="#2a3442"/>
+      <text x="129" y="124" text-anchor="middle" fill="#454e5d" font-family="JetBrains Mono" font-size="10" font-weight="700">B</text>
+      <rect x="190" y="75" width="28" height="100" fill="#141922" stroke="#2a3442"/>
+      <text x="204" y="129" text-anchor="middle" fill="#454e5d" font-family="JetBrains Mono" font-size="10" font-weight="700">C</text>
+      <rect x="265" y="65" width="28" height="110" fill="#141922" stroke="#2a3442"/>
+      <text x="279" y="124" text-anchor="middle" fill="#454e5d" font-family="JetBrains Mono" font-size="10" font-weight="700">D</text>
+      <rect x="340" y="80" width="28" height="80" fill="#141922" stroke="#2a3442"/>
+      <text x="354" y="124" text-anchor="middle" fill="#454e5d" font-family="JetBrains Mono" font-size="10" font-weight="700">E</text>
+
+      <!-- dots: critical pulse -->
+      <circle cx="143" cy="130" r="14" fill="none" stroke="#c9ff3a" stroke-width="1" opacity=".5">
+        <animate attributeName="r" values="8;14;8" dur="2.4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="143" cy="130" r="5" fill="#ff5c5c"/>
+      <circle cx="293" cy="115" r="12" fill="none" stroke="#ff5c5c" stroke-width="1" opacity=".4">
+        <animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="293" cy="115" r="4" fill="#ff5c5c"/>
+
+      <!-- watch -->
+      <circle cx="218" cy="105" r="3.5" fill="#f5b13d"/>
+      <circle cx="370" cy="105" r="3.5" fill="#f5b13d"/>
+
+      <!-- stable dots scattered -->
+      <circle cx="68" cy="100" r="3" fill="#3ed598"/>
+      <circle cx="68" cy="140" r="3" fill="#3ed598"/>
+      <circle cx="143" cy="80" r="3" fill="#3ed598"/>
+      <circle cx="143" cy="170" r="3" fill="#3ed598"/>
+      <circle cx="218" cy="160" r="3" fill="#3ed598"/>
+      <circle cx="293" cy="170" r="3" fill="#3ed598"/>
+      <circle cx="370" cy="140" r="3" fill="#3ed598"/>
+    </svg>
+  </div>
+
+  <!-- ============================ -->
+  <!-- SCREEN 4 — DELAY FORECAST   -->
+  <!-- (placed before teams since it's executive-level for managers on the move) -->
+  <!-- ============================ -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">04 · Forecast</div>
+        <div class="sec-title">Delay prediction</div>
+      </div>
+      <span class="sec-action">90 min →</span>
+    </div>
+
+    <div class="summary-pills">
+      <div class="sp-cell crit">
+        <div class="sp-l">On-time forecast</div>
+        <div class="sp-v r">88.4%</div>
+        <div class="sp-s">↓ 5.9 pts vs prior</div>
+      </div>
+      <div class="sp-cell warn">
+        <div class="sp-l">Delays · 60m</div>
+        <div class="sp-v a">11</div>
+        <div class="sp-s">3 crit · 8 watch</div>
+      </div>
+      <div class="sp-cell ok">
+        <div class="sp-l">Avoided today</div>
+        <div class="sp-v g">7</div>
+        <div class="sp-s">smart reassigns</div>
+      </div>
+      <div class="sp-cell info">
+        <div class="sp-l">Cost exposure</div>
+        <div class="sp-v">$184K</div>
+        <div class="sp-s">no intervention</div>
+      </div>
+    </div>
+
+    <div class="delay-row crit">
+      <div>
+        <div class="dr-l-row1">
+          <span class="dr-flight">AA2201</span>
+          <span class="dr-route">DFW→LAX</span>
+        </div>
+        <div class="dr-cause">Crew cert gap + heavy bag load</div>
+        <div class="dr-window crit">Closes in 9 min</div>
+      </div>
+      <div class="dr-prob">
+        <div class="dr-prob-v r">71%</div>
+        <div class="dr-prob-l">Delay</div>
+      </div>
+    </div>
+
+    <div class="delay-row crit">
+      <div>
+        <div class="dr-l-row1">
+          <span class="dr-flight">AA0917</span>
+          <span class="dr-route">DFW→SFO</span>
+        </div>
+        <div class="dr-cause">Equipment shortfall · belt loader</div>
+        <div class="dr-window crit">Closes in 4 min</div>
+      </div>
+      <div class="dr-prob">
+        <div class="dr-prob-v r">82%</div>
+        <div class="dr-prob-l">Delay</div>
+      </div>
+    </div>
+
+    <div class="delay-row watch">
+      <div>
+        <div class="dr-l-row1">
+          <span class="dr-flight">UA0418</span>
+          <span class="dr-route">DFW→ORD</span>
+        </div>
+        <div class="dr-cause">Bagroom upstream delay · sort line 3</div>
+        <div class="dr-window">Closes in 16 min</div>
+      </div>
+      <div class="dr-prob">
+        <div class="dr-prob-v a">34%</div>
+        <div class="dr-prob-l">Delay</div>
+      </div>
+    </div>
+
+    <div class="delay-row watch">
+      <div>
+        <div class="dr-l-row1">
+          <span class="dr-flight">SW3320</span>
+          <span class="dr-route">DFW→DEN</span>
+        </div>
+        <div class="dr-cause">Concourse C taxi congestion +6m</div>
+        <div class="dr-window">Closes in 13 min</div>
+      </div>
+      <div class="dr-prob">
+        <div class="dr-prob-v a">29%</div>
+        <div class="dr-prob-l">Delay</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ============================ -->
+  <!-- SCREEN 3 — ASSIGNMENT INTEL -->
+  <!-- ============================ -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">03 · Engine</div>
+        <div class="sec-title">Smart recommendations</div>
+      </div>
+      <span class="sec-action">All →</span>
+    </div>
+
+    <div class="scn">
+      <div class="scn-r1">
+        <span class="scn-id">SCN-01 · AA2201</span>
+        <span class="scn-impact g">+59 pts</span>
+      </div>
+      <div class="scn-text">Reassign <b>Team Delta</b> from DL1144 → AA2201. Drops departure risk 71% → 12%.</div>
+      <div class="scn-foot"><span>Confidence</span><b>96.4%</b></div>
+    </div>
+
+    <div class="scn">
+      <div class="scn-r1">
+        <span class="scn-id">SCN-02 · AA0917</span>
+        <span class="scn-impact a">+44 pts</span>
+      </div>
+      <div class="scn-text">Dispatch belt loader from <b>Depot 1</b> → D22. Reduces equip risk 82% → 38%.</div>
+      <div class="scn-foot"><span>Window</span><b>4 min left</b></div>
+    </div>
+
+    <div class="scn">
+      <div class="scn-r1">
+        <span class="scn-id">SCN-03 · Concourse C</span>
+        <span class="scn-impact a">+22 pts</span>
+      </div>
+      <div class="scn-text">Stagger pushback for <b>C7 + C18</b> by 90s. Cuts taxi congestion across 4 flights.</div>
+      <div class="scn-foot"><span>Affected</span><b>612 pax</b></div>
+    </div>
+
+  </section>
+
+  <!-- ============================ -->
+  <!-- SCREEN 2 — TEAMS            -->
+  <!-- ============================ -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">02 · Teams</div>
+        <div class="sec-title">Crew suitability</div>
+      </div>
+      <span class="sec-action">All 6 →</span>
+    </div>
+
+    <div class="trow">
+      <div class="tr-mark delta">D</div>
+      <div class="tr-info">
+        <div class="tr-name">Team Delta <span>· 6 crew</span></div>
+        <div class="tr-meta">
+          <span>→ <b>DL1144</b></span>
+          <span>fatigue <b>34</b></span>
+        </div>
+      </div>
+      <div class="tr-suit">
+        <div class="tr-suit-v g">96</div>
+        <div class="tr-suit-l">Suit</div>
+      </div>
+    </div>
+
+    <div class="trow">
+      <div class="tr-mark golf">G</div>
+      <div class="tr-info">
+        <div class="tr-name">Team Golf <span>· 5 crew</span></div>
+        <div class="tr-meta">
+          <span>→ <b>AS0612</b></span>
+          <span>fatigue <b>28</b></span>
+        </div>
+      </div>
+      <div class="tr-suit">
+        <div class="tr-suit-v g">88</div>
+        <div class="tr-suit-l">Suit</div>
+      </div>
+    </div>
+
+    <div class="trow">
+      <div class="tr-mark echo">E</div>
+      <div class="tr-info">
+        <div class="tr-name">Team Echo <span>· 5 crew</span></div>
+        <div class="tr-meta">
+          <span>→ <b>UA0418</b></span>
+          <span>fatigue <b>58</b></span>
+        </div>
+      </div>
+      <div class="tr-suit">
+        <div class="tr-suit-v">81</div>
+        <div class="tr-suit-l">Suit</div>
+      </div>
+    </div>
+
+    <div class="trow">
+      <div class="tr-mark foxtrot">F</div>
+      <div class="tr-info">
+        <div class="tr-name">Team Foxtrot <span>· 6 crew</span></div>
+        <div class="tr-meta">
+          <span>→ <b>AA0917</b></span>
+          <span>fatigue <b style="color:var(--amber)">78</b></span>
+        </div>
+      </div>
+      <div class="tr-suit">
+        <div class="tr-suit-v a">67</div>
+        <div class="tr-suit-l">Suit</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- INTEL FEED -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <div class="sec-eyebrow">Intel feed</div>
+        <div class="sec-title">Live alerts</div>
+      </div>
+      <span class="sec-action">12 new →</span>
+    </div>
+
+    <div class="alert smart">
+      <div class="alert-row1">
+        <span class="alert-tag">◇ Smart insight</span>
+        <span class="alert-time">14:40</span>
+      </div>
+      <div class="alert-msg">Reassigning <b>Team Delta</b> from DL1144 → AA2201 reduces departure risk <b>−42%</b>.</div>
+      <div class="alert-meta">DL1144 (T-33) absorbs slack · zero impact</div>
+      <div class="alert-actions">
+        <button class="alert-btn primary">Run</button>
+        <button class="alert-btn">Why?</button>
+      </div>
+    </div>
+
+    <div class="alert warn">
+      <div class="alert-row1">
+        <span class="alert-tag">⚠ Watch · Fatigue</span>
+        <span class="alert-time">14:38</span>
+      </div>
+      <div class="alert-msg"><b>Team Foxtrot</b> approaching fatigue threshold — 9.2h continuous · 78% load.</div>
+      <div class="alert-meta">Suggest break in 22 min</div>
+      <div class="alert-actions">
+        <button class="alert-btn">Schedule break</button>
+        <button class="alert-btn">Acknowledge</button>
+      </div>
+    </div>
+
+    <div class="alert info">
+      <div class="alert-row1">
+        <span class="alert-tag">i Wx · 16:20</span>
+        <span class="alert-time">14:35</span>
+      </div>
+      <div class="alert-msg">Convective cell 42nm SW · ground stop probability <b>38%</b>.</div>
+      <div class="alert-meta">Auto-buffering inbound +6 min</div>
+    </div>
+
+  </section>
+
+  <div class="splitter">END · 4 SCREENS COMPACTED</div>
+
+</div>
+
+<!-- BOTTOM TAB BAR -->
+<nav class="tabbar">
+  <div class="tab active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+    Hub
+  </div>
+  <div class="tab">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>
+    Map
+  </div>
+  <div class="tab">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5M14 20c0-2 2-4 4-4s4 2 4 4"/></svg>
+    Teams
+  </div>
+  <div class="tab" style="position:relative">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M10 21a2 2 0 004 0"/></svg>
+    Alerts
+    <span class="badge">3</span>
+  </div>
+  <div class="tab">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    Forecast
+  </div>
+</nav>
+
+</body>
+</html>

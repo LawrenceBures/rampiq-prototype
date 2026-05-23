@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RampIQ · Agent · Mastery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d12;
+    --bg-1:#0f1319;
+    --bg-2:#141922;
+    --bg-3:#1a212c;
+    --line:#1f2733;
+    --line-2:#2a3442;
+    --ink:#e8ecf2;
+    --ink-2:#aab3c0;
+    --ink-3:#6b7585;
+    --ink-4:#454e5d;
+    --green:#3ed598;
+    --green-dim:#1d6b4d;
+    --amber:#f5b13d;
+    --amber-dim:#7a5512;
+    --red:#ff5c5c;
+    --red-dim:#7a1f1f;
+    --blue:#5aa9ff;
+    --blue-dim:#1d3f6b;
+    --accent:#c9ff3a;
+    --grid:rgba(255,255,255,.025);
+
+    /* tier colors — calm, craft-trade earned tones */
+    --tier-app:#7a8a9c;       /* apprentice — slate */
+    --tier-jour:#a78b5c;      /* journeyman — bronze */
+    --tier-spec:#5fa6b5;      /* specialist — steel */
+    --tier-mast:#c9a23a;      /* master — patinaed gold */
+    --tier-lead:#9d6dc4;      /* lead instructor — earned wisdom */
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#000;font-family:'Inter Tight',sans-serif;-webkit-font-smoothing:antialiased}
+  body{
+    min-height:100vh;display:flex;align-items:flex-start;justify-content:center;
+    padding:32px 12px;gap:32px;flex-wrap:wrap;
+    background:radial-gradient(ellipse at top, #0c1018 0%, #050608 70%);
+  }
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .serif{font-family:'Instrument Serif',serif;font-style:italic}
+
+  /* phone shell */
+  .phone{
+    width:380px;height:820px;
+    background:var(--bg);
+    border-radius:42px;
+    border:1px solid #14181f;
+    box-shadow:0 30px 60px -15px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03);
+    overflow:hidden;position:relative;
+    display:flex;flex-direction:column;
+    color:var(--ink);font-size:13.5px;line-height:1.4;
+  }
+  .phone::before{
+    content:'';position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    width:90px;height:24px;background:#000;border-radius:14px;z-index:100;
+  }
+  .phone-label{
+    width:380px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.3em;
+    color:var(--ink-3);text-transform:uppercase;margin-top:14px;
+  }
+  .phone-label b{color:var(--accent)}
+
+  /* status bar */
+  .statusbar{
+    height:50px;flex-shrink:0;
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding:0 24px 6px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);font-weight:600;
+  }
+  .sb-right{display:flex;align-items:center;gap:5px;font-size:11px}
+  .sb-right svg{width:14px;height:9px;fill:var(--ink)}
+
+  /* topbar */
+  .topbar-m{
+    padding:8px 18px 14px;
+    display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--bg-1), var(--bg));
+  }
+  .brand-m{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.005em;font-size:14px}
+  .brand-mark-m{
+    width:22px;height:22px;border:1.5px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;position:relative;
+  }
+  .brand-mark-m::before{content:'';position:absolute;inset:2px;border:1px solid var(--accent);opacity:.5}
+  .brand-mark-m::after{content:'';position:absolute;width:5px;height:5px;background:var(--accent);border-radius:50%}
+  .brand-name-m .iq{color:var(--accent)}
+  .topbar-meta{margin-left:auto;display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3)}
+  .topbar-meta b{color:var(--green)}
+
+  /* scroll body */
+  .scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+  .scroll::-webkit-scrollbar{display:none}
+
+  /* shared block helpers */
+  .section-eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-3);
+    padding:18px 18px 8px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-eyebrow::after{content:'';flex:1;height:1px;background:var(--line)}
+  .section-eyebrow b{color:var(--accent);font-weight:700}
+
+  /* ============================================ */
+  /* PHONE 1 — YOU TAB · MASTERY OVERVIEW          */
+  /* ============================================ */
+
+  .mast-hero{
+    padding:24px 22px 20px;
+    border-bottom:1px solid var(--line);
+    background:radial-gradient(ellipse at top right, rgba(167,139,92,.12), transparent 60%);
+  }
+  .mast-hello{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;
+  }
+  .mast-name{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+  .mast-id{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-3);margin-top:4px;letter-spacing:.04em}
+
+  /* tier card — the centerpiece */
+  .tier-block{
+    margin-top:18px;
+    border:1px solid var(--tier-jour);
+    background:linear-gradient(135deg, rgba(167,139,92,.08), rgba(167,139,92,.02));
+    padding:18px 18px 16px;position:relative;
+  }
+  .tier-r1{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .tier-mark{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--tier-jour);font-weight:700;
+    border:1px solid var(--tier-jour);padding:3px 7px;
+  }
+  .tier-since{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3);letter-spacing:.05em}
+  .tier-title{
+    font-family:'Instrument Serif',serif;font-style:italic;
+    font-size:32px;font-weight:400;color:var(--ink);letter-spacing:-.02em;line-height:1;margin-bottom:6px;
+  }
+  .tier-craft{font-size:13px;color:var(--ink-2);margin-bottom:18px}
+  .tier-craft b{color:var(--ink);font-weight:600}
+
+  /* progression rail — apprentice → journeyman → specialist → master */
+  .rail{
+    display:grid;grid-template-columns:repeat(5, 1fr);gap:0;
+    margin-top:10px;
+  }
+  .rail-step{
+    text-align:center;position:relative;
+    padding-top:18px;
+  }
+  .rail-step::before{
+    content:'';position:absolute;top:5px;left:50%;width:8px;height:8px;
+    border-radius:50%;border:1.5px solid var(--ink-4);
+    transform:translateX(-50%);background:var(--bg);
+  }
+  .rail-step.done::before{background:var(--tier-jour);border-color:var(--tier-jour)}
+  .rail-step.now::before{background:var(--tier-jour);border-color:var(--tier-jour);box-shadow:0 0 0 3px rgba(167,139,92,.2)}
+  .rail-step.locked::before{background:var(--bg);border-color:var(--ink-4)}
+  .rail-step:not(:first-child)::after{
+    content:'';position:absolute;top:9px;right:50%;width:100%;height:1px;
+    background:var(--ink-4);
+  }
+  .rail-step.done:not(:first-child)::after,
+  .rail-step.now:not(:first-child)::after{background:var(--tier-jour)}
+  .rs-name{
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:600;
+  }
+  .rail-step.done .rs-name{color:var(--ink-2)}
+  .rail-step.now .rs-name{color:var(--tier-jour)}
+
+  /* progress to next tier */
+  .progress-block{
+    margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05);
+  }
+  .pb-r1{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  .pb-l{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+  .pb-pct{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink);font-weight:700}
+  .pb-bar{height:5px;background:var(--bg-3);overflow:hidden;position:relative}
+  .pb-fill{height:100%;background:linear-gradient(90deg, var(--tier-jour), var(--tier-spec));width:64%}
+  .pb-target{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-2);margin-top:8px;letter-spacing:.04em;
+  }
+  .pb-target b{color:var(--ink);font-weight:600}
+
+  /* practice metrics — the operational competencies */
+  .comp-grid{
+    display:grid;grid-template-columns:repeat(2, 1fr);
+    gap:1px;background:var(--line);
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .comp-cell{background:var(--bg);padding:14px 16px}
+  .comp-l{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);margin-bottom:6px;
+  }
+  .comp-v{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;letter-spacing:-.005em}
+  .comp-v.g{color:var(--green)}
+  .comp-trend{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--green);margin-top:4px;
+  }
+  .comp-trend.flat{color:var(--ink-3)}
+  .comp-spark{height:18px;margin-top:6px}
+
+  /* certification roadmap */
+  .cert-list{padding:6px 0}
+  .cert-row{
+    display:grid;grid-template-columns:38px 1fr auto;
+    gap:14px;align-items:center;
+    padding:14px 18px;border-bottom:1px solid var(--line);cursor:pointer;
+  }
+  .cert-row:last-child{border-bottom:none}
+  .cert-icon{
+    width:38px;height:38px;border:1px solid var(--line-2);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--ink-3);
+  }
+  .cert-icon.held{border-color:var(--green-dim);background:rgba(62,213,152,.04);color:var(--green)}
+  .cert-icon.progress{border-color:var(--amber-dim);background:rgba(245,177,61,.04);color:var(--amber)}
+  .cert-icon.next{border-color:var(--accent);background:rgba(201,255,58,.04);color:var(--accent)}
+  .cert-icon.future{border-style:dashed;color:var(--ink-4)}
+
+  .cert-info{}
+  .cert-name{font-size:13.5px;font-weight:600;letter-spacing:-.005em;margin-bottom:2px}
+  .cert-meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);letter-spacing:.04em}
+  .cert-meta.amber{color:var(--amber)}
+  .cert-meta.accent{color:var(--accent)}
+  .cert-meta b{color:var(--ink-2);font-weight:600}
+
+  .cert-status{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;
+    text-transform:uppercase;font-weight:700;
+    padding:5px 8px;
+  }
+  .cert-status.held{color:var(--green);border:1px solid var(--green-dim);background:rgba(62,213,152,.04)}
+  .cert-status.progress{color:var(--amber);border:1px solid var(--amber-dim);background:rgba(245,177,61,.04)}
+  .cert-status.next{color:var(--accent);border:1px solid var(--accent);background:rgba(201,255,58,.04)}
+  .cert-status.locked{color:var(--ink-4);border:1px solid var(--ink-4)}
+
+  /* what unlocks next */
+  .unlock-card{
+    margin:12px 18px;padding:16px;
+    border:1px dashed rgba(201,255,58,.3);background:rgba(201,255,58,.025);
+  }
+  .unlock-h{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px;
+  }
+  .unlock-msg{font-size:13px;color:var(--ink);line-height:1.5}
+  .unlock-msg b{color:var(--accent);font-weight:600}
+  .unlock-list{margin-top:10px;padding-top:10px;border-top:1px solid rgba(201,255,58,.15)}
+  .unlock-item{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-2);
+    padding:3px 0;display:flex;gap:8px;
+  }
+  .unlock-item::before{content:'⟶';color:var(--accent)}
+
+  /* growth ways — apprentice tasks */
+  .grow-card{
+    margin:0 18px 12px;padding:14px 16px;
+    border:1px solid var(--line);background:var(--bg-1);
+    position:relative;
+  }
+  .grow-card::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink-4);
+  }
+  .grow-card.priority::before{background:var(--accent)}
+  .gc-r1{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .gc-tag{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:700;
+  }
+  .grow-card.priority .gc-tag{color:var(--accent)}
+  .gc-eta{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3)}
+  .gc-h{font-size:14px;font-weight:600;letter-spacing:-.005em;margin-bottom:6px}
+  .gc-desc{font-size:12.5px;color:var(--ink-2);line-height:1.5;margin-bottom:10px}
+  .gc-desc b{color:var(--ink);font-weight:600}
+  .gc-bar-row{display:flex;align-items:center;gap:8px}
+  .gc-bar-l{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-3);letter-spacing:.06em;min-width:62px;text-transform:uppercase}
+  .gc-bar{flex:1;height:4px;background:var(--bg-3);overflow:hidden}
+  .gc-bar-fill{height:100%;background:var(--accent)}
+  .gc-bar-fill.amber{background:var(--amber)}
+  .gc-bar-v{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--ink);min-width:46px;text-align:right}
+
+  /* mentorship card */
+  .mentor-card{
+    margin:0 18px 12px;padding:16px;
+    border:1px solid var(--line);background:linear-gradient(135deg, rgba(157,109,196,.05), transparent);
+    display:flex;align-items:center;gap:14px;
+  }
+  .mentor-av{
+    width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg, #9d6dc4, #c9a23a);
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#0a0d12;font-size:14px;flex-shrink:0;
+  }
+  .mentor-info{flex:1}
+  .mentor-r{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--tier-lead);font-weight:700;margin-bottom:3px}
+  .mentor-n{font-size:13.5px;font-weight:600}
+  .mentor-d{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);margin-top:2px}
+  .mentor-arrow{color:var(--ink-3);font-size:14px}
+
+  /* recognition strip — earned recognitions, NOT badges */
+  .recog-strip{
+    padding:0 18px 14px;
+    overflow-x:auto;display:flex;gap:8px;scrollbar-width:none;
+  }
+  .recog-strip::-webkit-scrollbar{display:none}
+  .recog-chip{
+    flex-shrink:0;border:1px solid var(--line-2);padding:8px 12px;background:var(--bg-1);
+    min-width:130px;
+  }
+  .recog-chip.held{border-color:var(--green-dim);background:rgba(62,213,152,.04)}
+  .recog-name{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;
+    text-transform:uppercase;font-weight:700;color:var(--ink-2);margin-bottom:3px;
+  }
+  .recog-chip.held .recog-name{color:var(--green)}
+  .recog-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3)}
+  .recog-meta b{color:var(--ink-2);font-weight:600}
+
+  /* tab bar */
+  .tabbar{
+    flex-shrink:0;
+    display:grid;grid-template-columns:repeat(5,1fr);
+    border-top:1px solid var(--line);background:var(--bg-1);
+    padding:8px 0 22px;
+  }
+  .tab{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    padding:6px 0;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:600;
+  }
+  .tab.active{color:var(--accent)}
+  .tab-icon{width:20px;height:20px;display:flex;align-items:center;justify-content:center}
+
+  /* ============================================ */
+  /* PHONE 2 — CERT ROADMAP DEEP VIEW              */
+  /* ============================================ */
+  .crm-hero{
+    padding:24px 22px 22px;
+    border-bottom:1px solid var(--line);
+    background:radial-gradient(ellipse at top, rgba(95,166,181,.12), transparent 60%);
+  }
+  .crm-back{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;display:inline-flex;align-items:center;gap:6px;
+  }
+  .crm-back::before{content:'←';color:var(--ink-2)}
+  .crm-eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;
+  }
+  .crm-h{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+  .crm-h em{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;color:var(--accent)}
+  .crm-sub{font-size:13px;color:var(--ink-2);margin-top:8px;line-height:1.5}
+  .crm-sub b{color:var(--ink);font-weight:600}
+
+  /* roadmap visualization — the path */
+  .roadmap{padding:18px 22px 6px}
+  .road-step{
+    display:grid;grid-template-columns:34px 1fr;gap:14px;
+    padding-bottom:18px;position:relative;
+  }
+  .road-step:not(:last-child)::after{
+    content:'';position:absolute;left:16px;top:38px;bottom:0;
+    width:1px;background:var(--line);
+  }
+  .road-step.done:not(:last-child)::after{background:var(--green-dim)}
+  .road-step.current:not(:last-child)::after{background:linear-gradient(180deg, var(--amber), var(--ink-4))}
+
+  .road-num{
+    width:34px;height:34px;border-radius:50%;
+    border:1.5px solid var(--ink-4);background:var(--bg);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;color:var(--ink-3);
+  }
+  .road-step.done .road-num{border-color:var(--green-dim);background:rgba(62,213,152,.06);color:var(--green)}
+  .road-step.current .road-num{border-color:var(--amber);background:rgba(245,177,61,.06);color:var(--amber)}
+  .road-step.next .road-num{border-color:var(--accent);background:rgba(201,255,58,.04);color:var(--accent)}
+  .road-step.locked .road-num{border-style:dashed}
+
+  .road-body{padding-top:5px}
+  .road-r1{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
+  .road-name{font-size:14px;font-weight:600;letter-spacing:-.005em}
+  .road-tag{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;
+    text-transform:uppercase;font-weight:700;padding:2px 6px;
+  }
+  .road-tag.held{background:rgba(62,213,152,.06);color:var(--green);border:1px solid var(--green-dim)}
+  .road-tag.now{background:rgba(245,177,61,.06);color:var(--amber);border:1px solid var(--amber-dim)}
+  .road-tag.next{background:rgba(201,255,58,.04);color:var(--accent);border:1px solid var(--accent)}
+  .road-tag.future{color:var(--ink-4);border:1px solid var(--ink-4)}
+
+  .road-desc{font-size:12.5px;color:var(--ink-2);line-height:1.5;margin-bottom:8px}
+  .road-desc b{color:var(--ink);font-weight:600}
+
+  .road-unlocks{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);
+    letter-spacing:.04em;display:flex;align-items:center;gap:6px;
+  }
+  .road-unlocks b{color:var(--ink-2);font-weight:600}
+
+  .road-progress{
+    margin-top:10px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .rp-bar{flex:1;height:3px;background:var(--bg-3);overflow:hidden}
+  .rp-fill{height:100%;background:var(--amber)}
+  .rp-pct{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--amber);font-weight:600}
+
+  /* WHAT-IT-OPENS UP card */
+  .opens-card{
+    margin:0 22px 16px;padding:16px;
+    border:1px solid var(--line);background:linear-gradient(135deg, rgba(95,166,181,.05), transparent);
+  }
+  .opens-h{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--tier-spec);font-weight:700;margin-bottom:10px;
+  }
+  .opens-list{}
+  .opens-row{
+    padding:8px 0;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;
+  }
+  .opens-row:last-child{border-bottom:none}
+  .opens-mark{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tier-spec);font-weight:700;width:26px}
+  .opens-name{flex:1;font-size:12.5px;color:var(--ink);font-weight:500}
+  .opens-name b{color:var(--ink);font-weight:600}
+  .opens-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--ink-3)}
+
+  /* ============================================ */
+  /* PHONE 3 — TODAY TAB · IRROPS-AWARE            */
+  /* ============================================ */
+  /* in IRROPS, agent app shifts to recovery dispatch mode */
+  .agent-irrops-banner{
+    padding:14px 18px;
+    background:linear-gradient(180deg, rgba(232,153,66,.1), rgba(232,153,66,.02));
+    border-bottom:1px solid #a06a26;
+    position:relative;
+  }
+  .agent-irrops-banner::before{
+    content:'';position:absolute;left:0;top:0;right:0;height:2px;
+    background:linear-gradient(90deg, transparent, #e89942, transparent);
+    background-size:200% 100%;animation:agstripe 4s linear infinite;
+  }
+  @keyframes agstripe{0%{background-position:0 0}100%{background-position:200% 0}}
+  .aib-r1{display:flex;align-items:center;gap:10px;margin-bottom:3px}
+  .aib-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+    color:#e89942;font-weight:700;border:1px solid #a06a26;padding:2px 6px;
+  }
+  .aib-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3)}
+  .aib-msg{font-size:12.5px;color:var(--ink);line-height:1.45}
+  .aib-msg b{color:#e89942;font-weight:600}
+
+  /* now card — assignment hero, IRROPS variant */
+  .now-card{
+    padding:22px 20px;border-bottom:1px solid var(--line);position:relative;
+    background:radial-gradient(ellipse at top right, rgba(232,153,66,.08), transparent 60%);
+  }
+  .now-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;color:#e89942;font-weight:700;margin-bottom:10px;
+  }
+  .now-flight{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;letter-spacing:-.01em;line-height:1}
+  .now-route{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-2);margin-top:4px;letter-spacing:.04em}
+  .now-route b{color:var(--ink);font-weight:600}
+
+  .now-meta-grid{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);
+    border:1px solid var(--line);margin-top:16px;
+  }
+  .nm-cell{background:var(--bg-1);padding:10px 11px}
+  .nm-l{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:3px}
+  .nm-v{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+  .nm-v.r{color:#e89942}
+  .nm-v.g{color:var(--green)}
+
+  .now-cta{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;
+  }
+  .ncta-btn{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+    padding:13px;border:1px solid var(--line-2);background:transparent;color:var(--ink-2);cursor:pointer;
+  }
+  .ncta-btn.primary{background:#e89942;color:#0a0d12;border-color:#e89942}
+
+  /* checklist row IRROPS-tight */
+  .check-list{padding:6px 0}
+  .check-row{
+    display:flex;align-items:center;gap:14px;
+    padding:14px 20px;border-bottom:1px solid var(--line);
+  }
+  .check-row:last-child{border-bottom:none}
+  .check-box{
+    width:22px;height:22px;border:1.5px solid var(--ink-4);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  }
+  .check-box.done{border-color:var(--green);background:rgba(62,213,152,.04);color:var(--green)}
+  .check-row.done .check-name{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--ink-4)}
+  .check-info{flex:1}
+  .check-name{font-size:13px;color:var(--ink);font-weight:500}
+  .check-time{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-3);margin-top:2px}
+  .check-pill{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+    padding:3px 7px;font-weight:700;
+  }
+  .check-pill.crit{color:#e89942;border:1px solid #a06a26}
+
+  /* recovery dispatch (only in IRROPS) */
+  .dispatch-card{
+    margin:14px 18px;padding:14px;
+    border:1px solid #a06a26;background:rgba(232,153,66,.04);
+  }
+  .disp-r1{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .disp-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;font-weight:700;color:#e89942;
+  }
+  .disp-time{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:#e89942;font-weight:700}
+  .disp-msg{font-size:13px;color:var(--ink);line-height:1.5;margin-bottom:12px}
+  .disp-msg b{color:#e89942}
+
+  .disp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .disp-btn{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    letter-spacing:.12em;text-transform:uppercase;font-weight:700;
+    padding:11px;cursor:pointer;
+  }
+  .disp-btn.accept{background:#e89942;color:#0a0d12;border:1px solid #e89942}
+  .disp-btn.swap{background:transparent;color:var(--ink-2);border:1px solid var(--line-2)}
+
+  /* helper for foot disclaimer  */
+  .quiet-note{
+    padding:14px 18px;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-4);
+  }
+
+</style>
+</head>
+<body>
+
+<!-- ====================================================== -->
+<!-- PHONE 1 — YOU TAB · OPERATIONAL MASTERY                 -->
+<!-- ====================================================== -->
+<div>
+  <div class="phone">
+
+    <!-- status bar -->
+    <div class="statusbar">
+      <span>14:42</span>
+      <div class="sb-right">
+        <svg viewBox="0 0 18 12"><path d="M1 9l1.5-1.5L4 9V3l1.5 1.5L7 3v8H1zM9 7l1.5-1.5L12 7V1l1.5 1.5L15 1v8H9z"/></svg>
+        <span>5G</span>
+        <svg viewBox="0 0 24 12" style="width:22px"><rect x="0" y="2" width="22" height="8" rx="1" fill="none" stroke="#e8ecf2" stroke-width="1"/><rect x="2" y="4" width="14" height="4" fill="#e8ecf2"/></svg>
+      </div>
+    </div>
+
+    <!-- topbar -->
+    <div class="topbar-m">
+      <div class="brand-m">
+        <div class="brand-mark-m"></div>
+        <span class="brand-name-m">Ramp<span class="iq">IQ</span></span>
+      </div>
+      <div class="topbar-meta">
+        <span>DFW</span>
+        <span>·</span>
+        <span><b>On-shift</b> 4h 12m</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+
+      <!-- HERO: name + tier -->
+      <div class="mast-hero">
+        <div class="mast-hello">Mastery · Profile</div>
+        <div class="mast-name">Marcus Rivera</div>
+        <div class="mast-id">ID 33421 · DFW · joined Mar 2022</div>
+
+        <!-- tier card -->
+        <div class="tier-block">
+          <div class="tier-r1">
+            <span class="tier-mark">◆ Journeyman</span>
+            <span class="tier-since">since Aug 2024</span>
+          </div>
+          <div class="tier-title">Ramp Journeyman</div>
+          <div class="tier-craft"><b>9 certifications held</b> · cleared for heavy-load and standard pushback · 2 years 2 months on-line</div>
+
+          <!-- progression rail -->
+          <div class="rail">
+            <div class="rail-step done"><div class="rs-name">Trainee</div></div>
+            <div class="rail-step done"><div class="rs-name">Apprentice</div></div>
+            <div class="rail-step now"><div class="rs-name">Journeyman</div></div>
+            <div class="rail-step locked"><div class="rs-name">Specialist</div></div>
+            <div class="rail-step locked"><div class="rs-name">Master</div></div>
+          </div>
+
+          <!-- progress to specialist -->
+          <div class="progress-block">
+            <div class="pb-r1">
+              <span class="pb-l">→ Specialist progression</span>
+              <span class="pb-pct">64%</span>
+            </div>
+            <div class="pb-bar"><div class="pb-fill"></div></div>
+            <div class="pb-target">2 of 3 remaining certs · est <b>4 — 6 months</b> at current cadence</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- competencies -->
+      <div class="section-eyebrow">Practice · 30-day window</div>
+
+      <div class="comp-grid">
+        <div class="comp-cell">
+          <div class="comp-l">Heavy-load turns</div>
+          <div class="comp-v g">9.4</div>
+          <div class="comp-trend">↑ 0.4 vs prior 30d</div>
+          <svg class="comp-spark" viewBox="0 0 100 18">
+            <polyline points="0,14 12,12 24,13 36,9 48,10 60,7 72,8 84,5 100,4" fill="none" stroke="#3ed598" stroke-width="1.4"/>
+          </svg>
+        </div>
+        <div class="comp-cell">
+          <div class="comp-l">Pushback accuracy</div>
+          <div class="comp-v">98.2%</div>
+          <div class="comp-trend flat">— flat</div>
+          <svg class="comp-spark" viewBox="0 0 100 18">
+            <polyline points="0,7 12,8 24,7 36,7 48,8 60,7 72,8 84,7 100,8" fill="none" stroke="#aab3c0" stroke-width="1.4"/>
+          </svg>
+        </div>
+        <div class="comp-cell">
+          <div class="comp-l">Avg turn time</div>
+          <div class="comp-v">28m 14s</div>
+          <div class="comp-trend">↓ 1m 04s vs prior</div>
+          <svg class="comp-spark" viewBox="0 0 100 18">
+            <polyline points="0,6 12,8 24,7 36,9 48,10 60,11 72,12 84,13 100,14" fill="none" stroke="#3ed598" stroke-width="1.4"/>
+          </svg>
+        </div>
+        <div class="comp-cell">
+          <div class="comp-l">Safety streak</div>
+          <div class="comp-v">142d</div>
+          <div class="comp-trend">↑ personal best</div>
+          <svg class="comp-spark" viewBox="0 0 100 18">
+            <polyline points="0,14 12,12 24,11 36,10 48,9 60,8 72,7 84,6 100,4" fill="none" stroke="#3ed598" stroke-width="1.4"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- certifications held + roadmap -->
+      <div class="section-eyebrow">Certifications · <b>9 held · 3 in progress · 4 ahead</b></div>
+
+      <div class="cert-list">
+        <div class="cert-row">
+          <div class="cert-icon held">✓</div>
+          <div class="cert-info">
+            <div class="cert-name">Pushback · Standard</div>
+            <div class="cert-meta">issued 09 Jun 2023 · valid through 09 Jun 2027</div>
+          </div>
+          <span class="cert-status held">Held</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon held">✓</div>
+          <div class="cert-info">
+            <div class="cert-name">Heavy-Load · B737/B738</div>
+            <div class="cert-meta">issued 14 Aug 2024 · valid through 14 Aug 2026</div>
+          </div>
+          <span class="cert-status held">Held</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon held">✓</div>
+          <div class="cert-info">
+            <div class="cert-name">Belt Loader · All Variants</div>
+            <div class="cert-meta">issued 11 Jan 2023 · perpetual</div>
+          </div>
+          <span class="cert-status held">Held</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon progress">◐</div>
+          <div class="cert-info">
+            <div class="cert-name">Wide-Body Pushback · A330 / 777</div>
+            <div class="cert-meta amber">in progress · <b>14 / 20</b> supervised turns logged</div>
+          </div>
+          <span class="cert-status progress">70%</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon progress">◐</div>
+          <div class="cert-info">
+            <div class="cert-name">Hazmat Handling · Class 3</div>
+            <div class="cert-meta amber">classroom complete · <b>field</b> remaining · scheduled 22 May</div>
+          </div>
+          <span class="cert-status progress">60%</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon next">◇</div>
+          <div class="cert-info">
+            <div class="cert-name">Deicing Operator · Type IV</div>
+            <div class="cert-meta accent">next up · <b>opens 2 winter assignment types</b></div>
+          </div>
+          <span class="cert-status next">Next</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon future">◌</div>
+          <div class="cert-info">
+            <div class="cert-name">Recovery Lead · IRROPS</div>
+            <div class="cert-meta">requires Specialist tier · <b>opens crisis dispatch</b></div>
+          </div>
+          <span class="cert-status locked">Future</span>
+        </div>
+
+        <div class="cert-row">
+          <div class="cert-icon future">◌</div>
+          <div class="cert-info">
+            <div class="cert-name">Mentor · Field Instructor</div>
+            <div class="cert-meta">requires Master tier · 4 — 6 yrs from now</div>
+          </div>
+          <span class="cert-status locked">Future</span>
+        </div>
+      </div>
+
+      <!-- what unlocks next -->
+      <div class="unlock-card">
+        <div class="unlock-h">◇ What completing Wide-Body opens up</div>
+        <div class="unlock-msg">Once <b>Wide-Body Pushback</b> is logged, you become eligible for these <b>new assignment types</b> at DFW:</div>
+        <div class="unlock-list">
+          <div class="unlock-item">Wide-body international turnarounds (T2 + T4)</div>
+          <div class="unlock-item">A350 cargo coordination role</div>
+          <div class="unlock-item">+$3.20/hr operating differential</div>
+          <div class="unlock-item">Eligibility for Specialist tier review</div>
+        </div>
+      </div>
+
+      <!-- ways to grow — how to add 11 points -->
+      <div class="section-eyebrow">Ways to grow · suggested by your record</div>
+
+      <div class="grow-card priority">
+        <div class="gc-r1">
+          <span class="gc-tag">Closest to next tier</span>
+          <span class="gc-eta">~ 6 turns</span>
+        </div>
+        <div class="gc-h">Log 6 more wide-body supervised turns</div>
+        <div class="gc-desc">You're <b>14 of 20</b> on Wide-Body Pushback. Three open A350 turns this week match your shift. Mentor Khalil is on-line for sign-off.</div>
+        <div class="gc-bar-row">
+          <span class="gc-bar-l">Progress</span>
+          <div class="gc-bar"><div class="gc-bar-fill" style="width:70%"></div></div>
+          <span class="gc-bar-v">14 / 20</span>
+        </div>
+      </div>
+
+      <div class="grow-card">
+        <div class="gc-r1">
+          <span class="gc-tag">Field hours</span>
+          <span class="gc-eta">8 hrs · scheduled</span>
+        </div>
+        <div class="gc-h">Complete Hazmat field component</div>
+        <div class="gc-desc">Field portion scheduled for 22 May. Adds Class 3 fuel and battery handling to your eligible assignments.</div>
+        <div class="gc-bar-row">
+          <span class="gc-bar-l">Status</span>
+          <div class="gc-bar"><div class="gc-bar-fill amber" style="width:60%"></div></div>
+          <span class="gc-bar-v">Field due</span>
+        </div>
+      </div>
+
+      <div class="grow-card">
+        <div class="gc-r1">
+          <span class="gc-tag">Skill broadening</span>
+          <span class="gc-eta">winter window</span>
+        </div>
+        <div class="gc-h">Begin Type IV deicing certification</div>
+        <div class="gc-desc">Classroom enrollment opens September. Holding this cert keeps you working through winter and unlocks weather-event premium pay.</div>
+      </div>
+
+      <!-- mentorship -->
+      <div class="section-eyebrow">Mentorship</div>
+
+      <div class="mentor-card">
+        <div class="mentor-av">KO</div>
+        <div class="mentor-info">
+          <div class="mentor-r">◇ Your wide-body mentor</div>
+          <div class="mentor-n">Khalil Okafor</div>
+          <div class="mentor-d">Master Lead · 11 yrs · DFW T2</div>
+        </div>
+        <span class="mentor-arrow">›</span>
+      </div>
+
+      <!-- recognitions -->
+      <div class="section-eyebrow">Recognitions · earned</div>
+
+      <div class="recog-strip">
+        <div class="recog-chip held">
+          <div class="recog-name">Recovery contributor</div>
+          <div class="recog-meta">named on <b>3</b> incident reports</div>
+        </div>
+        <div class="recog-chip held">
+          <div class="recog-name">Heavy-load steady</div>
+          <div class="recog-meta">90+ days · <b>0 anomalies</b></div>
+        </div>
+        <div class="recog-chip held">
+          <div class="recog-name">Mentee feedback</div>
+          <div class="recog-meta"><b>4.8</b> avg from 12 trainees</div>
+        </div>
+        <div class="recog-chip">
+          <div class="recog-name">Wide-body crossover</div>
+          <div class="recog-meta">in progress · 70%</div>
+        </div>
+      </div>
+
+      <div class="quiet-note">◇ Profile reflects your work · not surveillance · adjust visibility in settings</div>
+
+    </div>
+
+    <!-- tab bar -->
+    <div class="tabbar">
+      <div class="tab"><div class="tab-icon">◐</div>Today</div>
+      <div class="tab"><div class="tab-icon">▢</div>Schedule</div>
+      <div class="tab"><div class="tab-icon">◇</div>Score</div>
+      <div class="tab"><div class="tab-icon">◌</div>Comms</div>
+      <div class="tab active"><div class="tab-icon">◆</div>You</div>
+    </div>
+  </div>
+  <div class="phone-label">PHONE 1 · <b>YOU TAB</b> · MASTERY OVERVIEW</div>
+</div>
+
+<!-- ====================================================== -->
+<!-- PHONE 2 — CERTIFICATION ROADMAP DEEP VIEW              -->
+<!-- ====================================================== -->
+<div>
+  <div class="phone">
+
+    <div class="statusbar">
+      <span>14:42</span>
+      <div class="sb-right">
+        <svg viewBox="0 0 18 12"><path d="M1 9l1.5-1.5L4 9V3l1.5 1.5L7 3v8H1zM9 7l1.5-1.5L12 7V1l1.5 1.5L15 1v8H9z"/></svg>
+        <span>5G</span>
+        <svg viewBox="0 0 24 12" style="width:22px"><rect x="0" y="2" width="22" height="8" rx="1" fill="none" stroke="#e8ecf2" stroke-width="1"/><rect x="2" y="4" width="14" height="4" fill="#e8ecf2"/></svg>
+      </div>
+    </div>
+
+    <div class="topbar-m">
+      <div class="brand-m">
+        <div class="brand-mark-m"></div>
+        <span class="brand-name-m">Ramp<span class="iq">IQ</span></span>
+      </div>
+      <div class="topbar-meta">
+        <span>DFW</span>
+        <span>·</span>
+        <span>Marcus R · ID 33421</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+
+      <!-- HERO -->
+      <div class="crm-hero">
+        <span class="crm-back">Back to You</span>
+        <div class="crm-eyebrow">Certification Roadmap</div>
+        <h1 class="crm-h">Your path to <em>Specialist</em></h1>
+        <p class="crm-sub">Three certifications stand between Journeyman and Specialist. Each opens a new class of assignments — and a new pay tier. Estimated time at your current cadence: <b>4 — 6 months</b>.</p>
+      </div>
+
+      <!-- ROADMAP -->
+      <div class="roadmap">
+
+        <div class="road-step done">
+          <div class="road-num">✓</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Pushback · Standard</span>
+              <span class="road-tag held">Held</span>
+            </div>
+            <div class="road-desc">Foundation cert · narrow-body push and tow. Required for all gate operations.</div>
+            <div class="road-unlocks"><b>Earned</b> · 09 Jun 2023</div>
+          </div>
+        </div>
+
+        <div class="road-step done">
+          <div class="road-num">✓</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Heavy-Load · B737/B738</span>
+              <span class="road-tag held">Held</span>
+            </div>
+            <div class="road-desc">Bag count ≥ 140 and cargo handling for 737 family. Cleared for heavy summer operations.</div>
+            <div class="road-unlocks"><b>Earned</b> · 14 Aug 2024 · differential <b>+$2.10/hr</b></div>
+          </div>
+        </div>
+
+        <div class="road-step current">
+          <div class="road-num">◐</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Wide-Body Pushback · A330 / 777</span>
+              <span class="road-tag now">In progress</span>
+            </div>
+            <div class="road-desc">Wide-body aircraft handling under supervision. Threshold: <b>20 logged supervised turns</b> with mentor sign-off.</div>
+            <div class="road-progress">
+              <div class="rp-bar"><div class="rp-fill" style="width:70%"></div></div>
+              <div class="rp-pct">14 / 20</div>
+            </div>
+            <div class="road-unlocks" style="margin-top:6px"><b>Mentor</b> · Khalil O · est completion <b>6 — 8 wks</b></div>
+          </div>
+        </div>
+
+        <div class="road-step current">
+          <div class="road-num">◐</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Hazmat Handling · Class 3</span>
+              <span class="road-tag now">In progress</span>
+            </div>
+            <div class="road-desc">Class 3 flammable liquids — fuel, batteries, certain pharmaceuticals. Classroom complete · field component due.</div>
+            <div class="road-progress">
+              <div class="rp-bar"><div class="rp-fill" style="width:60%"></div></div>
+              <div class="rp-pct">60%</div>
+            </div>
+            <div class="road-unlocks" style="margin-top:6px"><b>Field portion</b> · 22 May · 8 hours</div>
+          </div>
+        </div>
+
+        <div class="road-step next">
+          <div class="road-num">◇</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Deicing Operator · Type IV</span>
+              <span class="road-tag next">Next</span>
+            </div>
+            <div class="road-desc">Cold-weather operations using Type IV anti-icing fluid. Adds you to the winter rotation pool.</div>
+            <div class="road-unlocks"><b>Window</b> · enrollment Sep 2026 · 16 hrs classroom + 8 field</div>
+          </div>
+        </div>
+
+        <div class="road-step locked">
+          <div class="road-num">◌</div>
+          <div class="road-body">
+            <div class="road-r1">
+              <span class="road-name">Specialist Tier · Review</span>
+              <span class="road-tag future">After 3 above</span>
+            </div>
+            <div class="road-desc">Once Wide-Body, Hazmat, and Deicing are logged, you become eligible for Specialist tier review. Adds <b>$4.80/hr</b> to base, opens recovery-lead assignments.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- WHAT IT OPENS UP -->
+      <div class="opens-card">
+        <div class="opens-h">◇ Specialist tier · what it opens up</div>
+        <div class="opens-list">
+          <div class="opens-row">
+            <span class="opens-mark">01</span>
+            <span class="opens-name">Wide-body international turnarounds</span>
+            <span class="opens-meta">+$3.20/hr</span>
+          </div>
+          <div class="opens-row">
+            <span class="opens-mark">02</span>
+            <span class="opens-name">Recovery dispatch assignments</span>
+            <span class="opens-meta">priority pool</span>
+          </div>
+          <div class="opens-row">
+            <span class="opens-mark">03</span>
+            <span class="opens-name">Mentor eligibility · field sign-off</span>
+            <span class="opens-meta">+training pay</span>
+          </div>
+          <div class="opens-row">
+            <span class="opens-mark">04</span>
+            <span class="opens-name">Shift bid priority · weekend / holiday</span>
+            <span class="opens-meta">tier 2 → tier 1</span>
+          </div>
+          <div class="opens-row">
+            <span class="opens-mark">05</span>
+            <span class="opens-name">Eligibility for IRROPS Recovery Lead path</span>
+            <span class="opens-meta">future cert track</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="quiet-note">◇ Mastery is yours · share with mentor · export to records</div>
+
+    </div>
+
+    <div class="tabbar">
+      <div class="tab"><div class="tab-icon">◐</div>Today</div>
+      <div class="tab"><div class="tab-icon">▢</div>Schedule</div>
+      <div class="tab"><div class="tab-icon">◇</div>Score</div>
+      <div class="tab"><div class="tab-icon">◌</div>Comms</div>
+      <div class="tab active"><div class="tab-icon">◆</div>You</div>
+    </div>
+  </div>
+  <div class="phone-label">PHONE 2 · <b>CERT ROADMAP</b> · DEEP VIEW</div>
+</div>
+
+<!-- ====================================================== -->
+<!-- PHONE 3 — TODAY TAB · IRROPS-AWARE                     -->
+<!-- ====================================================== -->
+<div>
+  <div class="phone">
+
+    <div class="statusbar">
+      <span>14:42</span>
+      <div class="sb-right">
+        <svg viewBox="0 0 18 12"><path d="M1 9l1.5-1.5L4 9V3l1.5 1.5L7 3v8H1zM9 7l1.5-1.5L12 7V1l1.5 1.5L15 1v8H9z"/></svg>
+        <span>5G</span>
+        <svg viewBox="0 0 24 12" style="width:22px"><rect x="0" y="2" width="22" height="8" rx="1" fill="none" stroke="#e8ecf2" stroke-width="1"/><rect x="2" y="4" width="14" height="4" fill="#e8ecf2"/></svg>
+      </div>
+    </div>
+
+    <div class="topbar-m">
+      <div class="brand-m">
+        <div class="brand-mark-m" style="border-color:#e89942"></div>
+        <span class="brand-name-m">Ramp<span class="iq" style="color:#e89942">IQ</span></span>
+      </div>
+      <div class="topbar-meta">
+        <span style="color:#e89942;font-weight:700">⚡ IRROPS</span>
+        <span>·</span>
+        <span>Marcus R</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+
+      <!-- IRROPS BANNER -->
+      <div class="agent-irrops-banner">
+        <div class="aib-r1">
+          <span class="aib-tag">◇ Recovery Mode</span>
+          <span class="aib-time">14:42 · station-wide</span>
+        </div>
+        <div class="aib-msg">DFW is in <b>recovery mode</b> until 16:30. Your dispatch may shift fast — you'll be paid recovery rate <b>+$4.50/hr</b> for the duration.</div>
+      </div>
+
+      <!-- NOW assignment, IRROPS variant -->
+      <div class="now-card">
+        <div class="now-tag">◇ Now · Active turn</div>
+        <div class="now-flight">AA1844</div>
+        <div class="now-route"><b>DFW → ORD</b> · Gate B14 · B738</div>
+
+        <div class="now-meta-grid">
+          <div class="nm-cell">
+            <div class="nm-l">Pushback in</div>
+            <div class="nm-v r">T-12 min</div>
+          </div>
+          <div class="nm-cell">
+            <div class="nm-l">Bag count</div>
+            <div class="nm-v">147</div>
+          </div>
+          <div class="nm-cell">
+            <div class="nm-l">Crew</div>
+            <div class="nm-v g">4 / 4</div>
+          </div>
+        </div>
+
+        <div class="now-cta">
+          <button class="ncta-btn primary">▷ Start checklist</button>
+          <button class="ncta-btn">Map · B14</button>
+        </div>
+      </div>
+
+      <!-- checklist -->
+      <div class="check-list">
+        <div class="check-row done">
+          <div class="check-box done">✓</div>
+          <div class="check-info">
+            <div class="check-name">Walkaround · forward + aft</div>
+            <div class="check-time">completed 14:31</div>
+          </div>
+        </div>
+        <div class="check-row done">
+          <div class="check-box done">✓</div>
+          <div class="check-info">
+            <div class="check-name">GPU connect + power confirm</div>
+            <div class="check-time">completed 14:34</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <div class="check-box"></div>
+          <div class="check-info">
+            <div class="check-name">Bag transfer · belt loader 8</div>
+            <div class="check-time">in progress · 92 / 147</div>
+          </div>
+          <span class="check-pill crit">Heavy</span>
+        </div>
+        <div class="check-row">
+          <div class="check-box"></div>
+          <div class="check-info">
+            <div class="check-name">Cargo hold seal + manifest sign-off</div>
+            <div class="check-time">due T-7</div>
+          </div>
+        </div>
+        <div class="check-row">
+          <div class="check-box"></div>
+          <div class="check-info">
+            <div class="check-name">Pushback brief · with PIC</div>
+            <div class="check-time">due T-3</div>
+          </div>
+          <span class="check-pill crit">Critical</span>
+        </div>
+      </div>
+
+      <!-- recovery dispatch — appears in IRROPS only -->
+      <div class="section-eyebrow" style="color:#e89942">⟶ Recovery dispatch · <b style="color:#e89942">incoming</b></div>
+
+      <div class="dispatch-card">
+        <div class="disp-r1">
+          <span class="disp-tag">◇ Reassignment requested</span>
+          <span class="disp-time">14:42:38</span>
+        </div>
+        <div class="disp-msg">RampIQ is requesting <b>Team Delta</b> (you) be pulled from DL1144 to <b>AA2201 · B12</b>. DL1144 has +6m slack and Team Bravo can absorb. Walking ETA <b>1m 50s</b>.</div>
+        <div class="disp-grid">
+          <button class="disp-btn accept">▷ Accept &amp; go</button>
+          <button class="disp-btn swap">Request swap</button>
+        </div>
+      </div>
+
+      <!-- next up — abbreviated in IRROPS -->
+      <div class="section-eyebrow">Up next · <b>simplified · IRROPS</b></div>
+
+      <div class="grow-card" style="margin-bottom:8px">
+        <div class="gc-r1">
+          <span class="gc-tag" style="color:var(--ink-2)">17:15 · Gate B22</span>
+          <span class="gc-eta">B738 · 132 bags</span>
+        </div>
+        <div class="gc-h">AA0712 · DFW → SFO</div>
+        <div class="gc-desc" style="margin-bottom:0">Heavy-load turn · Team Bravo lead. Your role · belt loader.</div>
+      </div>
+
+      <div class="quiet-note">◇ All other up-next · paused · resume after recovery clears 16:30</div>
+
+    </div>
+
+    <div class="tabbar">
+      <div class="tab active" style="color:#e89942"><div class="tab-icon">◐</div>Today</div>
+      <div class="tab"><div class="tab-icon">▢</div>Schedule</div>
+      <div class="tab"><div class="tab-icon">◇</div>Score</div>
+      <div class="tab"><div class="tab-icon">◌</div>Comms</div>
+      <div class="tab"><div class="tab-icon">◆</div>You</div>
+    </div>
+  </div>
+  <div class="phone-label">PHONE 3 · <b>TODAY TAB</b> · IRROPS-AWARE</div>
+</div>
+
+</body>
+</html>

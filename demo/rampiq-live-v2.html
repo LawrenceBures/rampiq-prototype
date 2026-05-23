@@ -1,0 +1,1994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RampIQ · Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & base ─────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:        #0a0b0d;
+  --surface:   #111318;
+  --surface2:  #161a21;
+  --border:    #1e2430;
+  --border2:   #252d3a;
+  --text:      #d4dbe8;
+  --muted:     #5a6478;
+  --lime:      #b8e632;
+  --lime-dim:  #7fa020;
+  --amber:     #e89942;
+  --amber-dim: #a06520;
+  --red:       #d4524a;
+  --red-dim:   #8a2f2a;
+  --blue:      #4a9fd4;
+  --blue-dim:  #2a5f8a;
+  --purple:    #9b72cf;
+  --sidebar-w: 196px;
+  --topbar-h:  52px;
+  --mono: 'JetBrains Mono', monospace;
+  --serif: 'Instrument Serif', serif;
+  --sans: 'Inter Tight', sans-serif;
+}
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ── Shell layout ─────────────────────────────────────── */
+#shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-areas: "sidebar topbar" "sidebar main";
+  height: 100vh;
+}
+
+/* ── Topbar ───────────────────────────────────────────── */
+#topbar {
+  grid-area: topbar;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 20px;
+}
+.topbar-brand { display: flex; align-items: baseline; gap: 8px; }
+.topbar-brand .wordmark { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--lime); letter-spacing: -0.5px; }
+.topbar-brand .phase { font-size: 10px; color: var(--muted); letter-spacing: 0.4px; text-transform: uppercase; }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); }
+#topbar-time { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); letter-spacing: 1px; min-width: 52px; }
+#topbar-date { font-size: 11px; color: var(--muted); }
+.topbar-spacer { flex: 1; }
+.wx-badge { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border2); background: var(--surface2); font-family: var(--mono); font-size: 11px; }
+.wx-badge .wx-icon { font-size: 14px; }
+.wx-badge .wx-label { color: var(--muted); }
+.wx-badge .wx-val { color: var(--text); }
+.wx-badge.wx-threat { border-color: rgba(232,153,66,0.3); background: rgba(232,153,66,0.05); }
+.wx-badge.wx-threat .wx-val { color: var(--amber); }
+.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.conn-dot.live { background: var(--lime); box-shadow: 0 0 6px var(--lime); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+@keyframes alert-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+@keyframes cascade-appear { from{opacity:0;transform:translateX(-5px)} to{opacity:1;transform:none} }
+.critical-pulse { animation: alert-pulse 1.6s ease-in-out infinite; }
+.cascade-step { opacity:0; animation: cascade-appear 0.3s ease-out forwards; }
+.cand-score-fill { transition: width 0.8s ease-out; }
+.conn-label { font-size: 11px; color: var(--muted); }
+
+/* ── Demo mode button ─────────────────────────────────── */
+#demo-toggle {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer; letter-spacing: 0.3px;
+  background: transparent; border: 1px solid var(--border2); color: var(--muted);
+  transition: all 0.15s;
+}
+#demo-toggle:hover { border-color: var(--border); color: var(--text); }
+#demo-toggle.demo-on { background: rgba(184,230,50,0.1); border-color: rgba(184,230,50,0.4); color: var(--lime); }
+
+/* ── Demo narrative panel ─────────────────────────────── */
+#demo-panel {
+  position: fixed; bottom: 20px; right: 20px; z-index: 200;
+  width: 300px; background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 6px; padding: 14px 16px; display: none;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+}
+#demo-panel.visible { display: block; }
+.dp-step { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+.dp-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.dp-text { font-size: 11px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+.dp-controls { display: flex; align-items: center; gap: 8px; }
+.dp-btn {
+  font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 4px 10px;
+  border-radius: 3px; cursor: pointer; border: 1px solid var(--border2);
+  background: var(--surface2); color: var(--text); transition: all 0.12s;
+}
+.dp-btn:hover { border-color: var(--lime); color: var(--lime); }
+.dp-btn.dp-next { background: rgba(184,230,50,0.1); border-color: rgba(184,230,50,0.4); color: var(--lime); }
+.dp-btn.dp-next:hover { background: rgba(184,230,50,0.18); }
+.dp-auto-label { font-size: 10px; color: var(--muted); margin-left: auto; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.dp-pip { display: flex; gap: 4px; margin-bottom: 10px; }
+.dp-pip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); cursor: pointer; transition: background 0.15s; }
+.dp-pip-dot.active { background: var(--lime); }
+.dp-pip-dot.done { background: var(--lime-dim); }
+
+/* ── IRROPS banner ────────────────────────────────────── */
+#irrops-banner {
+  display: none;
+  border-bottom: 1px solid rgba(232,153,66,0.28);
+  padding: 3px 20px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--amber);
+  letter-spacing: 0.1px;
+  grid-column: 2;
+}
+#irrops-banner.active { display: block; }
+
+/* ── Sidebar ──────────────────────────────────────────── */
+#sidebar {
+  grid-area: sidebar;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-logo {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-logo .mark { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--lime); }
+.sidebar-logo .sub { font-size: 9px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-top: 1px; }
+.sidebar-kpis {
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.kpi-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 7px 8px;
+}
+.kpi-chip .kv { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--text); line-height: 1; }
+.kpi-chip .kl { font-size: 9px; color: var(--muted); margin-top: 3px; letter-spacing: 0.5px; text-transform: uppercase; }
+.kpi-chip.k-otp .kv { color: var(--lime); }
+.kpi-chip.k-risk .kv { color: var(--amber); }
+.kpi-chip.k-crit .kv { color: var(--red); }
+.kpi-chip.k-cost .kv { color: var(--blue); }
+.nav-section { padding: 8px 0; flex: 1; overflow-y: auto; }
+.nav-label { padding: 6px 16px 3px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  border-left: 2px solid transparent;
+  transition: all 0.12s;
+  user-select: none;
+}
+.nav-item:hover { color: var(--text); background: var(--surface2); }
+.nav-item.active { color: var(--lime); border-left-color: var(--lime); background: rgba(184,230,50,0.04); }
+.nav-item .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+.nav-badge { margin-left: auto; background: var(--red); color: #fff; font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; min-width: 18px; text-align: center; }
+.nav-badge.amber { background: var(--amber-dim); }
+.sidebar-footer { padding: 10px 12px; border-top: 1px solid var(--border); }
+.sidebar-footer p { font-size: 9px; color: var(--muted); line-height: 1.5; }
+
+/* ── Main pane ────────────────────────────────────────── */
+#main {
+  grid-area: main;
+  overflow: hidden;
+  position: relative;
+}
+.view {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.view.active { display: flex; }
+.view-header {
+  padding: 16px 20px 0;
+  flex-shrink: 0;
+}
+.view-header h1 { font-family: var(--serif); font-size: 22px; font-weight: 400; color: var(--text); font-style: italic; }
+.view-header p { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.view-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+.view-cols { display: flex; gap: 14px; height: 100%; overflow: hidden; }
+.view-cols > * { overflow-y: auto; }
+
+/* ── Cards ────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.card-head {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-head h3 { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text); letter-spacing: 0.5px; text-transform: uppercase; flex: 1; }
+.card-body { padding: 10px 14px; }
+.card-tag { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 600; letter-spacing: 0.5px; }
+.tag-watch { background: rgba(232,153,66,0.15); color: var(--amber); }
+.tag-critical { background: rgba(212,82,74,0.15); color: var(--red); }
+.tag-ok { background: rgba(184,230,50,0.1); color: var(--lime); }
+.tag-delayed { background: rgba(212,82,74,0.15); color: var(--red); }
+.tag-blue { background: rgba(74,159,212,0.15); color: var(--blue); }
+
+/* ── Flight queue (View 1) ────────────────────────────── */
+.flight-queue { font-family: var(--mono); font-size: 11px; }
+.fq-row {
+  display: grid;
+  grid-template-columns: 72px 42px 36px 54px 52px 60px 54px 60px 1fr;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+}
+.fq-row:last-child { border-bottom: none; }
+.fq-head { color: var(--muted); font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; padding-bottom: 6px; border-bottom: 1px solid var(--border2); margin-bottom: 2px; }
+.fq-id { color: var(--blue); font-weight: 600; }
+.fq-bar { height: 4px; border-radius: 2px; background: var(--border2); position: relative; overflow: hidden; width: 100%; }
+.fq-bar-fill { height: 100%; border-radius: 2px; }
+.risk-watch .fq-bar-fill { background: var(--amber); }
+.risk-critical .fq-bar-fill { background: var(--red); }
+.risk-ok .fq-bar-fill { background: var(--lime-dim); }
+.fq-score.risk-critical { color: var(--red); }
+.fq-score.risk-watch { color: var(--amber); }
+.fq-score.risk-ok { color: var(--lime); }
+
+/* ── Gate grid (View 1) ───────────────────────────────── */
+.gate-grid-wrap { overflow-x: auto; }
+.gate-terminal-row { margin-bottom: 10px; }
+.gate-terminal-label { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.gate-cells { display: flex; flex-wrap: wrap; gap: 3px; }
+.gate-cell {
+  width: 12px; height: 12px; border-radius: 2px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  cursor: default;
+  position: relative;
+}
+.gate-cell.g-critical { background: var(--red-dim); border-color: var(--red); }
+.gate-cell.g-watch { background: var(--amber-dim); border-color: var(--amber); }
+.gate-cell.g-ok { background: rgba(184,230,50,0.2); border-color: var(--lime-dim); }
+.gate-cell.g-empty { background: var(--surface2); border-color: var(--border); }
+.gate-legend { display: flex; gap: 14px; margin-top: 6px; }
+.gate-legend span { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted); }
+.gate-legend span::before { content:''; display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
+.gate-legend .l-critical::before { background: var(--red-dim); border: 1px solid var(--red); }
+.gate-legend .l-watch::before { background: var(--amber-dim); border: 1px solid var(--amber); }
+.gate-legend .l-ok::before { background: rgba(184,230,50,0.2); border: 1px solid var(--lime-dim); }
+.gate-legend .l-empty::before { background: var(--surface2); border: 1px solid var(--border); }
+
+/* ── Alert feed (View 1) ──────────────────────────────── */
+.alert-feed { display: flex; flex-direction: column; gap: 6px; }
+.alert-item { display: flex; gap: 8px; padding: 7px 10px; border-radius: 4px; border: 1px solid var(--border2); background: var(--surface2); align-items: flex-start; }
+.alert-item.sev-critical { border-color: var(--red-dim); background: rgba(212,82,74,0.06); }
+.alert-item.sev-warning { border-color: var(--amber-dim); background: rgba(232,153,66,0.06); }
+.alert-item.sev-info { border-color: var(--border2); }
+.alert-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+.sev-critical .alert-dot { background: var(--red); }
+.sev-warning .alert-dot { background: var(--amber); }
+.sev-info .alert-dot { background: var(--blue); }
+.alert-text { font-size: 11px; line-height: 1.4; }
+.alert-time { font-family: var(--mono); font-size: 10px; color: var(--muted); flex-shrink: 0; }
+
+/* ── Team cards (View 2) ──────────────────────────────── */
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.team-card {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 10px;
+}
+.team-card.status-available { border-color: rgba(184,230,50,0.25); }
+.team-card.status-assigned { border-color: var(--border2); }
+.team-card.status-high_fatigue { border-color: rgba(232,153,66,0.4); }
+.team-card.status-unavailable { border-color: rgba(212,82,74,0.3); opacity: 0.6; }
+.tc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.tc-name { font-weight: 600; font-size: 12px; color: var(--text); }
+.tc-id { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 1px; }
+.tc-tier { font-size: 9px; padding: 2px 6px; border-radius: 3px; font-family: var(--mono); font-weight: 600; letter-spacing: 0.5px; }
+.tier-master { background: rgba(184,230,50,0.12); color: var(--lime); }
+.tier-journeyman { background: rgba(74,159,212,0.12); color: var(--blue); }
+.tier-apprentice { background: rgba(155,114,207,0.12); color: var(--purple); }
+.tc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+.tc-stat .ts-val { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+.tc-stat .ts-lbl { font-size: 9px; color: var(--muted); }
+.fatigue-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 6px; }
+.fatigue-fill { height: 100%; border-radius: 2px; background: var(--lime-dim); transition: width 0.4s; }
+.fatigue-fill.high { background: var(--amber); }
+.fatigue-fill.cap { background: var(--red); }
+.tc-certs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.tc-cert { font-size: 8px; padding: 1px 5px; border-radius: 2px; background: rgba(74,159,212,0.1); color: var(--blue); font-family: var(--mono); border: 1px solid rgba(74,159,212,0.2); }
+.tc-assignment { margin-top: 6px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.tc-assignment .assigned-flight { color: var(--lime); }
+
+/* ── Assignment engine (View 3) ──────────────────────────*/
+.reco-list { display: flex; flex-direction: column; gap: 10px; }
+.reco-card {
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface2);
+}
+.reco-flight-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border2);
+}
+.reco-flight-id { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue); }
+.reco-flight-meta { font-size: 11px; color: var(--muted); }
+.reco-confidence { margin-left: auto; }
+.conf-pct { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--lime); }
+.conf-lbl { font-size: 9px; color: var(--muted); text-align: right; }
+.reco-candidates { padding: 10px 14px; }
+.cand-header { font-size: 9px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; }
+.candidate-row {
+  display: grid;
+  grid-template-columns: 120px 60px 1fr 50px 60px;
+  align-items: center; gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.candidate-row:last-child { border-bottom: none; }
+.candidate-row.top-pick { background: rgba(184,230,50,0.04); border-radius: 3px; padding: 5px 6px; margin: 0 -6px; }
+.cand-name { font-size: 12px; font-weight: 500; }
+.cand-name .top-icon { color: var(--lime); font-size: 9px; margin-right: 3px; }
+.cand-tier { font-size: 9px; }
+.cand-score-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.cand-score-fill { height: 100%; border-radius: 2px; background: var(--lime-dim); }
+.cand-score-fill.high { background: var(--lime); }
+.cand-score-num { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--lime); }
+.cand-fatigue { font-family: var(--mono); font-size: 10px; }
+.cand-fatigue.hi { color: var(--amber); }
+.reco-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 12px; }
+
+/* ── Risk breakdown ───────────────────────────────────── */
+.risk-breakdown { display: flex; flex-direction: column; gap: 5px; }
+.risk-row { display: flex; align-items: center; gap: 8px; }
+.risk-lbl { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 70px; }
+.risk-mini-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.risk-mini-fill { height: 100%; border-radius: 2px; }
+.risk-mini-fill.r-low { background: var(--lime-dim); }
+.risk-mini-fill.r-med { background: var(--amber); }
+.risk-mini-fill.r-high { background: var(--red); }
+.risk-num { font-family: var(--mono); font-size: 10px; width: 28px; text-align: right; color: var(--muted); }
+
+/* ── Delay / cascade (View 4) ────────────────────────── */
+.cascade-empty { padding: 24px; text-align: center; color: var(--muted); font-style: italic; font-size: 12px; }
+.cascade-chain {
+  border: 1px solid var(--amber-dim);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  background: rgba(232,153,66,0.04);
+}
+.cascade-head { padding: 8px 14px; background: rgba(232,153,66,0.08); border-bottom: 1px solid var(--amber-dim); }
+.cascade-flights { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.cascade-flight { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; }
+.cf-connector { color: var(--amber); }
+.delay-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.delay-table th { text-align: left; padding: 5px 8px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; border-bottom: 1px solid var(--border2); font-weight: 500; }
+.delay-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+.delay-table tr:last-child td { border-bottom: none; }
+.cause-bar-wrap { display: flex; align-items: center; gap: 6px; }
+.cause-bar { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.cause-bar-fill { height: 100%; border-radius: 2px; background: var(--amber); }
+.recovery-paths { display: flex; gap: 10px; margin-top: 10px; }
+.recovery-path {
+  flex: 1; padding: 12px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--surface2);
+}
+.recovery-path.path-a { border-color: rgba(184,230,50,0.25); }
+.recovery-path.path-b { border-color: rgba(74,159,212,0.25); }
+.recovery-path.path-hold { border-color: rgba(232,153,66,0.25); }
+.path-label { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+.path-a .path-label { color: var(--lime); }
+.path-b .path-label { color: var(--blue); }
+.path-hold .path-label { color: var(--amber); }
+.path-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.path-metric { font-family: var(--mono); font-size: 12px; font-weight: 600; margin-top: 6px; }
+.path-a .path-metric { color: var(--lime); }
+.path-b .path-metric { color: var(--blue); }
+.path-hold .path-metric { color: var(--amber); }
+
+/* ── Equipment (View 5) ───────────────────────────────── */
+.depot-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+.depot-card {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 12px;
+}
+.depot-name { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.depot-id { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 10px; }
+.depot-donut-row { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.depot-donut { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+.depot-donut svg { transform: rotate(-90deg); }
+.depot-donut .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.donut-pct { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); line-height: 1; }
+.donut-sub { font-size: 8px; color: var(--muted); }
+.depot-stats { display: flex; flex-direction: column; gap: 4px; font-size: 10px; }
+.depot-stat { display: flex; justify-content: space-between; gap: 10px; }
+.depot-stat .ds-lbl { color: var(--muted); }
+.depot-stat .ds-val { font-family: var(--mono); font-weight: 600; }
+.ds-avail { color: var(--lime); }
+.ds-maint { color: var(--amber); }
+.shortage-section h4 { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; }
+.shortage-empty { font-size: 12px; color: var(--muted); padding: 10px 0; font-style: italic; }
+
+/* ── Crew Mobility (View 6) ───────────────────────────── */
+.mobility-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.position-list { display: flex; flex-direction: column; gap: 6px; }
+.position-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px; }
+.pi-gate { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--blue); width: 36px; }
+.pi-name { font-size: 11px; flex: 1; }
+.pi-status { font-size: 10px; color: var(--muted); }
+.idle-pockets { display: flex; flex-direction: column; gap: 6px; }
+.idle-item { padding: 7px 10px; background: rgba(184,230,50,0.04); border: 1px solid rgba(184,230,50,0.15); border-radius: 4px; }
+.idle-gate { font-family: var(--mono); font-size: 11px; color: var(--lime); }
+.idle-desc { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.conc-section { margin-top: 12px; }
+.conc-section h4 { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; }
+.terminal-conc-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tcr-label { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 20px; }
+.tcr-bar { flex: 1; height: 8px; background: var(--border); border-radius: 3px; overflow: hidden; display: flex; }
+.tcr-seg { height: 100%; }
+.tcr-count { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 20px; text-align: right; }
+
+/* ── Executive (View 7) ───────────────────────────────── */
+.exec-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.exec-kpi-card { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 14px 16px; }
+.exec-kpi-val { font-family: var(--mono); font-size: 28px; font-weight: 700; line-height: 1; }
+.exec-kpi-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.exec-kpi-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+.exec-kpi-card.k-otp .exec-kpi-val { color: var(--lime); }
+.exec-kpi-card.k-risk .exec-kpi-val { color: var(--amber); }
+.exec-kpi-card.k-crit .exec-kpi-val { color: var(--red); }
+.exec-kpi-card.k-teams .exec-kpi-val { color: var(--blue); }
+.exec-kpi-card.k-cost .exec-kpi-val { color: var(--amber); }
+.exec-kpi-card.k-prevent .exec-kpi-val { color: var(--lime); }
+.narrative-card {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px;
+  padding: 14px 16px; margin-bottom: 12px;
+}
+.narrative-card h3 { font-family: var(--serif); font-size: 16px; font-style: italic; color: var(--text); margin-bottom: 8px; }
+.narrative-card p { font-size: 12px; color: var(--muted); line-height: 1.7; }
+.narrative-card p strong { color: var(--text); }
+.benchmark-section h4 { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; }
+.bench-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bench-label { font-size: 11px; width: 80px; color: var(--muted); }
+.bench-bar-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.bench-bar-fill { height: 100%; border-radius: 3px; background: var(--lime-dim); }
+.bench-bar-fill.this-station { background: var(--lime); }
+.bench-pct { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 36px; text-align: right; }
+.bench-note { font-size: 9px; color: var(--muted); font-style: italic; margin-top: 6px; }
+
+/* ── Utilities ────────────────────────────────────────── */
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.lime { color: var(--lime); }
+.amber { color: var(--amber); }
+.red { color: var(--red); }
+.blue { color: var(--blue); }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.5px;
+  padding: 2px 7px; border-radius: 10px;
+}
+.pill-ok { background: rgba(184,230,50,0.1); color: var(--lime); border: 1px solid rgba(184,230,50,0.25); }
+.pill-watch { background: rgba(232,153,66,0.12); color: var(--amber); border: 1px solid rgba(232,153,66,0.3); }
+.pill-critical { background: rgba(212,82,74,0.12); color: var(--red); border: 1px solid rgba(212,82,74,0.3); }
+.pill-delayed { background: rgba(212,82,74,0.12); color: var(--red); border: 1px solid rgba(212,82,74,0.3); }
+.pill-boarding { background: rgba(74,159,212,0.12); color: var(--blue); border: 1px solid rgba(74,159,212,0.3); }
+.pill-scheduled { background: rgba(90,100,120,0.15); color: var(--muted); border: 1px solid var(--border2); }
+.pill-pushback { background: rgba(155,114,207,0.12); color: var(--purple); border: 1px solid rgba(155,114,207,0.3); }
+.divider { height: 1px; background: var(--border); margin: 10px 0; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ── Recovery orchestration ───────────────────────────── */
+/* Cascade chain state variants */
+.cascade-chain.recovering {
+  border-color: rgba(232,153,66,0.35);
+  background: rgba(232,153,66,0.02);
+  transition: border-color 1.5s ease, background 1.5s ease;
+}
+.cascade-chain.recovering .cascade-head {
+  background: rgba(232,153,66,0.04);
+}
+.cascade-chain.contained {
+  border-color: var(--border);
+  background: transparent;
+  opacity: 0.32;
+  pointer-events: none;
+  transition: opacity 1.5s ease, border-color 1.5s ease;
+}
+.cascade-chain.contained .cascade-head { background: transparent; }
+
+/* Status tags on cascade chain headers */
+.cascade-status-tag {
+  font-family: var(--mono); font-size: 9px; font-weight: 600;
+  letter-spacing: 0.3px; padding: 1px 6px; border-radius: 3px; margin-left: auto; flex-shrink: 0;
+}
+.cst-recovering { background: rgba(232,153,66,0.1); color: var(--amber); border: 1px solid rgba(232,153,66,0.28); }
+.cst-contained  { background: rgba(90,100,120,0.1); color: var(--muted);  border: 1px solid var(--border2); }
+
+/* Active Recoveries panel */
+.rai-item { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.rai-item:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: none; }
+.rai-flight { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--blue); }
+.rai-team   { font-family: var(--mono); font-size: 10px; color: var(--lime); margin-left: 6px; }
+.rai-desc   { font-size: 10px; color: var(--muted); margin-top: 2px; margin-bottom: 6px; line-height: 1.5; }
+.rai-label  { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.3px; text-transform: uppercase; }
+.stab-bar-wrap { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+.stab-bar-fill { height: 100%; border-radius: 1px; background: var(--lime-dim); transition: width 1.5s ease-out; }
+
+/* Recovery outcome grid (exec view) */
+.outcome-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 10px; }
+.outcome-cell { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; padding: 12px 14px; }
+.outcome-val  { font-family: var(--mono); font-size: 22px; font-weight: 700; line-height: 1; color: var(--lime); }
+.outcome-lbl  { font-size: 10px; color: var(--muted); margin-top: 4px; }
+.outcome-sub  { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
+.outcome-rate { font-size: 9px; color: var(--muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); font-style: italic; }
+.outcome-summary { font-size: 11px; color: var(--muted); line-height: 1.7; margin-top: 10px; }
+
+/* Accept recommendation button (step 4 demo) */
+.accept-reco-btn {
+  font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+  padding: 6px 14px; border-radius: 3px; cursor: pointer; margin-top: 12px;
+  background: rgba(184,230,50,0.1); border: 1px solid rgba(184,230,50,0.4); color: var(--lime);
+  transition: all 0.12s; display: inline-block;
+}
+.accept-reco-btn:hover { background: rgba(184,230,50,0.18); }
+.accept-reco-btn:active { background: rgba(184,230,50,0.25); }
+</style>
+</head>
+<body>
+<div id="shell">
+
+  <!-- ── Sidebar ───────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <div class="mark">RampIQ</div>
+      <div class="sub">Intelligence Platform</div>
+    </div>
+    <div class="sidebar-kpis">
+      <div class="kpi-chip k-otp"><div class="kv" id="s-otp">—</div><div class="kl">OTP</div></div>
+      <div class="kpi-chip k-risk"><div class="kv" id="s-atrisk">—</div><div class="kl">At-Risk</div></div>
+      <div class="kpi-chip k-crit"><div class="kv" id="s-crit">—</div><div class="kl">Critical</div></div>
+      <div class="kpi-chip k-cost"><div class="kv" id="s-cost">—</div><div class="kl">Exposure</div></div>
+    </div>
+    <nav class="nav-section">
+      <div class="nav-label">Operations</div>
+      <div class="nav-item active" onclick="switchView('ops')">
+        <span class="nav-icon">✈</span> Flight Ops
+        <span class="nav-badge" id="nb-crit" style="display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="switchView('teams')">
+        <span class="nav-icon">◈</span> Team Intel
+      </div>
+      <div class="nav-item" onclick="switchView('assign')">
+        <span class="nav-icon">⇄</span> Assignments
+        <span class="nav-badge amber" id="nb-reco" style="display:none">0</span>
+      </div>
+      <div class="nav-label">Intelligence</div>
+      <div class="nav-item" onclick="switchView('delay')">
+        <span class="nav-icon">◷</span> Delay / Cascade
+      </div>
+      <div class="nav-item" onclick="switchView('equip')">
+        <span class="nav-icon">⚙</span> Equipment
+      </div>
+      <div class="nav-item" onclick="switchView('crew')">
+        <span class="nav-icon">⊕</span> Crew Mobility
+      </div>
+      <div class="nav-label">Command</div>
+      <div class="nav-item" onclick="switchView('exec')">
+        <span class="nav-icon">▣</span> Executive
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <p>Synthetic DFW simulation<br>Read-only decision support concept</p>
+    </div>
+  </aside>
+
+  <!-- ── Topbar ─────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="topbar-brand">
+      <span class="wordmark">RampIQ</span>
+      <span class="phase">Phase 4 POC</span>
+    </div>
+    <div class="topbar-sep"></div>
+    <div>
+      <div id="topbar-time">—:——</div>
+    </div>
+    <div>
+      <div id="topbar-date" class="muted">—</div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div id="wx-badge" class="wx-badge">
+      <span class="wx-icon">◌</span>
+      <span class="wx-label">WX</span>
+      <span class="wx-val" id="wx-text">—</span>
+    </div>
+    <div class="topbar-sep"></div>
+    <button id="demo-toggle" onclick="toggleDemoMode()">DEMO MODE</button>
+    <div class="topbar-sep"></div>
+    <div class="conn-dot" id="conn-dot"></div>
+    <div class="conn-label" id="conn-label">connecting…</div>
+  </header>
+
+  <!-- ── IRROPS banner ──────────────────────────────────── -->
+  <div id="irrops-banner">⚠ IRROPS ACTIVE — <span id="irrops-text"></span></div>
+
+  <!-- ── Main ───────────────────────────────────────────── -->
+  <main id="main">
+
+    <!-- View 1: Flight Ops -->
+    <section id="view-ops" class="view active">
+      <div class="view-header">
+        <h1>Flight Operations</h1>
+        <p>Live gate queue · risk scoring · alert feed — refreshes every 5 seconds</p>
+      </div>
+      <div class="view-body" style="display:grid; grid-template-columns:1fr 320px; gap:14px; overflow:hidden; padding-top:14px;">
+        <div style="overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-head">
+              <h3>Active Flight Queue</h3>
+              <span id="fq-count" class="mono muted" style="font-size:10px;"></span>
+            </div>
+            <div class="card-body" style="padding: 6px 14px;">
+              <div class="flight-queue">
+                <div class="fq-row fq-head">
+                  <span>Flight</span><span>Gate</span><span>AC</span><span>Status</span>
+                  <span>Pax</span><span>Assigned</span><span>Risk</span><span>Score</span><span>P(OT)</span>
+                </div>
+                <div id="flight-queue-body"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Gate Grid · DFW</h3></div>
+            <div class="card-body">
+              <div class="gate-grid-wrap" id="gate-grid"></div>
+              <div class="gate-legend">
+                <span class="l-critical">Critical</span>
+                <span class="l-watch">Watch</span>
+                <span class="l-ok">On Time</span>
+                <span class="l-empty">Inactive</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+          <div class="card" style="flex-shrink:0;">
+            <div class="card-head"><h3>Alert Feed</h3></div>
+            <div class="card-body" id="alert-feed" style="max-height:200px; overflow-y:auto;"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Station Status</h3></div>
+            <div class="card-body">
+              <div id="station-status"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Weather</h3></div>
+            <div class="card-body" id="weather-panel"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Team Intel -->
+    <section id="view-teams" class="view">
+      <div class="view-header">
+        <h1>Team Intelligence</h1>
+        <p>22 ramp teams · fatigue tracking · certification coverage · suitability scoring</p>
+      </div>
+      <div class="view-body">
+        <div style="display:flex; gap:12px; margin-bottom:12px; flex-shrink:0;">
+          <div class="card" style="flex:1; margin-bottom:0;">
+            <div class="card-body" style="display:flex; gap:20px;">
+              <div><div class="mono" style="font-size:20px; font-weight:700;" id="ts-total">—</div><div class="muted" style="font-size:10px;">Total Teams</div></div>
+              <div><div class="mono lime" style="font-size:20px; font-weight:700;" id="ts-avail">—</div><div class="muted" style="font-size:10px;">Available</div></div>
+              <div><div class="mono blue" style="font-size:20px; font-weight:700;" id="ts-assigned">—</div><div class="muted" style="font-size:10px;">Assigned</div></div>
+              <div><div class="mono amber" style="font-size:20px; font-weight:700;" id="ts-fatigue">—</div><div class="muted" style="font-size:10px;">High Fatigue</div></div>
+              <div><div class="mono red" style="font-size:20px; font-weight:700;" id="ts-unavail">—</div><div class="muted" style="font-size:10px;">Unavailable</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="team-grid" id="team-grid"></div>
+      </div>
+    </section>
+
+    <!-- View 3: Assignments -->
+    <section id="view-assign" class="view">
+      <div class="view-header">
+        <h1>Assignment Engine</h1>
+        <p>Algorithm-generated recommendations · suitability ranking · impact-aware optimization</p>
+      </div>
+      <div class="view-body" style="display:grid; grid-template-columns:1fr 280px; gap:14px; overflow:hidden; padding-top:14px;">
+        <div style="overflow-y:auto;">
+          <div id="reco-list" class="reco-list"></div>
+        </div>
+        <div style="overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-head"><h3>Engine Parameters</h3></div>
+            <div class="card-body">
+              <div style="display:flex; flex-direction:column; gap:7px; font-size:11px;">
+                <div style="display:flex; justify-content:space-between;"><span class="muted">Suitability weight</span><span class="mono lime">0.60</span></div>
+                <div style="display:flex; justify-content:space-between;"><span class="muted">Global impact</span><span class="mono blue">0.30</span></div>
+                <div style="display:flex; justify-content:space-between;"><span class="muted">Operational</span><span class="mono muted">0.10</span></div>
+                <div class="divider"></div>
+                <div style="display:flex; justify-content:space-between;"><span class="muted">Fatigue hard cap</span><span class="mono amber">85</span></div>
+                <div style="display:flex; justify-content:space-between;"><span class="muted">Horizon window</span><span class="mono muted">90 min</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Current Assignments</h3></div>
+            <div class="card-body" id="assign-current" style="display:flex; flex-direction:column; gap:5px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 4: Delay / Cascade -->
+    <section id="view-delay" class="view">
+      <div class="view-header">
+        <h1>Delay & Cascade Analysis</h1>
+        <p>Delay attribution · cascade chains · Path A/B/Hold recovery scenarios</p>
+      </div>
+      <div class="view-body" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; overflow:hidden; padding-top:14px;">
+        <div style="overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-head"><h3>Cascade Chains</h3></div>
+            <div class="card-body" id="cascade-body"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Delay Attribution · Top Flights</h3></div>
+            <div class="card-body">
+              <table class="delay-table" id="delay-table">
+                <thead><tr><th>Flight</th><th>Delay</th><th>Cause</th><th>P(OT)</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div style="overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+          <div class="card">
+            <div class="card-head"><h3>Delay Module Breakdown · Selected Flight</h3></div>
+            <div class="card-body" id="delay-module-panel">
+              <div class="muted" style="font-size:11px; font-style:italic;">Select a flight from the table to see module breakdown.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Recovery Scenarios</h3></div>
+            <div class="card-body" id="recovery-panel"></div>
+          </div>
+          <div class="card" id="active-recoveries-card" style="display:none;">
+            <div class="card-head">
+              <h3>Active Recoveries</h3>
+              <span id="ari-count" class="mono muted" style="font-size:10px;"></span>
+            </div>
+            <div class="card-body" id="active-recoveries-body"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 5: Equipment -->
+    <section id="view-equip" class="view">
+      <div class="view-header">
+        <h1>Equipment Intelligence</h1>
+        <p>3 depots · 130+ GSE units · 90-minute availability forecast</p>
+      </div>
+      <div class="view-body">
+        <div class="depot-cards" id="depot-cards"></div>
+        <div class="card">
+          <div class="card-head"><h3>Shortage Windows · Next 90 min</h3></div>
+          <div class="card-body" id="shortage-body"></div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div class="card-head"><h3>Fleet Utilization by Depot</h3></div>
+          <div class="card-body" id="fleet-util"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 6: Crew Mobility -->
+    <section id="view-crew" class="view">
+      <div class="view-header">
+        <h1>Crew Mobility</h1>
+        <p>Team positioning · idle pockets · gate concentration by terminal</p>
+      </div>
+      <div class="view-body">
+        <div class="mobility-grid">
+          <div>
+            <div class="card">
+              <div class="card-head"><h3>Team Positions</h3></div>
+              <div class="card-body">
+                <div class="position-list" id="position-list"></div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div class="card">
+              <div class="card-head"><h3>Idle Pockets</h3></div>
+              <div class="card-body">
+                <div class="idle-pockets" id="idle-pockets"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>Terminal Concentration</h3></div>
+              <div class="card-body" id="terminal-conc"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 7: Executive -->
+    <section id="view-exec" class="view">
+      <div class="view-header">
+        <h1>Executive Overview</h1>
+        <p>Platform performance summary · cost exposure · peer benchmarking</p>
+      </div>
+      <div class="view-body">
+        <div class="exec-grid" id="exec-kpis"></div>
+        <div class="narrative-card" id="exec-narrative"></div>
+        <div class="card">
+          <div class="card-head"><h3>OTP Benchmark · DFW vs Peer Stations (Illustrative)</h3></div>
+          <div class="card-body" id="benchmark-body"></div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div class="card-head"><h3>Algorithm Performance · This Snapshot</h3></div>
+          <div class="card-body" id="algo-perf"></div>
+        </div>
+        <div class="card" id="outcome-card" style="margin-top:12px; display:none;">
+          <div class="card-head"><h3>Recovery Outcome · Modeled Measurement</h3></div>
+          <div class="card-body" id="outcome-body"></div>
+        </div>
+      </div>
+    </section>
+
+  </main><!-- /#main -->
+</div><!-- /#shell -->
+
+<!-- ── Demo narrative panel (outside shell, fixed position) ── -->
+<div id="demo-panel">
+  <div class="dp-pip" id="dp-pip"></div>
+  <div class="dp-step" id="dp-step-label"></div>
+  <div class="dp-title" id="dp-title"></div>
+  <div class="dp-text" id="dp-text"></div>
+  <div class="dp-controls" id="dp-controls-main">
+    <button class="dp-btn" onclick="demoPrev()" id="dp-prev">← PREV</button>
+    <button class="dp-btn dp-next" onclick="demoNext()" id="dp-next-btn">NEXT →</button>
+    <button class="dp-btn" id="dp-reset" onclick="resetDemo()" style="display:none;">↺ RESET</button>
+    <label class="dp-auto-label"><input type="checkbox" id="dp-auto" onchange="toggleDemoAuto(this.checked)" style="margin:0;"> AUTO</label>
+  </div>
+  <div id="dp-accept-row" style="display:none; margin-top:8px;">
+    <button class="accept-reco-btn" style="width:100%;" onclick="demoNext()">Accept Recommendation — Initiate Recovery</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── State ──────────────────────────────────────────────────
+let state = null;
+let selectedDelayFlight = null;
+let currentView = 'ops';
+
+// ── Fetch ──────────────────────────────────────────────────
+async function fetchState() {
+  try {
+    const r = await fetch('../sim/output/state.json?_=' + Date.now());
+    if (!r.ok) throw new Error(r.status);
+    state = await r.json();
+    setConn(true);
+    renderAll(state);
+  } catch(e) {
+    setConn(false);
+  }
+}
+
+function setConn(ok) {
+  document.getElementById('conn-dot').className = 'conn-dot' + (ok ? ' live' : '');
+  document.getElementById('conn-label').textContent = ok ? 'LIVE' : 'reconnecting…';
+}
+
+// ── View switching ─────────────────────────────────────────
+function switchView(name) {
+  currentView = name;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(el => { if (el.getAttribute('onclick') === `switchView('${name}')`) el.classList.add('active'); });
+  const viewEl = document.getElementById('view-' + name);
+  if (viewEl) viewEl.classList.add('active');
+  if (state) renderAll(state);
+}
+
+// ── Main render ────────────────────────────────────────────
+function renderAll(s) {
+  renderTopbar(s);
+  renderSidebar(s);
+  renderIrrops(s);
+  if (currentView === 'ops')    renderOps(s);
+  if (currentView === 'teams')  renderTeams(s);
+  if (currentView === 'assign') renderAssign(s);
+  if (currentView === 'delay')  renderDelay(s);
+  if (currentView === 'equip')  renderEquip(s);
+  if (currentView === 'crew')   renderCrew(s);
+  if (currentView === 'exec')   renderExec(s);
+}
+
+// ── Topbar ─────────────────────────────────────────────────
+function renderTopbar(s) {
+  const t = s.sim_time || '';
+  const parts = t.split('T');
+  document.getElementById('topbar-time').textContent = parts[1] ? parts[1].slice(0,5) : t;
+  document.getElementById('topbar-date').textContent = parts[0] || '';
+  const wx = s.weather;
+  const el = document.getElementById('wx-badge');
+  const wxText = document.getElementById('wx-text');
+  if (wx) {
+    const threat = wx.convective_threat;
+    el.className = 'wx-badge' + (threat ? ' wx-threat' : '');
+    let desc = wx.condition || 'clear';
+    if (threat && wx.convective_eta_min != null) desc = `CONV ${wx.convective_eta_min}min`;
+    wxText.textContent = desc.toUpperCase();
+  }
+}
+
+// ── Sidebar KPIs ───────────────────────────────────────────
+function renderSidebar(s) {
+  const kpi = s.kpis;
+  document.getElementById('s-otp').textContent   = kpi.otp_pct + '%';
+  document.getElementById('s-atrisk').textContent = kpi.at_risk_count;
+  document.getElementById('s-crit').textContent  = kpi.critical_count;
+  document.getElementById('s-cost').textContent  = '$' + Math.round(kpi.cost_exposure_usd / 1000) + 'k';
+
+  const crit = kpi.critical_count;
+  const nb = document.getElementById('nb-crit');
+  if (crit > 0) { nb.textContent = crit; nb.style.display = ''; } else { nb.style.display = 'none'; }
+
+  const recos = (s.recommendations || []).filter(r => r.candidates && r.candidates.length > 0);
+  const nr = document.getElementById('nb-reco');
+  if (recos.length > 0) { nr.textContent = recos.length; nr.style.display = ''; } else { nr.style.display = 'none'; }
+}
+
+// ── IRROPS ─────────────────────────────────────────────────
+function renderIrrops(s) {
+  const banner = document.getElementById('irrops-banner');
+  if (s.irrops && s.irrops.active) {
+    banner.classList.add('active');
+    document.getElementById('irrops-text').textContent = (s.irrops.triggers_hit || []).join(' · ') || 'IRROPS active';
+  } else if (s.weather && s.weather.ground_stop_active) {
+    banner.classList.add('active');
+    document.getElementById('irrops-text').textContent = 'Ground stop in effect';
+  } else {
+    banner.classList.remove('active');
+  }
+}
+
+// ── View 1: Ops ────────────────────────────────────────────
+function renderOps(s) {
+  const flights = s.active_flights || [];
+  document.getElementById('fq-count').textContent = flights.length + ' active';
+
+  // Flight queue
+  const tbody = document.getElementById('flight-queue-body');
+  const sorted = [...flights].sort((a,b) => (b.risk_score||0) - (a.risk_score||0));
+  tbody.innerHTML = sorted.map(f => {
+    const tier = f.risk_tier || 'ok';
+    const score = Math.round(f.risk_score || 0);
+    const pot = f.p_on_time != null ? Math.round(f.p_on_time * 100) + '%' : '—';
+    const team = f.assigned_team ? f.assigned_team.replace('TEAM-','') : '—';
+    const delay = f.delay_minutes > 0 ? `+${f.delay_minutes}m` : '';
+    const statusHtml = `<span class="pill pill-${f.status}">${f.status}</span>`;
+    return `<div class="fq-row risk-${tier}${tier === 'critical' ? ' critical-pulse' : ''}">
+      <span class="fq-id">${f.flight_id}</span>
+      <span class="mono muted" style="font-size:10px;">${f.gate || '—'}</span>
+      <span class="mono muted" style="font-size:10px;">${f.aircraft_type || '—'}</span>
+      <span>${statusHtml}${delay ? `<span class="mono red" style="font-size:10px;"> ${delay}</span>` : ''}</span>
+      <span class="mono muted" style="font-size:10px;">${f.pax_count || 0}</span>
+      <span class="mono" style="font-size:10px; color:var(--blue);">${team}</span>
+      <span class="fq-score risk-${tier}">${score}</span>
+      <span><div class="fq-bar"><div class="fq-bar-fill" style="width:${score}%"></div></div></span>
+      <span class="mono" style="font-size:10px; color:var(--muted);">${pot}</span>
+    </div>`;
+  }).join('');
+
+  // Gate grid
+  renderGateGrid(s);
+
+  // Alert feed
+  const alertEl = document.getElementById('alert-feed');
+  const events = (s.event_log || []).slice().reverse();
+  if (events.length === 0) {
+    alertEl.innerHTML = '<div class="muted" style="font-size:11px;font-style:italic;">No events logged.</div>';
+  } else {
+    const gateMap = {};
+    (s.active_flights || []).forEach(f => { if (f.gate) gateMap[f.gate] = f; });
+    alertEl.innerHTML = '<div class="alert-feed">' + events.map((e, i) => {
+      const sev = i === 0 ? 'sev-critical' : (i < 3 ? 'sev-warning' : 'sev-info');
+      const timeMatch = e.match(/^\[(\d+:\d+)\]/);
+      const time = timeMatch ? timeMatch[1] : '';
+      const text = e.replace(/^\[\d+:\d+\]\s*/, '');
+      return `<div class="alert-item ${sev}">
+        <div class="alert-dot"></div>
+        <div class="alert-text">${text}</div>
+        <div class="alert-time">${time}</div>
+      </div>`;
+    }).join('') + '</div>';
+  }
+
+  // Station status
+  const ts = s.team_summary || {};
+  document.getElementById('station-status').innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:7px; font-size:11px;">
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Active flights</span><span class="mono">${s.kpis.active_flight_count}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Teams assigned</span><span class="mono blue">${ts.assigned||0}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Teams available</span><span class="mono lime">${ts.available||0}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Delay prevented</span><span class="mono lime">${s.kpis.delay_minutes_prevented||0}min</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Cost exposure</span><span class="mono amber">$${s.kpis.cost_exposure_usd.toLocaleString()}</span></div>
+    </div>`;
+
+  // Weather panel
+  const wx = s.weather;
+  const wcolor = wx.convective_threat ? 'amber' : (wx.condition === 'clear' ? 'lime' : 'muted');
+  document.getElementById('weather-panel').innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:7px; font-size:11px;">
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Condition</span><span class="mono ${wcolor}">${wx.condition}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Wind</span><span class="mono">${wx.wind_kt}kt</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Visibility</span><span class="mono">${wx.visibility_sm}sm</span></div>
+      <div style="display:flex;justify-content:space-between;"><span class="muted">Ceiling</span><span class="mono">${wx.ceiling_ft.toLocaleString()}ft</span></div>
+      ${wx.convective_threat ? `<div style="display:flex;justify-content:space-between;"><span class="muted">Conv ETA</span><span class="mono amber">${wx.convective_eta_min}min</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;"><span class="muted">GS prob</span><span class="mono ${wx.ground_stop_probability > 0.4 ? 'amber' : 'muted'}">${Math.round(wx.ground_stop_probability*100)}%</span></div>
+    </div>`;
+}
+
+function renderGateGrid(s) {
+  const terminals = [
+    { id: 'A', label: 'Terminal A', count: 37 },
+    { id: 'B', label: 'Terminal B', count: 40 },
+    { id: 'C', label: 'Terminal C', count: 39 },
+    { id: 'D', label: 'Terminal D', count: 44 },
+    { id: 'E', label: 'Terminal E', count: 38 },
+  ];
+  // Build gate→tier map
+  const gateMap = {};
+  (s.active_flights || []).forEach(f => {
+    if (f.terminal && f.gate_num != null) {
+      const key = f.terminal + '|' + f.gate_num;
+      // If multiple flights at same gate, take worst
+      const existing = gateMap[key];
+      const tierRank = { critical: 2, watch: 1, ok: 0 };
+      if (!existing || (tierRank[f.risk_tier]||0) > (tierRank[existing]||0)) {
+        gateMap[key] = f.risk_tier;
+      }
+    }
+  });
+
+  const el = document.getElementById('gate-grid');
+  el.innerHTML = terminals.map(term => {
+    const cells = [];
+    for (let g = 1; g <= term.count; g++) {
+      const tier = gateMap[term.id + '|' + g];
+      const cls = tier ? `g-${tier}` : 'g-empty';
+      cells.push(`<div class="gate-cell ${cls}" title="${term.id}${g}"></div>`);
+    }
+    return `<div class="gate-terminal-row">
+      <div class="gate-terminal-label">${term.label}</div>
+      <div class="gate-cells">${cells.join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── View 2: Teams ──────────────────────────────────────────
+function renderTeams(s) {
+  const ts = s.team_summary || {};
+  document.getElementById('ts-total').textContent = ts.total || 22;
+  document.getElementById('ts-avail').textContent = ts.available || 0;
+  document.getElementById('ts-assigned').textContent = ts.assigned || 0;
+  document.getElementById('ts-fatigue').textContent = ts.high_fatigue || 0;
+  document.getElementById('ts-unavail').textContent = ts.unavailable || 0;
+
+  const teams = s.teams || [];
+  const grid = document.getElementById('team-grid');
+  grid.innerHTML = teams.map(t => {
+    const fatPct = Math.min(100, t.fatigue);
+    const fatClass = t.fatigue >= 85 ? 'cap' : (t.fatigue >= 65 ? 'high' : '');
+    const tierClass = `tier-${t.tier}`;
+    const tierLabel = t.tier.charAt(0).toUpperCase() + t.tier.slice(1);
+    const duty = Math.round(t.duty_minutes_today / 60 * 10) / 10;
+    const certs = t.certifications || [];
+    const assignEl = t.current_assignment
+      ? `<span class="assigned-flight">${t.current_assignment}</span> @ ${t.current_gate||'—'}`
+      : `<span style="color:var(--lime-dim);">Available</span> @ ${t.current_gate||'—'}`;
+    return `<div class="team-card status-${t.status}">
+      <div class="tc-header">
+        <div>
+          <div class="tc-name">${t.name}</div>
+          <div class="tc-id">${t.team_id}</div>
+        </div>
+        <div class="tc-tier ${tierClass}">${tierLabel}</div>
+      </div>
+      <div class="tc-stats">
+        <div class="tc-stat"><div class="ts-val">${t.crew_size}</div><div class="ts-lbl">Crew</div></div>
+        <div class="tc-stat"><div class="ts-val">${Math.round(t.fatigue)}</div><div class="ts-lbl">Fatigue</div></div>
+        <div class="tc-stat"><div class="ts-val">${t.turns_logged}</div><div class="ts-lbl">Turns</div></div>
+        <div class="tc-stat"><div class="ts-val">${duty}h</div><div class="ts-lbl">On Duty</div></div>
+      </div>
+      <div class="fatigue-bar"><div class="fatigue-fill ${fatClass}" style="width:${fatPct}%"></div></div>
+      <div class="tc-certs">${certs.map(c => `<span class="tc-cert">${c.replace(/_/g,' ')}</span>`).join('')}</div>
+      <div class="tc-assignment mono" style="font-size:10px; margin-top:6px;">${assignEl}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── View 3: Assignments ────────────────────────────────────
+function renderAssign(s) {
+  const recos = s.recommendations || [];
+  const flights = s.active_flights || [];
+  const teams = s.teams || [];
+  const teamMap = {};
+  teams.forEach(t => { teamMap[t.team_id] = t; });
+  const flightMap = {};
+  flights.forEach(f => { flightMap[f.flight_id] = f; });
+
+  const recoEl = document.getElementById('reco-list');
+  if (recos.length === 0) {
+    recoEl.innerHTML = '<div class="reco-empty muted">No pending recommendations.</div>';
+  } else {
+    recoEl.innerHTML = recos.map(r => {
+      const f = flightMap[r.flight_id] || {};
+      const cands = r.candidates || [];
+      const conf = r.confidence != null ? Math.round(r.confidence * 100) : 0;
+      const confColor = conf >= 70 ? 'lime' : (conf >= 50 ? 'amber' : 'red');
+      const risk = Math.round(f.risk_score || 0);
+      const tier = f.risk_tier || 'ok';
+      const candsHtml = cands.length === 0
+        ? '<div class="reco-empty" style="padding:10px 0;">No viable candidates — all teams at capacity or below cert threshold.</div>'
+        : `<div class="cand-header">Ranked Candidates</div>` + cands.map((c, i) => {
+          const team = teamMap[c.team_id] || {};
+          const sc = Math.round(c.reco_score || c.suitability_score || 0);
+          const scClass = sc >= 70 ? 'high' : '';
+          const fat = Math.round(team.fatigue || 0);
+          const fatClass = fat >= 65 ? 'hi' : '';
+          const tierLabel = team.tier ? team.tier.charAt(0).toUpperCase() + team.tier.slice(1) : '—';
+          return `<div class="candidate-row ${i===0 ? 'top-pick' : ''}">
+            <span class="cand-name">${i===0 ? '<span class="top-icon">★</span>' : ''}${team.name || c.team_id}</span>
+            <span class="cand-tier ${tierLabel.toLowerCase() === 'master' ? 'lime' : (tierLabel.toLowerCase() === 'journeyman' ? 'blue' : 'purple')}" style="font-size:9px; font-family:var(--mono);">${tierLabel}</span>
+            <div class="cand-score-bar"><div class="cand-score-fill ${scClass}" style="width:${sc}%"></div></div>
+            <span class="cand-score-num">${sc}</span>
+            <span class="cand-fatigue ${fatClass}">${fat}</span>
+          </div>`;
+        }).join('');
+
+      return `<div class="reco-card">
+        <div class="reco-flight-header">
+          <span class="reco-flight-id">${r.flight_id}</span>
+          <span class="reco-flight-meta">${f.aircraft_type||''} · ${f.gate||'—'} · <span class="pill pill-${tier}">${tier}</span></span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--muted);">Risk ${risk}</span>
+          <div class="reco-confidence">
+            <div class="conf-pct" style="color:var(--${confColor})">${conf}%</div>
+            <div class="conf-lbl">confidence</div>
+          </div>
+        </div>
+        <div class="reco-candidates">${candsHtml}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Current assignments sidebar
+  const assignEl = document.getElementById('assign-current');
+  const assigned = teams.filter(t => t.current_assignment);
+  if (assigned.length === 0) {
+    assignEl.innerHTML = '<div class="muted" style="font-size:11px;">No active assignments.</div>';
+  } else {
+    assignEl.innerHTML = assigned.map(t => `
+      <div style="display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--border);">
+        <span class="mono lime" style="font-size:10px;">${t.current_assignment}</span>
+        <span style="flex:1; font-size:11px; color:var(--muted);">${t.name.replace('Team ','')}</span>
+        <span class="mono muted" style="font-size:9px;">${t.current_gate||'—'}</span>
+      </div>`).join('');
+  }
+}
+
+// ── View 4: Delay ──────────────────────────────────────────
+function renderDelay(s) {
+  const cascades = s.cascades || [];
+  const cascEl = document.getElementById('cascade-body');
+  if (cascades.length === 0) {
+    cascEl.innerHTML = '<div class="cascade-empty">No active cascade chains at this time.</div>';
+  } else {
+    const kindColor = { origin:'var(--amber)', gate:'var(--blue)', adjacency:'var(--muted)', bag:'var(--muted)', crew:'var(--red)', equipment:'var(--amber)' };
+    cascEl.innerHTML = cascades.map(c => {
+      const chain = c.chain || [];
+      const paxNote = c.estimated_pax ? ` · ${c.estimated_pax} pax` : '';
+      const rs = c._recovery_status || 'active';  // 'active' | 'recovering' | 'contained'
+      const chainClass = rs !== 'active' ? ` ${rs}` : '';
+      let statusTag = '';
+      if (rs === 'recovering') statusTag = '<span class="cascade-status-tag cst-recovering">RECOVERY IN PROGRESS</span>';
+      else if (rs === 'contained') statusTag = '<span class="cascade-status-tag cst-contained">CONTAINED</span>';
+      return `<div class="cascade-chain${chainClass}">
+        <div class="cascade-head" style="display:flex;align-items:center;">
+          <span class="mono" style="color:var(--amber);font-weight:700;">${c.origin_flight}</span>
+          <span class="muted" style="font-size:10px;"> · gate ${c.origin_gate} · +${c.origin_delay_min}min · ${chain.length}-step chain${paxNote}</span>
+          ${statusTag}
+        </div>
+        <div class="cascade-flights">
+          ${chain.map((step, i) => `
+            <div class="cascade-flight cascade-step" style="animation-delay:${i*200}ms">
+              ${i > 0 ? '<span class="cf-connector">↳</span>' : '<span style="width:14px;display:inline-block;"></span>'}
+              <span style="color:${kindColor[step.kind]||'var(--text)'};">${step.event || step.flight_id || '—'}</span>
+              ${step.detail ? `<span class="mono muted" style="font-size:9px;margin-left:6px;">${step.detail}</span>` : ''}
+              ${step.pax_affected > 0 ? `<span class="mono muted" style="font-size:9px;margin-left:4px;">${step.pax_affected}px</span>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Active Recoveries panel
+  const recoveryState = s.recovery_state || {};
+  const activeRec = recoveryState.active_recoveries || [];
+  const ariCard = document.getElementById('active-recoveries-card');
+  const ariBody = document.getElementById('active-recoveries-body');
+  const ariCount = document.getElementById('ari-count');
+  if (ariCard) {
+    if (activeRec.length > 0) {
+      ariCard.style.display = '';
+      if (ariCount) ariCount.textContent = activeRec.length + ' in progress';
+      ariBody.innerHTML = activeRec.map(rec => {
+        const prog = Math.round((rec.stabilization_progress || 0) * 100);
+        const barW = Math.max(4, rec.stabilization_progress * 100);
+        return `<div class="rai-item">
+          <div><span class="rai-flight">${rec.flight_id || '—'}</span><span class="rai-team">${rec.team_assigned || ''}</span></div>
+          <div class="rai-desc">${rec.description || 'Recovery sequence initiated · modeled stabilization window: ~90s'}</div>
+          <div class="rai-label">Stabilization · in progress</div>
+          <div class="stab-bar-wrap"><div class="stab-bar-fill" style="width:${barW}%"></div></div>
+        </div>`;
+      }).join('');
+    } else {
+      ariCard.style.display = 'none';
+    }
+  }
+
+  // Delay table
+  const flights = (s.active_flights || []).filter(f => f.delay_minutes > 0 || f.risk_score > 50)
+    .sort((a,b) => (b.delay_minutes||0) - (a.delay_minutes||0)).slice(0,12);
+  const tbody = document.querySelector('#delay-table tbody');
+  tbody.innerHTML = flights.map(f => {
+    const cause = f.predicted_cause || '—';
+    const delay = f.delay_minutes || 0;
+    const pot = f.p_on_time != null ? Math.round(f.p_on_time * 100) + '%' : '—';
+    return `<tr onclick="selectDelayFlight('${f.flight_id}')" style="cursor:pointer;">
+      <td class="blue">${f.flight_id}</td>
+      <td class="${delay > 0 ? 'red' : 'muted'}">${delay > 0 ? '+'+delay+'m' : '—'}</td>
+      <td>
+        <div class="cause-bar-wrap">
+          <div class="cause-bar-fill" style="width:10px;height:4px;background:var(--amber);border-radius:2px;flex-shrink:0;"></div>
+          <span>${cause}</span>
+        </div>
+      </td>
+      <td class="${f.p_on_time < 0.5 ? 'red' : 'muted'}">${pot}</td>
+    </tr>`;
+  }).join('');
+
+  // Recovery scenarios (generated from current state)
+  const atRisk = (s.active_flights || []).filter(f => f.risk_tier === 'critical' || f.risk_tier === 'watch').length;
+  const prevented = s.kpis.delay_minutes_prevented || 0;
+  document.getElementById('recovery-panel').innerHTML = `
+    <div class="recovery-paths">
+      <div class="recovery-path path-a">
+        <div class="path-label">PATH A · REASSIGN</div>
+        <div class="path-desc">Reassign highest-suitability available team to the top critical flight. Estimated resolution in 8–12 min.</div>
+        <div class="path-metric">−${Math.min(atRisk*3, 18)}min delay exposure</div>
+      </div>
+      <div class="recovery-path path-b">
+        <div class="path-label">PATH B · EXPEDITE</div>
+        <div class="path-desc">Expedite bag load on ${Math.min(atRisk,3)} watch-tier flights simultaneously. Requires 2 additional teams.</div>
+        <div class="path-metric">${Math.min(atRisk*2, 12)}% OTP uplift</div>
+      </div>
+      <div class="recovery-path path-hold">
+        <div class="path-label">HOLD · MONITOR</div>
+        <div class="path-desc">No intervention. Monitor ${atRisk} at-risk flights for natural resolution. Convective threat may clear in ${s.weather.convective_eta_min||'?'}min.</div>
+        <div class="path-metric">+${prevented}min already prevented</div>
+      </div>
+    </div>`;
+
+  // If a flight is selected, show delay modules
+  if (selectedDelayFlight) {
+    const f = (s.active_flights || []).find(x => x.flight_id === selectedDelayFlight);
+    if (f) renderDelayModules(f);
+  }
+}
+
+function selectDelayFlight(id) {
+  selectedDelayFlight = id;
+  if (state) {
+    const f = (state.active_flights || []).find(x => x.flight_id === id);
+    if (f) renderDelayModules(f);
+  }
+}
+
+function renderDelayModules(f) {
+  const mods = f.delay_modules || {};
+  const rc = f.risk_components || {};
+  const el = document.getElementById('delay-module-panel');
+  const modLabels = { bag: 'Baggage', crew: 'Crew', equipment: 'Equipment', upstream: 'Upstream', env: 'Environment' };
+  const modRows = Object.entries(mods).map(([k, v]) => {
+    const pct = Math.round(v * 100);
+    const cls = pct > 15 ? 'r-high' : (pct > 8 ? 'r-med' : 'r-low');
+    return `<div class="risk-row">
+      <span class="risk-lbl">${modLabels[k]||k}</span>
+      <div class="risk-mini-bar"><div class="risk-mini-fill ${cls}" style="width:${Math.min(100,pct*4)}%"></div></div>
+      <span class="risk-num">${pct}%</span>
+    </div>`;
+  });
+  const rcRows = Object.entries(rc).map(([k,v]) => {
+    const cls = v > 50 ? 'r-high' : (v > 20 ? 'r-med' : 'r-low');
+    return `<div class="risk-row">
+      <span class="risk-lbl">${k}</span>
+      <div class="risk-mini-bar"><div class="risk-mini-fill ${cls}" style="width:${Math.min(100,v)}%"></div></div>
+      <span class="risk-num">${Math.round(v)}</span>
+    </div>`;
+  });
+  el.innerHTML = `
+    <div class="mono blue" style="font-size:12px; font-weight:700; margin-bottom:8px;">${f.flight_id} · ${f.aircraft_type} · <span class="pill pill-${f.risk_tier}">${f.risk_tier}</span></div>
+    <div style="font-size:10px; color:var(--muted); margin-bottom:6px; letter-spacing:0.8px; text-transform:uppercase; font-family:var(--mono);">Delay Modules (P failure)</div>
+    <div class="risk-breakdown" style="margin-bottom:12px;">${modRows.join('')}</div>
+    <div style="font-size:10px; color:var(--muted); margin-bottom:6px; letter-spacing:0.8px; text-transform:uppercase; font-family:var(--mono);">Risk Components (0–100)</div>
+    <div class="risk-breakdown">${rcRows.join('')}</div>`;
+}
+
+// ── View 5: Equipment ──────────────────────────────────────
+function renderEquip(s) {
+  const ef = s.equipment_forecast || {};
+  const depots = ef.depot_summary || s.depot_summary || {};
+
+  const depotEl = document.getElementById('depot-cards');
+  const depotEntries = Object.entries(depots);
+  depotEl.innerHTML = depotEntries.map(([id, d]) => {
+    const inUsePct = d.total > 0 ? Math.round(d.in_use / d.total * 100) : 0;
+    const availPct = d.total > 0 ? Math.round(d.available / d.total * 100) : 0;
+    const maintPct = d.total > 0 ? Math.round(d.maintenance / d.total * 100) : 0;
+    const r = 22; const circ = 2 * Math.PI * r;
+    const dashIn = circ * inUsePct / 100;
+    const dashAvail = circ * availPct / 100;
+    const dashMaint = circ * maintPct / 100;
+    // Simple single-ring donut showing utilization %
+    const dash = circ * inUsePct / 100;
+    const gap = circ - dash;
+    return `<div class="depot-card">
+      <div class="depot-name">${d.name}</div>
+      <div class="depot-id">${id}</div>
+      <div class="depot-donut-row">
+        <div class="depot-donut">
+          <svg width="52" height="52" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--border2)" stroke-width="5"/>
+            <circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--blue)" stroke-width="5"
+              stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"/>
+          </svg>
+          <div class="donut-center">
+            <div class="donut-pct">${inUsePct}%</div>
+            <div class="donut-sub">in use</div>
+          </div>
+        </div>
+        <div class="depot-stats">
+          <div class="depot-stat"><span class="ds-lbl">Total</span><span class="ds-val">${d.total}</span></div>
+          <div class="depot-stat"><span class="ds-lbl">Available</span><span class="ds-val ds-avail">${d.available}</span></div>
+          <div class="depot-stat"><span class="ds-lbl">In Use</span><span class="ds-val">${d.in_use}</span></div>
+          <div class="depot-stat"><span class="ds-lbl">Maint</span><span class="ds-val ds-maint">${d.maintenance}</span></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Shortage windows
+  const sw = ef.shortage_windows || [];
+  const shortEl = document.getElementById('shortage-body');
+  if (sw.length === 0) {
+    shortEl.innerHTML = '<div class="shortage-empty">No shortage windows forecast in the next 90 minutes.</div>';
+  } else {
+    shortEl.innerHTML = sw.map(w => `
+      <div class="alert-item sev-warning">
+        <div class="alert-dot"></div>
+        <div class="alert-text">${w.depot_id||''} · ${w.equipment_type||'equipment'} shortage at T+${w.offset_min||0}min</div>
+      </div>`).join('');
+  }
+
+  // Fleet utilization breakdown
+  const fleetEl = document.getElementById('fleet-util');
+  fleetEl.innerHTML = depotEntries.map(([id, d]) => {
+    const total = d.total || 1;
+    const inPct = d.in_use / total * 100;
+    const avPct = d.available / total * 100;
+    const mPct = d.maintenance / total * 100;
+    return `<div style="margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+        <span class="mono muted" style="font-size:10px;">${id}</span>
+        <span class="mono muted" style="font-size:10px;">${d.total} units</span>
+      </div>
+      <div style="height:10px; background:var(--border); border-radius:3px; overflow:hidden; display:flex;">
+        <div style="width:${inPct}%; background:var(--blue); height:100%;"></div>
+        <div style="width:${avPct}%; background:var(--lime-dim); height:100%;"></div>
+        <div style="width:${mPct}%; background:var(--amber-dim); height:100%;"></div>
+      </div>
+      <div style="display:flex; gap:12px; margin-top:4px; font-size:9px; color:var(--muted);">
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;background:var(--blue);border-radius:1px;display:inline-block;"></span>In use ${d.in_use}</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;background:var(--lime-dim);border-radius:1px;display:inline-block;"></span>Available ${d.available}</span>
+        <span style="display:flex;align-items:center;gap:3px;"><span style="width:7px;height:7px;background:var(--amber-dim);border-radius:1px;display:inline-block;"></span>Maint ${d.maintenance}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── View 6: Crew Mobility ──────────────────────────────────
+function renderCrew(s) {
+  const teams = s.teams || [];
+
+  // Positions
+  const posEl = document.getElementById('position-list');
+  posEl.innerHTML = teams.filter(t => t.current_gate).map(t => {
+    const status = t.current_assignment ? `→ ${t.current_assignment}` : 'Idle';
+    const statusColor = t.current_assignment ? 'color:var(--lime)' : 'color:var(--muted)';
+    return `<div class="position-item">
+      <span class="pi-gate">${t.current_gate}</span>
+      <span class="pi-name">${t.name}</span>
+      <span class="pi-status" style="${statusColor}">${status}</span>
+    </div>`;
+  }).join('');
+
+  // Idle pockets
+  const idle = teams.filter(t => !t.current_assignment && t.status === 'available');
+  const idleEl = document.getElementById('idle-pockets');
+  if (idle.length === 0) {
+    idleEl.innerHTML = '<div class="muted" style="font-size:11px; font-style:italic;">All teams currently engaged.</div>';
+  } else {
+    idleEl.innerHTML = idle.map(t => `
+      <div class="idle-item">
+        <div class="idle-gate">${t.current_gate || '—'} · ${t.name}</div>
+        <div class="idle-desc">${t.tier} · Fatigue ${Math.round(t.fatigue)} · ${t.crew_size} crew</div>
+      </div>`).join('');
+  }
+
+  // Terminal concentration
+  const termMap = {};
+  teams.forEach(t => {
+    if (!t.current_gate) return;
+    const term = t.current_gate.charAt(0);
+    if (!termMap[term]) termMap[term] = { assigned: 0, idle: 0 };
+    if (t.current_assignment) termMap[term].assigned++;
+    else termMap[term].idle++;
+  });
+  const maxCount = Math.max(1, ...Object.values(termMap).map(v => v.assigned + v.idle));
+  const termEl = document.getElementById('terminal-conc');
+  termEl.innerHTML = Object.entries(termMap).sort().map(([term, counts]) => {
+    const total = counts.assigned + counts.idle;
+    const aPct = total / maxCount * 100;
+    const iRatio = counts.idle / (total || 1);
+    return `<div class="terminal-conc-row">
+      <span class="tcr-label">${term}</span>
+      <div class="tcr-bar">
+        <div class="tcr-seg" style="width:${aPct*(1-iRatio)}%; background:var(--lime-dim);"></div>
+        <div class="tcr-seg" style="width:${aPct*iRatio}%; background:var(--border2);"></div>
+      </div>
+      <span class="tcr-count">${total}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── View 7: Executive ──────────────────────────────────────
+function renderExec(s) {
+  const kpi = s.kpis;
+  const wx = s.weather;
+  const ts = s.team_summary || {};
+
+  // KPI cards
+  document.getElementById('exec-kpis').innerHTML = `
+    <div class="exec-kpi-card k-otp">
+      <div class="exec-kpi-val">${kpi.otp_pct}%</div>
+      <div class="exec-kpi-lbl">On-Time Performance Forecast</div>
+      <div class="exec-kpi-sub">${kpi.on_time_count} of ${kpi.active_flight_count} active flights on track</div>
+    </div>
+    <div class="exec-kpi-card k-risk">
+      <div class="exec-kpi-val">${kpi.at_risk_count}</div>
+      <div class="exec-kpi-lbl">At-Risk Departures</div>
+      <div class="exec-kpi-sub">${kpi.critical_count} critical · ${kpi.at_risk_count - kpi.critical_count} watch</div>
+    </div>
+    <div class="exec-kpi-card k-cost">
+      <div class="exec-kpi-val">$${Math.round(kpi.cost_exposure_usd/1000)}k</div>
+      <div class="exec-kpi-lbl">Current Cost Exposure</div>
+      <div class="exec-kpi-sub">@$80/min industry delay rate</div>
+    </div>
+    <div class="exec-kpi-card k-teams">
+      <div class="exec-kpi-val">${ts.assigned||0}/${ts.total||22}</div>
+      <div class="exec-kpi-lbl">Teams On Assignment</div>
+      <div class="exec-kpi-sub">${ts.available||0} available · ${ts.high_fatigue||0} high fatigue</div>
+    </div>
+    <div class="exec-kpi-card k-prevent">
+      <div class="exec-kpi-val">${kpi.delay_minutes_prevented||0}m</div>
+      <div class="exec-kpi-lbl">Delay Minutes Prevented</div>
+      <div class="exec-kpi-sub">Via algorithm-driven assignments</div>
+    </div>
+    <div class="exec-kpi-card k-crit">
+      <div class="exec-kpi-val">${kpi.critical_count}</div>
+      <div class="exec-kpi-lbl">Critical Threshold Flights</div>
+      <div class="exec-kpi-sub">Risk score ≥ 65 · requires action</div>
+    </div>`;
+
+  // Narrative
+  const threat = wx.convective_threat ? `Convective threat inbound (${wx.convective_eta_min}min ETA) is elevating ground-stop probability to <strong>${Math.round(wx.ground_stop_probability*100)}%</strong>. ` : '';
+  const costSaved = Math.round((kpi.delay_minutes_prevented||0) * 80);
+  document.getElementById('exec-narrative').innerHTML = `
+    <h3>Operations Summary · ${(s.sim_time||'').split('T')[1]?.slice(0,5) || '—'} Local</h3>
+    <p>${threat}The platform is tracking <strong>${kpi.active_flight_count} active flights</strong> across five terminals with <strong>${kpi.at_risk_count} at-risk</strong> departures.
+    The assignment engine has kept <strong>${ts.assigned||0} of ${ts.total||22} teams</strong> actively deployed.
+    Algorithm-driven interventions have prevented an estimated <strong>${kpi.delay_minutes_prevented||0} delay-minutes</strong> ($${costSaved.toLocaleString()} cost avoidance at the $80/min rate).
+    OTP forecast stands at <strong>${kpi.otp_pct}%</strong> — within the expected 45–65% range for a mid-afternoon high-disruption window at DFW.</p>`;
+
+  // Benchmarking
+  const otpPct = kpi.otp_pct;
+  const benchmarks = [
+    { label: 'DFW (this)', pct: otpPct, thisStation: true },
+    { label: 'ORD', pct: 58 },
+    { label: 'ATL', pct: 61 },
+    { label: 'LAX', pct: 54 },
+    { label: 'MIA', pct: 52 },
+  ];
+  document.getElementById('benchmark-body').innerHTML = `
+    <div>${benchmarks.map(b => `
+      <div class="bench-row">
+        <span class="bench-label">${b.label}</span>
+        <div class="bench-bar-wrap"><div class="bench-bar-fill ${b.thisStation?'this-station':''}" style="width:${b.pct}%"></div></div>
+        <span class="bench-pct">${b.pct}%</span>
+      </div>`).join('')}
+    </div>
+    <div class="bench-note">Peer stations: illustrative baseline. Live integration pending.</div>`;
+
+  // Recovery Outcome card
+  const outcomeCard = document.getElementById('outcome-card');
+  const outcomeBody = document.getElementById('outcome-body');
+  const rs = s.recovery_state || {};
+  const outcome = rs.outcome;
+  if (outcomeCard) {
+    if (outcome) {
+      outcomeCard.style.display = '';
+      const costFmt = '$' + Math.round(outcome.cost_avoidance_modeled / 1000 * 10) / 10 + 'k';
+      outcomeBody.innerHTML = `
+        <div class="outcome-grid">
+          <div class="outcome-cell">
+            <div class="outcome-val">${outcome.connections_protected}</div>
+            <div class="outcome-lbl">Connections protected</div>
+          </div>
+          <div class="outcome-cell">
+            <div class="outcome-val">${outcome.delay_minutes_prevented}m</div>
+            <div class="outcome-lbl">Delay minutes prevented</div>
+          </div>
+          <div class="outcome-cell">
+            <div class="outcome-val">${outcome.cascades_contained}</div>
+            <div class="outcome-lbl">Cascades contained</div>
+          </div>
+          <div class="outcome-cell">
+            <div class="outcome-val" style="font-size:18px;">~${costFmt}</div>
+            <div class="outcome-lbl">Modeled cost avoidance</div>
+            <div class="outcome-sub">A4A 2024 · $100.76/min</div>
+          </div>
+          <div class="outcome-cell">
+            <div class="outcome-val">+${outcome.otp_recovery_pts}</div>
+            <div class="outcome-lbl">OTP recovery</div>
+            <div class="outcome-sub">pts from disrupted state</div>
+          </div>
+        </div>
+        <div class="outcome-rate">Reference rate: A4A 2024 · $100.76/min. Figures represent modeled estimates from the recovery sequence, not realized savings.</div>
+        <div class="outcome-summary">Recovery sequence completed. ${outcome.cascades_contained} cascade chain${outcome.cascades_contained !== 1 ? 's' : ''} contained. Operational state normalized. System returning to surveillance posture.</div>`;
+    } else {
+      outcomeCard.style.display = 'none';
+    }
+  }
+
+  // Algorithm performance
+  document.getElementById('algo-perf').innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; text-align:center;">
+      ${[
+        { label: 'Flight Risk', sub: '5-factor weighted', color: 'var(--lime)' },
+        { label: 'Team Suitability', sub: '6-factor score', color: 'var(--blue)' },
+        { label: 'Delay Prediction', sub: 'Independent failure', color: 'var(--amber)' },
+        { label: 'Assignment Opt.', sub: 'RecoScore engine', color: 'var(--lime)' },
+        { label: 'Equip Readiness', sub: '90-min forecast', color: 'var(--purple)' },
+      ].map(a => `<div style="padding:10px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px;">
+        <div style="font-size:11px; font-weight:600; color:${a.color}; margin-bottom:3px;">${a.label}</div>
+        <div style="font-size:9px; color:var(--muted);">${a.sub}</div>
+        <div style="font-family:var(--mono); font-size:9px; color:var(--lime); margin-top:4px;">ACTIVE</div>
+      </div>`).join('')}
+    </div>`;
+}
+
+// ── Demo Mode ──────────────────────────────────────────────
+let demoActive    = false;
+let demoStep      = 0;
+let demoAutoTimer = null;
+let demoBaseState = null;
+
+// Per-step auto-advance delays (ms). Index = from-step. Step 8 (index 7) never auto-advances.
+const AUTO_DELAYS = [8000, 6000, 8000, 6000, 4000, 12000, 8000];
+
+// Shared cascade chain definitions — reused across steps to keep patches DRY
+const _C_UA1312_FULL = { origin_flight:'UA1312', origin_gate:'B15', origin_delay_min:15, estimated_pax:300,
+  chain:[
+    {step:1, flight_id:'UA1312', event:'UA1312 departure delayed', detail:'+15min slip · B737', pax_affected:160, kind:'origin'},
+    {step:2, flight_id:'AA1318', event:'Gate B15 occupied — AA1318 hold', detail:'inbound blocked · ETA T+12min', pax_affected:140, kind:'gate'},
+    {step:3, flight_id:null,     event:'Bagroom sort line congestion', detail:'2 downstream connections at risk', pax_affected:0, kind:'bag'},
+    {step:4, flight_id:'UA1312', event:'Crew legality risk', detail:'FAA duty threshold in 56min', pax_affected:0, kind:'crew'}
+  ]};
+const _C_AA1314_FULL = { origin_flight:'AA1314', origin_gate:'E32', origin_delay_min:20, estimated_pax:220,
+  chain:[
+    {step:1, flight_id:'AA1314', event:'AA1314 late inbound · E32', detail:'+20min · gate occupied', pax_affected:178, kind:'origin'},
+    {step:2, flight_id:'WN1343', event:'Adjacent gate E33 hold', detail:'pushback sequence blocked', pax_affected:0, kind:'adjacency'},
+    {step:3, flight_id:'AA1330', event:'AA1330 equipment wait', detail:'belt loader reassignment queued', pax_affected:145, kind:'equipment'}
+  ]};
+const _C_WN1334 = { origin_flight:'WN1334', origin_gate:'D35', origin_delay_min:13, estimated_pax:180,
+  chain:[
+    {step:1, flight_id:'WN1334', event:'WN1334 bag surge +18 bags', detail:'D35 · heavy load flag', pax_affected:165, kind:'origin'},
+    {step:2, flight_id:null,     event:'DEPOT-02 belt loader shortage', detail:'nearest available T+14min', pax_affected:0, kind:'equipment'}
+  ]};
+
+function _rec(base, status) { return Object.assign({}, base, {_recovery_status: status}); }
+
+const DEMO_PATCHES = [
+  // ── Step 1: Baseline ─────────────────────────────────────
+  {
+    step:1, title:'Baseline Operations', view:'ops',
+    narrative:'Normal steady-state. 142 flights tracked across five terminals. No disruptions active. OTP tracking at 78%.',
+    kpi:{ otp_pct:78.0, at_risk_count:12, critical_count:0, cost_exposure_usd:4200,
+          active_flight_count:142, on_time_count:111, delay_minutes_prevented:0 },
+    cascades:[], recommendations:[],
+    irrops:{ active:false, triggers_hit:[] },
+    recovery_state:{ active_recoveries:[], outcome:null },
+    weather:{ convective_threat:false, ground_stop_probability:0.08, ground_stop_active:false,
+              condition:'clear', wind_kt:8, visibility_sm:10, ceiling_ft:25000, convective_eta_min:null },
+    event_log:['[13:02] Routine operations · all terminals nominal',
+               '[12:54] Team Delta rotated to Terminal B · coverage maintained',
+               '[12:41] Equipment inspection complete · DEPOT-01 cleared']
+  },
+  // ── Step 2: Equipment Fault ───────────────────────────────
+  {
+    step:2, title:'Equipment Fault Detected', view:'equip',
+    narrative:'DEPOT-02 belt loader fault detected at 13:20. Four Terminal C/D departures showing elevated bag load risk. Equipment readiness degraded.',
+    kpi:{ otp_pct:71.0, at_risk_count:28, critical_count:2, cost_exposure_usd:9800,
+          active_flight_count:147, on_time_count:104, delay_minutes_prevented:4 },
+    cascades:[], recommendations:[],
+    irrops:{ active:false, triggers_hit:[] },
+    recovery_state:{ active_recoveries:[], outcome:null },
+    weather:{ convective_threat:false, ground_stop_probability:0.11, ground_stop_active:false,
+              condition:'clear', wind_kt:10, visibility_sm:10, ceiling_ft:22000, convective_eta_min:null },
+    event_log:['[13:20] Equipment fault · DEPOT-02 belt loader to maintenance',
+               '[13:18] Bag load forecast degraded · C/D cluster affected',
+               '[13:02] Routine operations · all terminals nominal']
+  },
+  // ── Step 3: Cascade Propagation ───────────────────────────
+  {
+    step:3, title:'Cascade Propagation', view:'delay',
+    narrative:'UA1312 +15min late inbound triggering gate occupancy chain on B15. Bagroom sort congestion spreading to two downstream connections. AA1318 pushback hold issued.',
+    kpi:{ otp_pct:61.0, at_risk_count:52, critical_count:6, cost_exposure_usd:21400,
+          active_flight_count:152, on_time_count:93, delay_minutes_prevented:12 },
+    cascades:[_rec(_C_UA1312_FULL,'active'), _rec(_C_AA1314_FULL,'active'), _rec(_C_WN1334,'active')],
+    recommendations:[],
+    irrops:{ active:true, triggers_hit:['3 active cascades', '6 critical departures'] },
+    recovery_state:{ active_recoveries:[], outcome:null },
+    weather:{ convective_threat:true, ground_stop_probability:0.38, ground_stop_active:false,
+              condition:'conv threat', wind_kt:14, visibility_sm:9, ceiling_ft:18000, convective_eta_min:36 },
+    event_log:['[14:17] Late inbound · UA1312 B15 +15min — cascade chain active',
+               '[14:00] Late inbound · AA1314 E32 +20min',
+               '[13:52] Crew callout · Team Hotel unavailable',
+               '[13:20] Equipment fault · DEPOT-02 belt loader to maintenance']
+  },
+  // ── Step 4: Recovery Recommendation ──────────────────────
+  {
+    step:4, title:'Recovery Recommendation', view:'assign',
+    narrative:'Assignment engine surfaced a high-confidence recovery path. Team Bravo recommended for AA1318 — widebody certified, gate-proximate, low fatigue. Accept to initiate recovery sequence.',
+    kpi:{ otp_pct:61.0, at_risk_count:52, critical_count:6, cost_exposure_usd:21400,
+          active_flight_count:152, on_time_count:93, delay_minutes_prevented:12 },
+    cascades:[
+      Object.assign({}, _C_UA1312_FULL, {_recovery_status:'active',
+        chain:[_C_UA1312_FULL.chain[0], _C_UA1312_FULL.chain[1]]}),
+      Object.assign({}, _C_AA1314_FULL, {_recovery_status:'active',
+        chain:[_C_AA1314_FULL.chain[0], _C_AA1314_FULL.chain[2]]})
+    ],
+    recommendations:[
+      { flight_id:'AA1318', confidence:0.92,
+        candidates:[
+          { team_id:'TEAM-BRAVO',   reco_score:87, suitability_score:87 },
+          { team_id:'TEAM-INDIA',   reco_score:74, suitability_score:74 },
+          { team_id:'TEAM-OSCAR',   reco_score:61, suitability_score:61 }
+        ]},
+      { flight_id:'AA1330', confidence:0.78,
+        candidates:[
+          { team_id:'TEAM-FOXTROT', reco_score:79, suitability_score:79 },
+          { team_id:'TEAM-LIMA',    reco_score:65, suitability_score:65 }
+        ]}
+    ],
+    irrops:{ active:true, triggers_hit:['2 active cascades', '6 critical departures'] },
+    recovery_state:{ active_recoveries:[], outcome:null },
+    weather:{ convective_threat:true, ground_stop_probability:0.38, ground_stop_active:false,
+              condition:'conv threat', wind_kt:14, visibility_sm:9, ceiling_ft:18000, convective_eta_min:32 },
+    event_log:['[14:28] Assignment engine · 2 recommendations generated',
+               '[14:17] Late inbound · UA1312 B15 +15min — cascade chain active',
+               '[14:00] Late inbound · AA1314 E32 +20min']
+  },
+  // ── Step 5: Recovery Orchestration Initiated ──────────────
+  {
+    step:5, title:'Recovery Sequence Initiated', view:'delay',
+    narrative:'Recovery sequence initiated. Team Bravo reassignment in progress. Modeled stabilization window: ~90s. Cascade containment beginning on B15 chain.',
+    kpi:{ otp_pct:61.0, at_risk_count:50, critical_count:5, cost_exposure_usd:20800,
+          active_flight_count:152, on_time_count:93, delay_minutes_prevented:12 },
+    cascades:[
+      _rec(_C_UA1312_FULL,'recovering'),
+      _rec(_C_AA1314_FULL,'active'),
+      _rec(_C_WN1334,'active')
+    ],
+    recommendations:[],
+    irrops:{ active:true, triggers_hit:['2 active cascades', '5 critical departures'] },
+    recovery_state:{
+      active_recoveries:[{
+        flight_id:'AA1318', team_assigned:'Team Bravo',
+        description:'Reassignment in progress · gate B15 release expected T+8min',
+        stabilization_progress:0.08,
+        accepted_at:'14:29', horizon_at:'14:31'
+      }],
+      outcome:null
+    },
+    weather:{ convective_threat:true, ground_stop_probability:0.34, ground_stop_active:false,
+              condition:'conv threat', wind_kt:14, visibility_sm:9, ceiling_ft:18000, convective_eta_min:30 },
+    event_log:['[14:29] Recovery sequence initiated · Team Bravo → AA1318',
+               '[14:28] Assignment engine · recommendation accepted',
+               '[14:17] Late inbound · UA1312 B15 +15min — cascade chain active',
+               '[14:00] Late inbound · AA1314 E32 +20min']
+  },
+  // ── Step 6: Stabilization in Progress ────────────────────
+  {
+    step:6, title:'Stabilization in Progress', view:'delay',
+    narrative:'Stabilization in progress. Cascade containment advancing. B15 chain downstream risk decreasing. Recovery window holding.',
+    kpi:{ otp_pct:65.0, at_risk_count:42, critical_count:4, cost_exposure_usd:17200,
+          active_flight_count:152, on_time_count:99, delay_minutes_prevented:22 },
+    cascades:[
+      _rec(_C_UA1312_FULL,'contained'),
+      _rec(_C_AA1314_FULL,'recovering'),
+      _rec(_C_WN1334,'recovering')
+    ],
+    recommendations:[],
+    irrops:{ active:true, triggers_hit:['2 recovering cascades', '4 critical departures'] },
+    recovery_state:{
+      active_recoveries:[{
+        flight_id:'AA1318', team_assigned:'Team Bravo',
+        description:'B15 gate releasing · downstream risk decreasing · bagroom sort recovering',
+        stabilization_progress:0.55,
+        accepted_at:'14:29', horizon_at:'14:31'
+      }],
+      outcome:null
+    },
+    weather:{ convective_threat:true, ground_stop_probability:0.27, ground_stop_active:false,
+              condition:'conv threat', wind_kt:13, visibility_sm:9, ceiling_ft:18000, convective_eta_min:24 },
+    event_log:['[14:31] Stabilization in progress · B15 cascade containment advancing',
+               '[14:30] Gate B15 clearance confirmed · AA1318 pushback window open',
+               '[14:29] Recovery sequence initiated · Team Bravo → AA1318',
+               '[14:28] Assignment engine · recommendation accepted']
+  },
+  // ── Step 7: Cascade Contained ─────────────────────────────
+  {
+    step:7, title:'Cascade Contained', view:'delay',
+    narrative:'Cascade contained. B15 and D35 chains resolved. Operational state stabilizing. Outcome window approaching.',
+    kpi:{ otp_pct:70.0, at_risk_count:25, critical_count:2, cost_exposure_usd:11400,
+          active_flight_count:153, on_time_count:107, delay_minutes_prevented:36 },
+    cascades:[
+      _rec(_C_UA1312_FULL,'contained'),
+      _rec(_C_AA1314_FULL,'contained'),
+      Object.assign({}, _C_WN1334, {_recovery_status:'recovering',
+        chain:[_C_WN1334.chain[0]]})   // shortened chain — belt loader issue resolving
+    ],
+    recommendations:[],
+    irrops:{ active:true, triggers_hit:['1 recovering cascade', '2 critical departures'] },
+    recovery_state:{
+      active_recoveries:[{
+        flight_id:'AA1318', team_assigned:'Team Bravo',
+        description:'2 of 3 cascades contained · final chain stabilizing',
+        stabilization_progress:0.92,
+        accepted_at:'14:29', horizon_at:'14:31'
+      }],
+      outcome:null
+    },
+    weather:{ convective_threat:true, ground_stop_probability:0.20, ground_stop_active:false,
+              condition:'conv threat', wind_kt:12, visibility_sm:9, ceiling_ft:19000, convective_eta_min:18 },
+    event_log:['[14:33] Cascade contained · B15 chain resolved · 2 of 3 chains cleared',
+               '[14:32] D35 belt loader shortage resolved · WN1334 equipment assigned',
+               '[14:31] Stabilization in progress · B15 cascade containment advancing',
+               '[14:30] Gate B15 clearance confirmed · AA1318 pushback window open']
+  },
+  // ── Step 8: Outcome Measured ──────────────────────────────
+  {
+    step:8, title:'Outcome Measured', view:'exec',
+    narrative:'Outcome measured. Recovery coordination complete. System returns to surveillance state.',
+    kpi:{ otp_pct:74.0, at_risk_count:16, critical_count:1, cost_exposure_usd:6400,
+          active_flight_count:155, on_time_count:115, delay_minutes_prevented:47 },
+    cascades:[], recommendations:[],
+    irrops:{ active:false, triggers_hit:[] },
+    recovery_state:{
+      active_recoveries:[],
+      outcome:{
+        connections_protected:12,
+        delay_minutes_prevented:47,
+        cascades_contained:3,
+        cost_avoidance_modeled:4736,   // 47min × $100.76/min (A4A 2024)
+        otp_recovery_pts:13            // 61% → 74%
+      }
+    },
+    weather:{ convective_threat:false, ground_stop_probability:0.14, ground_stop_active:false,
+              condition:'clearing', wind_kt:11, visibility_sm:10, ceiling_ft:21000, convective_eta_min:null },
+    event_log:['[14:52] IRROPS resolved · all cascades cleared',
+               '[14:48] OTP recovery confirmed · 74% forecast',
+               '[14:34] Recovery sequence complete · 3 cascades contained',
+               '[14:29] Recovery sequence initiated · Team Bravo → AA1318']
+  }
+];
+
+function applyDemoPatch(base, patch) {
+  const s = JSON.parse(JSON.stringify(base));
+  s.kpis         = Object.assign({}, s.kpis, patch.kpi);
+  s.cascades     = patch.cascades;
+  s.recommendations = patch.recommendations;
+  s.irrops       = patch.irrops;
+  s.weather      = Object.assign({}, s.weather, patch.weather);
+  s.event_log    = patch.event_log;
+  s.recovery_state = patch.recovery_state || { active_recoveries:[], outcome:null };
+  return s;
+}
+
+function renderDemoPanel() {
+  const p = DEMO_PATCHES[demoStep];
+  const isLast = demoStep === DEMO_PATCHES.length - 1;
+
+  document.getElementById('dp-step-label').textContent = `Step ${demoStep+1} of ${DEMO_PATCHES.length}`;
+  document.getElementById('dp-title').textContent  = p.title;
+  document.getElementById('dp-text').textContent   = p.narrative;
+
+  // Pip navigation
+  document.getElementById('dp-pip').innerHTML = DEMO_PATCHES.map((_, i) =>
+    `<div class="dp-pip-dot ${i === demoStep ? 'active' : (i < demoStep ? 'done' : '')}" onclick="jumpDemoStep(${i})"></div>`
+  ).join('');
+
+  // Show/hide NEXT and RESET
+  const nextBtn  = document.getElementById('dp-next-btn');
+  const resetBtn = document.getElementById('dp-reset');
+  if (nextBtn)  nextBtn.style.display  = isLast ? 'none' : '';
+  if (resetBtn) resetBtn.style.display = isLast ? '' : 'none';
+
+  // Show Accept button only at step 4 (index 3)
+  const acceptRow = document.getElementById('dp-accept-row');
+  if (acceptRow) acceptRow.style.display = (demoStep === 3) ? '' : 'none';
+}
+
+function jumpDemoStep(i) {
+  clearTimeout(demoAutoTimer);
+  demoStep = i;
+  applyAndRenderDemoStep();
+  if (document.getElementById('dp-auto')?.checked) scheduleAutoNext();
+}
+
+function applyAndRenderDemoStep() {
+  if (!demoBaseState) return;
+  const p = DEMO_PATCHES[demoStep];
+  state = applyDemoPatch(demoBaseState, p);
+  switchView(p.view);
+  renderAll(state);
+  renderDemoPanel();
+}
+
+function scheduleAutoNext() {
+  clearTimeout(demoAutoTimer);
+  if (!document.getElementById('dp-auto')?.checked) return;
+  if (demoStep >= DEMO_PATCHES.length - 1) return;  // last step — no auto-advance
+  const delay = AUTO_DELAYS[demoStep] || 5000;
+  demoAutoTimer = setTimeout(() => {
+    demoStep++;
+    applyAndRenderDemoStep();
+    scheduleAutoNext();
+  }, delay);
+}
+
+function demoNext() {
+  if (demoStep < DEMO_PATCHES.length - 1) {
+    clearTimeout(demoAutoTimer);
+    demoStep++;
+    applyAndRenderDemoStep();
+    if (document.getElementById('dp-auto')?.checked) scheduleAutoNext();
+  }
+}
+
+function demoPrev() {
+  if (demoStep > 0) {
+    clearTimeout(demoAutoTimer);
+    demoStep--;
+    applyAndRenderDemoStep();
+    if (document.getElementById('dp-auto')?.checked) scheduleAutoNext();
+  }
+}
+
+function resetDemo() {
+  clearTimeout(demoAutoTimer);
+  document.getElementById('dp-auto').checked = false;
+  demoStep = 0;
+  applyAndRenderDemoStep();
+}
+
+function toggleDemoAuto(on) {
+  clearTimeout(demoAutoTimer);
+  if (on) scheduleAutoNext();
+}
+
+function toggleDemoMode() {
+  demoActive = !demoActive;
+  const btn   = document.getElementById('demo-toggle');
+  const panel = document.getElementById('demo-panel');
+  if (demoActive) {
+    btn.classList.add('demo-on');
+    btn.textContent = 'EXIT DEMO';
+    panel.classList.add('visible');
+    demoStep = 0;
+    if (state) {
+      demoBaseState = JSON.parse(JSON.stringify(state));
+      applyAndRenderDemoStep();
+    }
+  } else {
+    btn.classList.remove('demo-on');
+    btn.textContent = 'DEMO MODE';
+    panel.classList.remove('visible');
+    clearTimeout(demoAutoTimer);
+    document.getElementById('dp-auto').checked = false;
+    demoBaseState = null;
+    fetchState();
+  }
+}
+
+// Pause AUTO when tab is backgrounded; resume on focus
+document.addEventListener('visibilitychange', () => {
+  if (!demoActive) return;
+  if (document.hidden) {
+    clearTimeout(demoAutoTimer);
+  } else {
+    if (document.getElementById('dp-auto')?.checked) scheduleAutoNext();
+  }
+});
+
+// ── Bootstrap ──────────────────────────────────────────────
+fetchState();
+setInterval(() => { if (!demoActive) fetchState(); }, 5000);
+</script>
+</body>
+</html>

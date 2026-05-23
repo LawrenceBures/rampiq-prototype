@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+.next/
+
+# Environment
+.env.local
+.env*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives / personal files
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+
+# Supabase local
+supabase/.temp/
+
+# Sim output
+sim/output/
