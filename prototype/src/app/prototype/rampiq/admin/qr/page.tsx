@@ -17,7 +17,8 @@ const QR_CODES = [
   { payload: 'LAX-EQUIP-BELT-007',  label: 'Belt Loader #7',    type: 'Equipment' },
   { payload: 'LAX-EQUIP-GPU-031',   label: 'GPU #31',           type: 'Equipment' },
   { payload: 'LAX-EQUIP-LAV-003',   label: 'Lav Truck #3',      type: 'Equipment' },
-  { payload: 'LAX-CHECK-RAMPCTL',   label: 'Ramp Control',      type: 'Checkpoint' },
+  { payload: 'LAX-CHECK-RAMPCTL',      label: 'Ramp Control',      type: 'Checkpoint' },
+  { payload: 'LAX-DISPATCH-BAGROOM',  label: 'Bag Room Dispatch', type: 'Dispatch' },
 ];
 
 export default function QrAdminPage() {

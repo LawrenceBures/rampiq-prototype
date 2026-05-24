@@ -6,7 +6,7 @@ import { getIdentity } from '@/lib/identity';
 import { useAgentProfile, useOperationalMetrics, updateShiftStatus, fetchEvents } from '@/lib/store';
 import {
   eventAge, durationLabel,
-  CERT_STATUS_LABELS, LEARNING_STATUS_LABELS,
+  CERT_STATUS_LABELS,
   ROLE_LABELS,
 } from '@/lib/rampiq-types';
 import type { AgentIdentity, RampiqEvent, ShiftWindow } from '@/lib/rampiq-types';
@@ -60,8 +60,6 @@ export default function AgentProfilePage() {
 
   const certActive = profile.certifications.filter(c => c.status === 'ACTIVE').length;
   const certTotal = profile.certifications.length;
-  const learningDone = profile.learningProgress.filter(p => p.status === 'COMPLETED').length;
-  const learningTotal = profile.learningProgress.length;
 
   return (
     <>
@@ -69,7 +67,7 @@ export default function AgentProfilePage() {
 
       {/* Header */}
       <div className="rq-gate-header">
-        <div className="rq-gate-id" style={{ fontSize: 20 }}>Operational Profile</div>
+        <div className="rq-gate-id" style={{ fontSize: 20 }}>{profile.user.display_name || profile.user.id}</div>
         <div className="rq-gate-meta">
           {profile.user.station} &middot; <b>{profile.user.display_name || profile.user.id}</b> &middot; {ROLE_LABELS[profile.user.role_type] || profile.user.role_type}
         </div>
@@ -146,35 +144,7 @@ export default function AgentProfilePage() {
         </div>
       ))}
 
-      {/* Learning Hub */}
-      <div className="rq-eyebrow">Learning Hub ({learningDone}/{learningTotal})</div>
-      <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div className="rq-progress-track">
-          <div className="rq-progress-fill" style={{
-            width: learningTotal > 0 ? `${(learningDone / learningTotal) * 100}%` : '0%',
-            background: 'var(--rq-accent)',
-          }} />
-        </div>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-3)' }}>
-          {learningTotal > 0 ? Math.round((learningDone / learningTotal) * 100) : 0}%
-        </span>
-      </div>
-      {profile.learningProgress.map(p => (
-        <div className="rq-cert-row" key={p.id}>
-          <span className="rq-cert-name" style={{ fontSize: 12 }}>{p.module_label || p.module_code}</span>
-          <span className={`rq-pill ${
-            p.status === 'COMPLETED' ? 'rq-pill-ready' :
-            p.status === 'IN_PROGRESS' ? 'rq-pill-watch' : 'rq-pill-pending'
-          }`}>
-            {LEARNING_STATUS_LABELS[p.status]}
-          </span>
-          {p.score != null && (
-            <span className="rq-cert-meta">{p.score}%</span>
-          )}
-        </div>
-      ))}
-
-      {/* Operational Metrics */}
+      {/* Operational Activity */}
       <div className="rq-eyebrow">Operational Activity</div>
       {metrics ? (
         <>

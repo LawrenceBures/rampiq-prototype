@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raw JS Test</title>
+<style>
+  body { background: #0a0d12; color: #e8ecf2; font-family: monospace; padding: 20px; }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1f2733; }
+  .label { color: #6b7585; }
+  .ok { color: #3ed598; font-weight: bold; }
+  .fail { color: #ff5c5c; font-weight: bold; }
+  button { margin-top: 16px; padding: 12px 20px; background: #c9ff3a; color: #0a0d12; border: none; font-family: monospace; font-size: 14px; font-weight: bold; }
+</style>
+</head>
+<body>
+<h2>Raw HTML + JS Test</h2>
+<p style="color:#6b7585;font-size:12px;">No React. No Next.js. Pure browser JS.</p>
+
+<div class="row">
+  <span class="label">inline script</span>
+  <span id="inline" class="fail">not run</span>
+</div>
+<div class="row">
+  <span class="label">DOMContentLoaded</span>
+  <span id="domloaded" class="fail">waiting</span>
+</div>
+<div class="row">
+  <span class="label">setTimeout (1s)</span>
+  <span id="timer" class="fail">waiting</span>
+</div>
+<div class="row">
+  <span class="label">counter</span>
+  <span id="counter" class="ok">0</span>
+</div>
+<div class="row">
+  <span class="label">fetch test</span>
+  <span id="fetchtest" class="fail">waiting</span>
+</div>
+
+<button onclick="document.getElementById('counter').textContent = ++window._c;">Tap to increment</button>
+
+<script>
+// Inline script test
+window._c = 0;
+document.getElementById('inline').textContent = 'executed';
+document.getElementById('inline').className = 'ok';
+
+// DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('domloaded').textContent = 'fired';
+  document.getElementById('domloaded').className = 'ok';
+});
+
+// setTimeout
+setTimeout(function() {
+  document.getElementById('timer').textContent = 'fired';
+  document.getElementById('timer').className = 'ok';
+}, 1000);
+
+// Fetch test — try to reach a Next.js API endpoint
+fetch('/api/rampiq/events')
+  .then(function(r) {
+    document.getElementById('fetchtest').textContent = 'status ' + r.status;
+    document.getElementById('fetchtest').className = r.ok ? 'ok' : 'fail';
+  })
+  .catch(function(e) {
+    document.getElementById('fetchtest').textContent = 'error: ' + e.message;
+  });
+</script>
+</body>
+</html>

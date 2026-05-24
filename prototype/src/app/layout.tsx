@@ -27,7 +27,17 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.__RAMPIQ_INLINE_SCRIPT_LOADED = true;
+              window.__RAMPIQ_SCRIPT_TIME = new Date().toISOString();
+            `,
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

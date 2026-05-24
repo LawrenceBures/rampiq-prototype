@@ -7,11 +7,32 @@
 
 export type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type OperationalStatus = 'OPEN' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'RESOLVED' | 'CANCELLED';
-export type QrTargetType = 'GATE' | 'EQUIPMENT' | 'FLIGHT' | 'CHECKPOINT';
+export type QrTargetType = 'GATE' | 'EQUIPMENT' | 'FLIGHT' | 'CHECKPOINT' | 'DISPATCH';
+export type EquipOperationalStatus = 'OPERATIONAL' | 'LIMITED' | 'GROUNDED';
+export type EquipIssueType = 'BATTERY' | 'TIRES' | 'BRAKES' | 'HYDRAULIC' | 'ELECTRICAL' | 'ENGINE' | 'BELT_MOTOR' | 'LIGHTING' | 'TOWBAR' | 'UNKNOWN';
+
+export const EQUIP_STATUS_LABELS: Record<EquipOperationalStatus, string> = {
+  OPERATIONAL: 'Operational',
+  LIMITED: 'Limited Operation',
+  GROUNDED: 'Grounded',
+};
+
+export const EQUIP_ISSUE_LABELS: Record<EquipIssueType, string> = {
+  BATTERY: 'Battery',
+  TIRES: 'Tires',
+  BRAKES: 'Brakes',
+  HYDRAULIC: 'Hydraulic',
+  ELECTRICAL: 'Electrical',
+  ENGINE: 'Engine',
+  BELT_MOTOR: 'Belt Motor',
+  LIGHTING: 'Lighting',
+  TOWBAR: 'Towbar',
+  UNKNOWN: 'Unknown',
+};
 export type ShiftWindow = 'AM' | 'PM' | 'OVERNIGHT';
 export type SyncStatus = 'SYNCED' | 'PENDING' | 'FAILED';
 export type SourcePlatform = 'IOS_SAFARI' | 'ANDROID_CHROME' | 'ZEBRA_TC56' | 'DESKTOP';
-export type RoleType = 'TUG_CREW' | 'BAG_RUNNER' | 'LEAD' | 'SUPERVISOR' | 'CABIN_CLEANER' | 'FUELER' | 'RAMP_AGENT';
+export type RoleType = 'RAMP_AGENT' | 'REGIONAL_CABIN' | 'LT_RUNNER' | 'LAV_TECH' | 'CREW_CHIEF' | 'BAG_ROOM';
 export type ScanSource = 'camera_jsqr' | 'datawedge_keystroke' | 'manual_entry';
 
 // ============================================================
@@ -91,6 +112,7 @@ export interface RampiqEvent {
   event_duration_seconds: number | null;
 
   sync_status: SyncStatus;
+  details_json: Record<string, unknown> | null;
 }
 
 // ============================================================
@@ -124,6 +146,7 @@ export interface EventSubmission {
   device_id: string;
   source_platform: SourcePlatform;
   offline_created_at?: string;
+  details_json?: Record<string, unknown>;
 }
 
 // ============================================================
@@ -166,13 +189,12 @@ export const STATUS_LABELS: Record<OperationalStatus, string> = {
 };
 
 export const ROLE_LABELS: Record<RoleType, string> = {
-  TUG_CREW: 'Tug Crew',
-  BAG_RUNNER: 'Bag Runner',
-  LEAD: 'Lead',
-  SUPERVISOR: 'Supervisor',
-  CABIN_CLEANER: 'Cabin Cleaner',
-  FUELER: 'Fueler',
   RAMP_AGENT: 'Ramp Agent',
+  REGIONAL_CABIN: 'Regional Cabin',
+  LT_RUNNER: 'LT / Runner',
+  LAV_TECH: 'LAV Tech',
+  CREW_CHIEF: 'Crew Chief',
+  BAG_ROOM: 'Bag Room',
 };
 
 export const SHIFT_LABELS: Record<ShiftWindow, string> = {
@@ -441,7 +463,7 @@ export const LEARNING_STATUS_LABELS: Record<LearningStatus, string> = {
 // CREW ASSIGNMENTS & RECOMMENDATION INFRASTRUCTURE
 // ============================================================
 
-export type AssignmentStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+export type AssignmentStatus = 'ASSIGNED' | 'ACKNOWLEDGED' | 'EN_ROUTE' | 'IN_PROGRESS' | 'COMPLETE' | 'ISSUE_REPORTED' | 'CANCELLED';
 
 export interface CrewAssignment {
   id: string;
@@ -460,6 +482,8 @@ export interface CrewAssignment {
   override_reason: string | null;
   override_by: string | null;
   status: AssignmentStatus;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
   completed_at: string | null;
   completed_by: string | null;
   notes: string | null;
@@ -479,8 +503,12 @@ export interface AssignmentOutcome {
 }
 
 export const ASSIGNMENT_STATUS_LABELS: Record<AssignmentStatus, string> = {
-  ACTIVE: 'Active',
-  COMPLETED: 'Completed',
+  ASSIGNED: 'Assigned',
+  ACKNOWLEDGED: 'Acknowledged',
+  EN_ROUTE: 'En Route',
+  IN_PROGRESS: 'In Progress',
+  COMPLETE: 'Complete',
+  ISSUE_REPORTED: 'Issue Reported',
   CANCELLED: 'Cancelled',
 };
 

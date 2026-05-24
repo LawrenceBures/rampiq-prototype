@@ -72,10 +72,10 @@ export default function WorkforceReadinessPage() {
                     <span className="rq-team-shift">{tr.team.shift} &middot; Lead: {tr.team.lead_user_id}</span>
                   </div>
 
-                  {/* Cert compliance bar */}
+                  {/* Cert status bar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-3)', width: 60, flexShrink: 0 }}>
-                      Cert compliance
+                      Cert status
                     </span>
                     <div className="rq-progress-track">
                       <div className="rq-progress-fill" style={{
@@ -115,7 +115,7 @@ export default function WorkforceReadinessPage() {
           {/* Equipment Coverage */}
           {readiness.equip_coverage.length > 0 && (
             <>
-              <div className="rq-eyebrow">Equipment Qualification Coverage</div>
+              <div className="rq-eyebrow">Equipment Coverage</div>
               {readiness.equip_coverage.map(ec => {
                 const max = Math.max(ec.qualified_total, 1);
                 return (

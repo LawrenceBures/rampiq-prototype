@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAgentProfile, useOperationalMetrics, fetchEvents } from '@/lib/store';
 import {
   eventAge, durationLabel,
-  CERT_STATUS_LABELS, LEARNING_STATUS_LABELS,
+  CERT_STATUS_LABELS,
   ROLE_LABELS, STATUS_LABELS,
 } from '@/lib/rampiq-types';
 import type { RampiqEvent, OperationalStatus } from '@/lib/rampiq-types';
@@ -40,8 +40,6 @@ export default function AgentDetailPage() {
 
   const certActive = profile.certifications.filter(c => c.status === 'ACTIVE').length;
   const certTotal = profile.certifications.length;
-  const learningDone = profile.learningProgress.filter(p => p.status === 'COMPLETED').length;
-  const learningTotal = profile.learningProgress.length;
 
   return (
     <div className="rq-ops-board">
@@ -129,35 +127,7 @@ export default function AgentDetailPage() {
         </>
       )}
 
-      {/* Learning Hub */}
-      <div className="rq-eyebrow">Learning Hub ({learningDone}/{learningTotal})</div>
-      <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div className="rq-progress-track">
-          <div className="rq-progress-fill" style={{
-            width: learningTotal > 0 ? `${(learningDone / learningTotal) * 100}%` : '0%',
-            background: 'var(--rq-accent)',
-          }} />
-        </div>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-3)' }}>
-          {learningTotal > 0 ? Math.round((learningDone / learningTotal) * 100) : 0}%
-        </span>
-      </div>
-      {profile.learningProgress.map(p => (
-        <div className="rq-cert-row" key={p.id}>
-          <span className="rq-cert-name" style={{ fontSize: 12 }}>{p.module_label || p.module_code}</span>
-          <span className={`rq-pill ${
-            p.status === 'COMPLETED' ? 'rq-pill-ready' :
-            p.status === 'IN_PROGRESS' ? 'rq-pill-watch' : 'rq-pill-pending'
-          }`}>
-            {LEARNING_STATUS_LABELS[p.status]}
-          </span>
-          {p.score != null && (
-            <span className="rq-cert-meta">{p.score}%</span>
-          )}
-        </div>
-      ))}
-
-      {/* Full Activity History */}
+      {/* Activity History */}
       <div className="rq-eyebrow">Operational Activity ({events.length} events)</div>
       {events.length === 0 && (
         <div className="rq-quiet">No operational events</div>

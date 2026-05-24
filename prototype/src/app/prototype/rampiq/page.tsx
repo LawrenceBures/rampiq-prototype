@@ -8,7 +8,7 @@ export default function RampIQLanding() {
       <div className="rq-gate-header">
         <div className="rq-gate-id">RampIQ</div>
         <div className="rq-gate-meta">
-          Operational Memory System &middot; <b>LAX</b>
+          LAX Eagle &middot; <b>Operational State</b>
         </div>
       </div>
 
@@ -18,15 +18,24 @@ export default function RampIQLanding() {
         <div className="rq-module-icon">AG</div>
         <div>
           <div className="rq-module-name">Agent Mobile</div>
-          <div className="rq-module-desc">Scan QR &middot; report signals &middot; capture events</div>
+          <div className="rq-module-desc">Tasks &middot; QR scan &middot; operational updates</div>
+        </div>
+        <span className="rq-module-arrow">&rsaquo;</span>
+      </Link>
+
+      <Link href="/prototype/rampiq/operations/dispatch" className="rq-module">
+        <div className="rq-module-icon">CC</div>
+        <div>
+          <div className="rq-module-name">Crew Chief Dispatch</div>
+          <div className="rq-module-desc">Assignment &middot; orchestration &middot; gate readiness</div>
         </div>
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
       <Link href="/prototype/rampiq/dashboard" className="rq-module">
-        <div className="rq-module-icon">MG</div>
+        <div className="rq-module-icon">OM</div>
         <div>
-          <div className="rq-module-name">Manager Dashboard</div>
+          <div className="rq-module-name">Operations Monitor</div>
           <div className="rq-module-desc">Live events &middot; resolution &middot; patterns</div>
         </div>
         <span className="rq-module-arrow">&rsaquo;</span>
@@ -36,31 +45,22 @@ export default function RampIQLanding() {
         <div className="rq-module-icon">OR</div>
         <div>
           <div className="rq-module-name">Operational Readiness</div>
-          <div className="rq-module-desc">Workforce &middot; certifications &middot; equipment coverage</div>
-        </div>
-        <span className="rq-module-arrow">&rsaquo;</span>
-      </Link>
-
-      <Link href="/prototype/rampiq/operations/assignments" className="rq-module">
-        <div className="rq-module-icon">OA</div>
-        <div>
-          <div className="rq-module-name">Operational Assignments</div>
-          <div className="rq-module-desc">Coordination &middot; suggestions &middot; override controls &middot; decision trail</div>
+          <div className="rq-module-desc">Workforce &middot; certifications &middot; coverage</div>
         </div>
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
       <div className="rq-explainer">
-        <div className="rq-explainer-h">How to demo</div>
+        <div className="rq-explainer-h">Operational flow</div>
         <div className="rq-explainer-msg">
-          Open Manager Dashboard on a laptop. Open Agent Mobile on a phone.
-          Scan a QR code, submit a signal. Watch the dashboard update in real time.
-          Manager can acknowledge and resolve events.
+          Crew Chief dispatches assignments from Dispatch board.
+          Agents receive tasks on mobile, acknowledge, scan gates, complete readiness.
+          Operations Monitor shows live operational state.
         </div>
       </div>
 
       <div className="rq-quiet">
-        RampIQ &middot; Phase 1
+        RampIQ &middot; Eagle Operations
       </div>
     </>
   );

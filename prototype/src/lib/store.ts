@@ -103,6 +103,7 @@ export async function postEvent(submission: EventSubmission): Promise<RampiqEven
     resolved_by: null,
     event_duration_seconds: null,
     sync_status: 'SYNCED',
+    details_json: submission.details_json || null,
   };
   const events = lsRead();
   events.push(full);
@@ -181,6 +182,7 @@ const FALLBACK_QR_TARGETS: QrTarget[] = [
   { id: 'LAX-EQUIP-GPU-031', target_type: 'EQUIPMENT', station: 'LAX', gate_id: null, equipment_id: 'GPU-031', equipment_kind: 'GPU', flight_id: null, label: 'GPU #31', active: true, created_at: '' },
   { id: 'LAX-EQUIP-LAV-003', target_type: 'EQUIPMENT', station: 'LAX', gate_id: null, equipment_id: 'LAV-003', equipment_kind: 'LAV_TRUCK', flight_id: null, label: 'Lav Truck #3', active: true, created_at: '' },
   { id: 'LAX-CHECK-RAMPCTL', target_type: 'CHECKPOINT', station: 'LAX', gate_id: null, equipment_id: null, equipment_kind: null, flight_id: null, label: 'Ramp Control', active: true, created_at: '' },
+  { id: 'LAX-DISPATCH-BAGROOM', target_type: 'DISPATCH', station: 'LAX', gate_id: null, equipment_id: null, equipment_kind: null, flight_id: null, label: 'Bag Room Dispatch', active: true, created_at: '' },
 ];
 
 export async function fetchQrTargets(): Promise<QrTarget[]> {
@@ -228,6 +230,10 @@ const FALLBACK_EVENT_TYPES: EventType[] = [
   { code: 'LAV_SERVICE_DELAY', label: 'Lav service delay', default_severity: 'LOW', applicable_targets: ['GATE', 'EQUIPMENT'], active: true, display_order: 6 },
   { code: 'CARGO_HOLD', label: 'Cargo hold', default_severity: 'MEDIUM', applicable_targets: ['FLIGHT', 'GATE'], active: true, display_order: 7 },
   { code: 'FUEL_DELAY', label: 'Fuel delay', default_severity: 'MEDIUM', applicable_targets: ['GATE', 'FLIGHT'], active: true, display_order: 8 },
+  { code: 'EQUIP_STATUS', label: 'Equipment status', default_severity: 'MEDIUM', applicable_targets: ['EQUIPMENT'], active: true, display_order: 9 },
+  { code: 'GATE_READINESS', label: 'Gate readiness', default_severity: 'LOW', applicable_targets: ['GATE'], active: true, display_order: 10 },
+  { code: 'LT_DISPATCH', label: 'LT dispatched', default_severity: 'LOW', applicable_targets: ['DISPATCH'], active: true, display_order: 11 },
+  { code: 'LT_ARRIVAL', label: 'LT arrived', default_severity: 'LOW', applicable_targets: ['GATE'], active: true, display_order: 12 },
 ];
 
 export async function fetchEventTypes(): Promise<EventType[]> {
@@ -261,11 +267,11 @@ export function getEventTypesForTarget(
 // ============================================================
 
 const FALLBACK_USERS: UserLite[] = [
-  { id: 'CM', display_name: 'Cortez M.', role_type: 'SUPERVISOR', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'TC12', display_name: 'Tug Crew 12', role_type: 'TUG_CREW', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'TC14', display_name: 'Tug Crew 14', role_type: 'TUG_CREW', default_shift: 'PM', station: 'LAX', active: true },
-  { id: 'BR01', display_name: 'Bag Runner 1', role_type: 'BAG_RUNNER', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'LD03', display_name: 'Lead 3', role_type: 'LEAD', default_shift: 'AM', station: 'LAX', active: true },
+  { id: 'CC01', display_name: 'Martinez J.', role_type: 'CREW_CHIEF', default_shift: 'AM', station: 'LAX', active: true },
+  { id: 'RA14', display_name: 'Santos R.', role_type: 'RAMP_AGENT', default_shift: 'AM', station: 'LAX', active: true },
+  { id: 'RA22', display_name: 'Okafor D.', role_type: 'RAMP_AGENT', default_shift: 'PM', station: 'LAX', active: true },
+  { id: 'LT02', display_name: 'Nguyen T.', role_type: 'LT_RUNNER', default_shift: 'AM', station: 'LAX', active: true },
+  { id: 'RC05', display_name: 'Park S.', role_type: 'REGIONAL_CABIN', default_shift: 'AM', station: 'LAX', active: true },
 ];
 
 export async function fetchUsers(): Promise<UserLite[]> {
@@ -397,58 +403,42 @@ export function useUsers(): {
     setError(null);
     setTimedOut(false);
 
-    console.log('[useUsers] Fetching users...');
     const sb = getSupabase();
-
     if (!sb) {
-      console.log('[useUsers] No Supabase client — fallback activated');
       setUsers(FALLBACK_USERS);
       setUsingFallback(true);
       setLoading(false);
       return;
     }
 
-    // Race the Supabase query against a 5-second timeout
-    let resolved = false;
-    const timeout = new Promise<'TIMEOUT'>((resolve) => {
-      setTimeout(() => { if (!resolved) resolve('TIMEOUT'); }, 5000);
-    });
+    // Race Supabase query against 5s timeout
+    let done = false;
+    const timeout = new Promise<'TIMEOUT'>(r => setTimeout(() => { if (!done) r('TIMEOUT'); }, 5000));
 
     const query = (async () => {
       try {
         const { data, error: sbErr } = await sb
-          .from('users_lite')
-          .select('*')
-          .eq('active', true)
-          .order('role_type');
-        if (resolved) return 'LATE'; // timeout already fired
-        if (sbErr) {
-          console.error('[useUsers] Supabase error:', sbErr.message);
-          return { error: `Supabase: ${sbErr.message}` };
-        }
-        console.log('[useUsers] Supabase response received:', data?.length, 'users');
+          .from('users_lite').select('*').eq('active', true).order('role_type');
+        if (done) return 'LATE';
+        if (sbErr) return { error: `Supabase: ${sbErr.message}` };
         return { data: data as UserLite[] };
       } catch (err) {
-        if (resolved) return 'LATE';
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[useUsers] Fetch exception:', msg);
-        return { error: `Network: ${msg}` };
+        if (done) return 'LATE';
+        return { error: `Network: ${err instanceof Error ? err.message : String(err)}` };
       }
     })();
 
     const result = await Promise.race([query, timeout]);
-    resolved = true;
+    done = true;
 
     if (result === 'TIMEOUT') {
-      console.warn('[useUsers] Fetch timeout after 5s — fallback activated');
       setTimedOut(true);
       setError('Supabase fetch timed out after 5s');
       setUsers(FALLBACK_USERS);
       setUsingFallback(true);
     } else if (result === 'LATE') {
-      // query resolved after timeout — ignore
+      // ignore
     } else if ('error' in result) {
-      console.warn('[useUsers] Fetch failed —', result.error);
       setError(result.error || 'Unknown error');
       setUsers(FALLBACK_USERS);
       setUsingFallback(true);
@@ -494,14 +484,14 @@ import type {
 // ---- Fallback data ----
 
 const FALLBACK_CERT_TYPES: CertificationType[] = [
-  { code: 'RAMP_SAFETY', label: 'Ramp Safety', category: 'SAFETY', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','CABIN_CLEANER','FUELER','RAMP_AGENT'], renewal_months: 12, active: true, display_order: 1 },
-  { code: 'FOD_AWARENESS', label: 'FOD Prevention', category: 'SAFETY', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','RAMP_AGENT'], renewal_months: 12, active: true, display_order: 2 },
-  { code: 'TUG_OPERATION', label: 'Tug Operation', category: 'EQUIPMENT', required_for: ['TUG_CREW'], renewal_months: 24, active: true, display_order: 3 },
-  { code: 'PUSHBACK_CERT', label: 'Pushback Certified', category: 'EQUIPMENT', required_for: ['TUG_CREW'], renewal_months: 24, active: true, display_order: 4 },
-  { code: 'BELT_LOADER_OP', label: 'Belt Loader Operation', category: 'EQUIPMENT', required_for: ['BAG_RUNNER','RAMP_AGENT'], renewal_months: 24, active: true, display_order: 5 },
-  { code: 'HAZMAT_BASIC', label: 'Hazmat Awareness', category: 'HAZMAT', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','FUELER','RAMP_AGENT'], renewal_months: 12, active: true, display_order: 6 },
-  { code: 'WING_WALKER', label: 'Wing Walker', category: 'PROCEDURE', required_for: ['TUG_CREW','LEAD'], renewal_months: 12, active: true, display_order: 7 },
-  { code: 'DEICING_BASIC', label: 'Basic Deicing', category: 'PROCEDURE', required_for: ['RAMP_AGENT','LEAD'], renewal_months: 12, active: true, display_order: 8 },
+  { code: 'RAMP_SAFETY', label: 'Ramp Safety', category: 'SAFETY', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','REGIONAL_CABIN','LAV_TECH','BAG_ROOM'], renewal_months: 12, active: true, display_order: 1 },
+  { code: 'FOD_AWARENESS', label: 'FOD Prevention', category: 'SAFETY', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','REGIONAL_CABIN'], renewal_months: 12, active: true, display_order: 2 },
+  { code: 'TUG_OPERATION', label: 'Tug Operation', category: 'EQUIPMENT', required_for: ['RAMP_AGENT'], renewal_months: 24, active: true, display_order: 3 },
+  { code: 'PUSHBACK_CERT', label: 'Pushback Certified', category: 'EQUIPMENT', required_for: ['RAMP_AGENT'], renewal_months: 24, active: true, display_order: 4 },
+  { code: 'BELT_LOADER_OP', label: 'Belt Loader Operation', category: 'EQUIPMENT', required_for: ['LT_RUNNER','RAMP_AGENT'], renewal_months: 24, active: true, display_order: 5 },
+  { code: 'HAZMAT_BASIC', label: 'Hazmat Awareness', category: 'HAZMAT', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','LAV_TECH'], renewal_months: 12, active: true, display_order: 6 },
+  { code: 'WING_WALKER', label: 'Wing Walker', category: 'PROCEDURE', required_for: ['RAMP_AGENT','CREW_CHIEF'], renewal_months: 12, active: true, display_order: 7 },
+  { code: 'DEICING_BASIC', label: 'Basic Deicing', category: 'PROCEDURE', required_for: ['RAMP_AGENT','CREW_CHIEF'], renewal_months: 12, active: true, display_order: 8 },
 ];
 
 const FALLBACK_EQUIP_QUAL_TYPES: EquipmentQualType[] = [
@@ -515,38 +505,38 @@ const FALLBACK_EQUIP_QUAL_TYPES: EquipmentQualType[] = [
 ];
 
 const FALLBACK_TEAMS: Team[] = [
-  { id: 'ALPHA-AM', label: 'Alpha Team', shift: 'AM', station: 'LAX', lead_user_id: 'LD03', active: true },
-  { id: 'BRAVO-PM', label: 'Bravo Team', shift: 'PM', station: 'LAX', lead_user_id: 'TC14', active: true },
+  { id: 'RAMP-AM', label: 'Ramp AM', shift: 'AM', station: 'LAX', lead_user_id: 'CC01', active: true },
+  { id: 'RAMP-PM', label: 'Ramp PM', shift: 'PM', station: 'LAX', lead_user_id: 'RA22', active: true },
 ];
 
 const FALLBACK_TEAM_MEMBERS: TeamMember[] = [
-  { team_id: 'ALPHA-AM', user_id: 'CM' },
-  { team_id: 'ALPHA-AM', user_id: 'TC12' },
-  { team_id: 'ALPHA-AM', user_id: 'BR01' },
-  { team_id: 'ALPHA-AM', user_id: 'LD03' },
-  { team_id: 'BRAVO-PM', user_id: 'TC14' },
+  { team_id: 'RAMP-AM', user_id: 'CC01' },
+  { team_id: 'RAMP-AM', user_id: 'RA14' },
+  { team_id: 'RAMP-AM', user_id: 'LT02' },
+  { team_id: 'RAMP-AM', user_id: 'RC05' },
+  { team_id: 'RAMP-PM', user_id: 'RA22' },
 ];
 
 const FALLBACK_ZONES: Zone[] = [
-  { id: 'EAGLE-NORTH', label: 'Eagle North', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
-  { id: 'EAGLE-MID', label: 'Eagle Mid', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
-  { id: 'EAGLE-SOUTH', label: 'Eagle South', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
+  { id: 'GATES-52ABC', label: 'Gates 52A\u2013C', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+  { id: 'GATES-52DEF', label: 'Gates 52D\u2013F', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+  { id: 'GATES-52GHI', label: 'Gates 52G\u2013I', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
 ];
 
 const FALLBACK_SHIFT_STATUSES: ShiftStatusRecord[] = [
-  { user_id: 'CM', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
-  { user_id: 'TC12', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
-  { user_id: 'BR01', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
-  { user_id: 'LD03', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
-  { user_id: 'TC14', on_shift: false, shift_start: null, shift_window: 'PM', updated_at: new Date().toISOString() },
+  { user_id: 'CC01', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
+  { user_id: 'RA14', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
+  { user_id: 'LT02', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
+  { user_id: 'RC05', on_shift: true, shift_start: new Date(Date.now() - 7200000).toISOString(), shift_window: 'AM', updated_at: new Date().toISOString() },
+  { user_id: 'RA22', on_shift: false, shift_start: null, shift_window: 'PM', updated_at: new Date().toISOString() },
 ];
 
 const FALLBACK_LEARNING_MODULES: LearningModule[] = [
-  { code: 'FOD_AWARENESS', label: 'FOD Awareness', category: 'SAFETY', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','RAMP_AGENT'], display_order: 1, active: true },
-  { code: 'PUSHBACK_PROC', label: 'Pushback Procedures', category: 'PROCEDURE', required_for: ['TUG_CREW','LEAD'], display_order: 2, active: true },
-  { code: 'SAFETY_BRIEFING', label: 'Daily Safety Briefing', category: 'SAFETY', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','CABIN_CLEANER','FUELER','RAMP_AGENT'], display_order: 3, active: true },
-  { code: 'EQUIP_INSPECTION', label: 'Equipment Pre-Use Inspection', category: 'EQUIPMENT', required_for: ['TUG_CREW','BAG_RUNNER','RAMP_AGENT'], display_order: 4, active: true },
-  { code: 'HAZMAT_HANDLING', label: 'Hazmat Handling Basics', category: 'COMPLIANCE', required_for: ['TUG_CREW','BAG_RUNNER','LEAD','SUPERVISOR','FUELER','RAMP_AGENT'], display_order: 5, active: true },
+  { code: 'FOD_AWARENESS', label: 'FOD Awareness', category: 'SAFETY', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','REGIONAL_CABIN'], display_order: 1, active: true },
+  { code: 'PUSHBACK_PROC', label: 'Pushback Procedures', category: 'PROCEDURE', required_for: ['RAMP_AGENT','CREW_CHIEF'], display_order: 2, active: true },
+  { code: 'SAFETY_BRIEFING', label: 'Daily Safety Briefing', category: 'SAFETY', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','REGIONAL_CABIN','LAV_TECH','BAG_ROOM'], display_order: 3, active: true },
+  { code: 'EQUIP_INSPECTION', label: 'Equipment Pre-Use Inspection', category: 'EQUIPMENT', required_for: ['RAMP_AGENT','LT_RUNNER'], display_order: 4, active: true },
+  { code: 'HAZMAT_HANDLING', label: 'Hazmat Handling Basics', category: 'COMPLIANCE', required_for: ['RAMP_AGENT','LT_RUNNER','CREW_CHIEF','LAV_TECH'], display_order: 5, active: true },
 ];
 
 // ---- Fetch functions ----
@@ -932,6 +922,101 @@ export function useOperationalReadiness(station: string, shift: ShiftWindow): Op
 }
 
 // ============================================================
+// ---- Assignment lifecycle ----
+
+export async function acknowledgeAssignment(id: string, userId: string): Promise<CrewAssignment | null> {
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb
+      .from('crew_assignments')
+      .update({ status: 'ACKNOWLEDGED', acknowledged_at: new Date().toISOString(), acknowledged_by: userId })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) { console.error('[store] acknowledge error:', error.message); return null; }
+    return data as CrewAssignment;
+  }
+  return null;
+}
+
+export async function updateAssignmentStatus(id: string, status: string): Promise<CrewAssignment | null> {
+  const sb = getSupabase();
+  const updates: Record<string, unknown> = { status };
+  if (status === 'COMPLETE') {
+    updates.completed_at = new Date().toISOString();
+  }
+  if (sb) {
+    const { data, error } = await sb
+      .from('crew_assignments')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) { console.error('[store] status update error:', error.message); return null; }
+    return data as CrewAssignment;
+  }
+  return null;
+}
+
+export async function fetchAgentTasks(userId: string): Promise<CrewAssignment[]> {
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb
+      .from('crew_assignments')
+      .select('*')
+      .contains('assigned_user_ids', [userId])
+      .not('status', 'in', '("COMPLETE","CANCELLED")')
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      const [teams, zones] = await Promise.all([fetchTeams(), fetchZones()]);
+      return (data as CrewAssignment[]).map(a => ({
+        ...a,
+        team_label: teams.find(t => t.id === a.team_id)?.label,
+        zone_label: a.zone_id ? zones.find(z => z.id === a.zone_id)?.label : undefined,
+      }));
+    }
+    console.error('[store] agent tasks fetch error:', error?.message);
+  }
+  // Fallback: filter from FALLBACK_CREW_ASSIGNMENTS
+  return FALLBACK_CREW_ASSIGNMENTS.filter(a =>
+    a.assigned_user_ids.includes(userId) && a.status !== 'COMPLETE' && a.status !== 'CANCELLED'
+  );
+}
+
+// LT DISPATCH — find active dispatch for a user (no matching arrival yet)
+// ============================================================
+
+export async function fetchActiveDispatch(userId: string): Promise<RampiqEvent | null> {
+  const sb = getSupabase();
+  if (sb) {
+    // Find most recent LT_DISPATCH by this user
+    const { data: dispatches } = await sb
+      .from('rampiq_events')
+      .select('*')
+      .eq('reported_by', userId)
+      .eq('event_type', 'LT_DISPATCH')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (!dispatches || dispatches.length === 0) return null;
+    const dispatch = dispatches[0] as RampiqEvent;
+
+    // Check if there's a matching LT_ARRIVAL
+    const { data: arrivals } = await sb
+      .from('rampiq_events')
+      .select('id')
+      .eq('event_type', 'LT_ARRIVAL')
+      .eq('reported_by', userId)
+      .gte('created_at', dispatch.created_at)
+      .limit(1);
+
+    if (arrivals && arrivals.length > 0) return null; // already arrived
+    return dispatch;
+  }
+  return null; // no fallback for active dispatch
+}
+
+// ============================================================
 // CREW ASSIGNMENTS
 // ============================================================
 
@@ -943,26 +1028,26 @@ import type {
 
 const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
   {
-    id: 'seed-alpha-am', created_at: new Date(Date.now() - 7200000).toISOString(),
-    team_id: 'ALPHA-AM', assigned_user_ids: ['CM','TC12','BR01','LD03'],
-    zone_id: 'EAGLE-NORTH', gate_ids: ['52A','52B','52C'], equipment_ids: ['TUG-042','BELT-007'],
-    assigned_by: 'LD03', shift_window: 'AM',
+    id: 'seed-ramp-am', created_at: new Date(Date.now() - 7200000).toISOString(),
+    team_id: 'RAMP-AM', assigned_user_ids: ['CC01','RA14','LT02','RC05'],
+    zone_id: 'GATES-52ABC', gate_ids: ['52A','52B','52C'], equipment_ids: ['TUG-042','BELT-007'],
+    assigned_by: 'CC01', shift_window: 'AM',
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
-    status: 'ACTIVE', completed_at: null, completed_by: null,
-    notes: 'Standard AM assignment — Alpha covers Eagle North cluster',
-    team_label: 'Alpha Team', zone_label: 'Eagle North', assigned_by_name: 'Lead 3',
+    status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
+    notes: 'AM ramp crew covering gates 52A through 52C',
+    team_label: 'Ramp AM', zone_label: 'Gates 52A\u2013C', assigned_by_name: 'Martinez J.',
   },
   {
-    id: 'seed-bravo-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
-    team_id: 'BRAVO-PM', assigned_user_ids: ['TC14'],
-    zone_id: 'EAGLE-SOUTH', gate_ids: ['52G','52H','52I'], equipment_ids: ['GPU-031'],
-    assigned_by: 'TC14', shift_window: 'PM',
+    id: 'seed-ramp-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
+    team_id: 'RAMP-PM', assigned_user_ids: ['RA22'],
+    zone_id: 'GATES-52GHI', gate_ids: ['52G','52H','52I'], equipment_ids: ['GPU-031'],
+    assigned_by: 'RA22', shift_window: 'PM',
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
-    status: 'ACTIVE', completed_at: null, completed_by: null,
-    notes: 'Standard PM assignment — Bravo covers Eagle South cluster',
-    team_label: 'Bravo Team', zone_label: 'Eagle South', assigned_by_name: 'Tug Crew 14',
+    status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
+    notes: 'PM ramp crew covering gates 52G through 52I',
+    team_label: 'Ramp PM', zone_label: 'Gates 52G\u2013I', assigned_by_name: 'Okafor D.',
   },
 ];
 
@@ -1029,7 +1114,7 @@ export async function createCrewAssignment(assignment: {
     override_reason: assignment.override_reason || null,
     override_by: assignment.override_by || null,
     notes: assignment.notes || null,
-    status: 'ACTIVE',
+    status: 'ASSIGNED',
   };
 
   if (sb) {
@@ -1045,7 +1130,7 @@ export async function createCrewAssignment(assignment: {
 
 export async function completeCrewAssignment(id: string, completedBy: string): Promise<CrewAssignment | null> {
   const sb = getSupabase();
-  const updates = { status: 'COMPLETED', completed_at: new Date().toISOString(), completed_by: completedBy };
+  const updates = { status: 'COMPLETE', completed_at: new Date().toISOString(), completed_by: completedBy };
   if (sb) {
     const { data, error } = await sb.from('crew_assignments').update(updates).eq('id', id).select().single();
     if (error) { console.error('[store] crew_assignment complete error:', error.message); return null; }
@@ -1174,7 +1259,7 @@ export async function computeSuggestion(
     // Equipment coverage: how many zone equipment types are covered
     const zoneEquipTypes = new Set<string>();
     // Infer equipment types from zone's gate equipment assignments
-    const activeAssignments = await fetchCrewAssignments({ status: 'ACTIVE' });
+    const activeAssignments = await fetchCrewAssignments({ status: 'ASSIGNED' });
     activeAssignments.forEach(a => {
       if (a.zone_id === zoneId) a.equipment_ids.forEach(eq => zoneEquipTypes.add(eq.split('-')[0]));
     });
@@ -1225,7 +1310,7 @@ export async function computeSuggestion(
   if (best.cert_match >= 75) reasons.push(`${best.certMatchCount}/${best.total} members cert-qualified`);
   if (best.zone_familiarity > 0) reasons.push(`${best.familiarCount}/${best.total} familiar with zone`);
   if (best.workload >= 80) reasons.push('lowest active workload');
-  if (best.equip_coverage >= 50) reasons.push('equipment qualification coverage');
+  if (best.equip_coverage >= 50) reasons.push('equipment coverage');
   if (reasons.length === 0) reasons.push('best available match');
 
   return {

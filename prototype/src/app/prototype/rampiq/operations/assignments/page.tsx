@@ -16,6 +16,7 @@ import {
   reassignCrew,
   useLiveEvents,
 } from '@/lib/store';
+import { getIdentity } from '@/lib/identity';
 import {
   eventAge, durationLabel,
 } from '@/lib/rampiq-types';
@@ -30,6 +31,8 @@ export default function OperationalAssignmentsPage() {
   const { events } = useLiveEvents(5000);
   const [teams, setTeams] = useState<Team[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
+  const identity = typeof window !== 'undefined' ? getIdentity() : null;
+  const currentUserId = identity?.user_id ?? 'CC01';
   const [outcomes, setOutcomes] = useState<Map<string, AssignmentOutcome>>(new Map());
   const [suggestion, setSuggestion] = useState<OperationalSuggestion | null>(null);
 
@@ -51,7 +54,7 @@ export default function OperationalAssignmentsPage() {
 
   // Compute outcomes for completed assignments
   useEffect(() => {
-    const completed = assignments.filter(a => a.status === 'COMPLETED');
+    const completed = assignments.filter(a => a.status === 'COMPLETE');
     if (completed.length === 0) return;
     Promise.all(completed.map(a => computeAssignmentOutcome(a))).then(results => {
       const map = new Map<string, AssignmentOutcome>();
@@ -74,8 +77,8 @@ export default function OperationalAssignmentsPage() {
   }, [formZone]);
 
   // KPIs
-  const active = assignments.filter(a => a.status === 'ACTIVE');
-  const completed = assignments.filter(a => a.status === 'COMPLETED');
+  const active = assignments.filter(a => !['COMPLETE', 'CANCELLED'].includes(a.status));
+  const completed = assignments.filter(a => a.status === 'COMPLETE');
   const overrides = assignments.filter(a => a.override_used).length;
   const openEvents = events.filter(e => e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED');
 
@@ -101,13 +104,13 @@ export default function OperationalAssignmentsPage() {
       zone_id: formZone,
       gate_ids: formGates,
       equipment_ids: equipIds,
-      assigned_by: 'CM',
+      assigned_by: currentUserId,
       shift_window: shift,
       recommended_team_id: suggestion?.suggested_team_id,
       recommendation_reason: suggestion?.reasons.join(' · '),
       override_used: isOverride || false,
       override_reason: isOverride ? formOverrideReason : undefined,
-      override_by: isOverride ? 'CM' : undefined,
+      override_by: isOverride ? currentUserId : undefined,
       notes: formNotes || undefined,
     });
 
@@ -125,7 +128,7 @@ export default function OperationalAssignmentsPage() {
 
   async function handleComplete(id: string) {
     setActionId(id);
-    await completeCrewAssignment(id, 'CM');
+    await completeCrewAssignment(id, currentUserId);
     setActionId(null);
     refresh();
   }

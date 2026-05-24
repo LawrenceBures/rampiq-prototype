@@ -54,7 +54,6 @@ export default function ScanPage() {
   // ============================================================
 
   async function handleScanResult(decodedValue: string) {
-    // Stop scanning while we resolve
     stopScanning();
 
     const target = await resolveQrTarget(decodedValue);
@@ -63,9 +62,23 @@ export default function ScanPage() {
       return;
     }
 
-    // Navigate to report form with target context
+    // Route by target type to purpose-built workflow pages
     const params = new URLSearchParams({ target: decodedValue });
-    router.push(`/prototype/rampiq/mobile/report?${params.toString()}`);
+    switch (target.target_type) {
+      case 'GATE':
+        router.push(`/prototype/rampiq/mobile/gate/${target.gate_id}?${params.toString()}`);
+        break;
+      case 'EQUIPMENT':
+        router.push(`/prototype/rampiq/mobile/equipment/${target.equipment_id}?${params.toString()}`);
+        break;
+      case 'DISPATCH':
+        router.push(`/prototype/rampiq/mobile/lt-dispatch?${params.toString()}`);
+        break;
+      default:
+        // CHECKPOINT and others → generic report
+        router.push(`/prototype/rampiq/mobile/report?${params.toString()}`);
+        break;
+    }
   }
 
   // ============================================================
