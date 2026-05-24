@@ -41,6 +41,15 @@ export default function RampIQLanding() {
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
+      <Link href="/prototype/rampiq/operations/flights" className="rq-module">
+        <div className="rq-module-icon">FL</div>
+        <div>
+          <div className="rq-module-name">Flight Ops</div>
+          <div className="rq-module-desc">Gate demand &middot; turn windows &middot; assignment planning</div>
+        </div>
+        <span className="rq-module-arrow">&rsaquo;</span>
+      </Link>
+
       <Link href="/prototype/rampiq/operations/workforce-pool" className="rq-module">
         <div className="rq-module-icon">WP</div>
         <div>
