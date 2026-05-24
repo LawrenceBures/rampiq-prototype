@@ -76,6 +76,30 @@ export interface UserLite {
   default_shift: ShiftWindow | null;
   station: string;
   active: boolean;
+  // Scheduling (workforce pool)
+  shift_end: string | null;
+  lunch_start: string | null;
+  lunch_end: string | null;
+  break_start: string | null;
+  break_end: string | null;
+  extension_eligible: boolean;
+  pushback_certified: boolean;
+  pushback_recert_date: string | null;
+}
+
+export type FlightStatus = 'SCHEDULED' | 'INBOUND' | 'ON_GATE' | 'BOARDING' | 'DEPARTED';
+export type TurnType = 'ARRIVAL' | 'DEPARTURE' | 'THROUGH' | 'OVERNIGHT';
+
+export interface Flight {
+  id: string;
+  gate_id: string | null;
+  aircraft: string;
+  route: string;
+  arrival_time: string | null;
+  departure_time: string | null;
+  turn_type: TurnType;
+  status: FlightStatus;
+  active: boolean;
 }
 
 // ============================================================

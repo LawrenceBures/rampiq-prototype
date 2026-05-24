@@ -267,11 +267,11 @@ export function getEventTypesForTarget(
 // ============================================================
 
 const FALLBACK_USERS: UserLite[] = [
-  { id: 'CC01', display_name: 'Martinez J.', role_type: 'CREW_CHIEF', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'RA14', display_name: 'Santos R.', role_type: 'RAMP_AGENT', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'RA22', display_name: 'Okafor D.', role_type: 'RAMP_AGENT', default_shift: 'PM', station: 'LAX', active: true },
-  { id: 'LT02', display_name: 'Nguyen T.', role_type: 'LT_RUNNER', default_shift: 'AM', station: 'LAX', active: true },
-  { id: 'RC05', display_name: 'Park S.', role_type: 'REGIONAL_CABIN', default_shift: 'AM', station: 'LAX', active: true },
+  { id: 'CC01', display_name: 'Martinez J.', role_type: 'CREW_CHIEF', default_shift: 'AM', station: 'LAX', active: true, shift_end: '14:30', lunch_start: '10:00', lunch_end: '10:30', break_start: '12:30', break_end: '12:45', extension_eligible: true, pushback_certified: true, pushback_recert_date: '2026-11-15' },
+  { id: 'RA14', display_name: 'Santos R.', role_type: 'RAMP_AGENT', default_shift: 'AM', station: 'LAX', active: true, shift_end: '14:30', lunch_start: '10:15', lunch_end: '10:45', break_start: '12:45', break_end: '13:00', extension_eligible: true, pushback_certified: true, pushback_recert_date: '2026-08-01' },
+  { id: 'RA22', display_name: 'Okafor D.', role_type: 'RAMP_AGENT', default_shift: 'PM', station: 'LAX', active: true, shift_end: '22:30', lunch_start: '18:00', lunch_end: '18:30', break_start: '20:15', break_end: '20:30', extension_eligible: false, pushback_certified: true, pushback_recert_date: '2027-02-01' },
+  { id: 'LT02', display_name: 'Nguyen T.', role_type: 'LT_RUNNER', default_shift: 'AM', station: 'LAX', active: true, shift_end: '14:30', lunch_start: '10:30', lunch_end: '11:00', break_start: '13:00', break_end: '13:15', extension_eligible: true, pushback_certified: false, pushback_recert_date: null },
+  { id: 'RC05', display_name: 'Park S.', role_type: 'REGIONAL_CABIN', default_shift: 'AM', station: 'LAX', active: true, shift_end: '14:30', lunch_start: '10:00', lunch_end: '10:30', break_start: '12:30', break_end: '12:45', extension_eligible: true, pushback_certified: false, pushback_recert_date: null },
 ];
 
 export async function fetchUsers(): Promise<UserLite[]> {
@@ -922,6 +922,28 @@ export function useOperationalReadiness(station: string, shift: ShiftWindow): Op
 }
 
 // ============================================================
+// ============================================================
+// FLIGHTS
+// ============================================================
+
+import type { Flight } from './rampiq-types';
+
+export async function fetchFlights(): Promise<Flight[]> {
+  const sb = getSupabase();
+  if (sb) {
+    const { data, error } = await sb.from('flights').select('*').eq('active', true).order('arrival_time');
+    if (!error && data) return data as Flight[];
+    console.error('[store] flights fetch error:', error?.message);
+  }
+  return [];
+}
+
+export function useFlights(): Flight[] {
+  const [flights, setFlights] = useState<Flight[]>([]);
+  useEffect(() => { fetchFlights().then(setFlights); }, []);
+  return flights;
+}
+
 // ---- Assignment lifecycle ----
 
 export async function acknowledgeAssignment(id: string, userId: string): Promise<CrewAssignment | null> {

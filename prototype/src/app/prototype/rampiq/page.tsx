@@ -41,11 +41,20 @@ export default function RampIQLanding() {
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
 
+      <Link href="/prototype/rampiq/operations/workforce-pool" className="rq-module">
+        <div className="rq-module-icon">WP</div>
+        <div>
+          <div className="rq-module-name">Workforce Pool</div>
+          <div className="rq-module-desc">Live labor &middot; availability &middot; team builder</div>
+        </div>
+        <span className="rq-module-arrow">&rsaquo;</span>
+      </Link>
+
       <Link href="/prototype/rampiq/workforce" className="rq-module">
         <div className="rq-module-icon">OR</div>
         <div>
           <div className="rq-module-name">Operational Readiness</div>
-          <div className="rq-module-desc">Workforce &middot; certifications &middot; coverage</div>
+          <div className="rq-module-desc">Certifications &middot; equipment coverage</div>
         </div>
         <span className="rq-module-arrow">&rsaquo;</span>
       </Link>
