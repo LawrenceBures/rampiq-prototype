@@ -931,17 +931,31 @@ import type { Flight } from './rampiq-types';
 export async function fetchFlights(): Promise<Flight[]> {
   const sb = getSupabase();
   if (sb) {
-    const { data, error } = await sb.from('flights').select('*').eq('active', true).order('arrival_time');
-    if (!error && data) return data as Flight[];
-    console.error('[store] flights fetch error:', error?.message);
+    try {
+      const { data, error } = await sb.from('flights').select('*').eq('active', true).order('arrival_time');
+      if (error) {
+        console.error('[store] flights fetch error:', error.message);
+        return [];
+      }
+      return (data || []) as Flight[];
+    } catch (err) {
+      console.error('[store] flights fetch exception:', err);
+      return [];
+    }
   }
   return [];
 }
 
-export function useFlights(): Flight[] {
+export function useFlights(): { flights: Flight[]; loading: boolean } {
   const [flights, setFlights] = useState<Flight[]>([]);
-  useEffect(() => { fetchFlights().then(setFlights); }, []);
-  return flights;
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetchFlights().then(data => {
+      setFlights(data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+  return { flights, loading };
 }
 
 // ---- Assignment lifecycle ----

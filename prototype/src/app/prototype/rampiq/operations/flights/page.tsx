@@ -163,7 +163,7 @@ function computeWarnings(
 
 export default function FlightsPage() {
   const [shift, setShift] = useState<ShiftWindow>('AM');
-  const flights = useFlights();
+  const { flights, loading: flightsLoading } = useFlights();
   const { assignments } = useCrewAssignments(shift);
   const { events } = useLiveEvents(5000);
   const [users, setUsers] = useState<UserLite[]>([]);
@@ -400,8 +400,11 @@ export default function FlightsPage() {
         );
       })}
 
-      {flights.length === 0 && (
-        <div className="rq-quiet" style={{ padding: '24px 16px' }}>No flight data loaded</div>
+      {flightsLoading && (
+        <div className="rq-quiet" style={{ padding: '24px 16px' }}>Loading flights...</div>
+      )}
+      {!flightsLoading && flights.length === 0 && (
+        <div className="rq-quiet" style={{ padding: '24px 16px' }}>No flight data</div>
       )}
 
       <div style={{ height: 20 }} />
