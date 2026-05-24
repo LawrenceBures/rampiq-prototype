@@ -928,34 +928,59 @@ export function useOperationalReadiness(station: string, shift: ShiftWindow): Op
 
 import type { Flight } from './rampiq-types';
 
-export async function fetchFlights(): Promise<Flight[]> {
+function makeFallbackFlights(): Flight[] {
+  const now = Date.now();
+  return [
+    { id: 'AA1318', gate_id: '52A', aircraft: 'B737', route: 'ORD → LAX', arrival_time: new Date(now + 45 * 60000).toISOString(), departure_time: new Date(now + 135 * 60000).toISOString(), turn_type: 'THROUGH', status: 'INBOUND', active: true },
+    { id: 'AA1350', gate_id: '52B', aircraft: 'A321', route: 'SFO → LAX', arrival_time: new Date(now - 20 * 60000).toISOString(), departure_time: new Date(now + 55 * 60000).toISOString(), turn_type: 'THROUGH', status: 'ON_GATE', active: true },
+    { id: 'WN1334', gate_id: '52C', aircraft: 'B738', route: 'DEN → LAX', arrival_time: new Date(now + 60 * 60000).toISOString(), departure_time: new Date(now + 150 * 60000).toISOString(), turn_type: 'THROUGH', status: 'SCHEDULED', active: true },
+    { id: 'AA2201', gate_id: '52D', aircraft: 'B739', route: 'SEA → LAX', arrival_time: new Date(now - 45 * 60000).toISOString(), departure_time: new Date(now + 30 * 60000).toISOString(), turn_type: 'THROUGH', status: 'BOARDING', active: true },
+    { id: 'UA0418', gate_id: '52E', aircraft: 'A319', route: 'EWR → LAX', arrival_time: new Date(now + 120 * 60000).toISOString(), departure_time: new Date(now + 225 * 60000).toISOString(), turn_type: 'ARRIVAL', status: 'SCHEDULED', active: true },
+    { id: 'AA0917', gate_id: '52F', aircraft: 'B738', route: 'MIA → LAX', arrival_time: new Date(now + 30 * 60000).toISOString(), departure_time: new Date(now + 110 * 60000).toISOString(), turn_type: 'THROUGH', status: 'INBOUND', active: true },
+    { id: 'DL1144', gate_id: '52G', aircraft: 'A321', route: 'ATL → LAX', arrival_time: new Date(now - 60 * 60000).toISOString(), departure_time: new Date(now + 15 * 60000).toISOString(), turn_type: 'DEPARTURE', status: 'BOARDING', active: true },
+    { id: 'WN2280', gate_id: '52H', aircraft: 'B737', route: 'PHX → LAX', arrival_time: new Date(now + 180 * 60000).toISOString(), departure_time: new Date(now + 270 * 60000).toISOString(), turn_type: 'THROUGH', status: 'SCHEDULED', active: true },
+    { id: 'AA1042', gate_id: '52I', aircraft: 'B738', route: 'HNL → LAX', arrival_time: new Date(now + 90 * 60000).toISOString(), departure_time: new Date(now + 180 * 60000).toISOString(), turn_type: 'THROUGH', status: 'INBOUND', active: true },
+  ];
+}
+
+export interface FlightsResult {
+  flights: Flight[];
+  loading: boolean;
+  source: 'supabase' | 'fallback' | 'loading';
+  error: string | null;
+  rawCount: number;
+}
+
+export async function fetchFlights(): Promise<{ data: Flight[]; error: string | null; source: 'supabase' | 'fallback' }> {
   const sb = getSupabase();
   if (sb) {
     try {
       const { data, error } = await sb.from('flights').select('*').eq('active', true).order('arrival_time');
       if (error) {
-        console.error('[store] flights fetch error:', error.message);
-        return [];
+        return { data: makeFallbackFlights(), error: `Supabase: ${error.message}`, source: 'fallback' };
       }
-      return (data || []) as Flight[];
+      if (!data || data.length === 0) {
+        return { data: makeFallbackFlights(), error: 'Supabase returned 0 rows', source: 'fallback' };
+      }
+      return { data: data as Flight[], error: null, source: 'supabase' };
     } catch (err) {
-      console.error('[store] flights fetch exception:', err);
-      return [];
+      return { data: makeFallbackFlights(), error: `Exception: ${err instanceof Error ? err.message : String(err)}`, source: 'fallback' };
     }
   }
-  return [];
+  return { data: makeFallbackFlights(), error: 'No Supabase client', source: 'fallback' };
 }
 
-export function useFlights(): { flights: Flight[]; loading: boolean } {
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useFlights(): FlightsResult {
+  const [result, setResult] = useState<FlightsResult>({ flights: [], loading: true, source: 'loading', error: null, rawCount: 0 });
   useEffect(() => {
-    fetchFlights().then(data => {
-      setFlights(data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetchFlights().then(({ data, error, source }) => {
+      setResult({ flights: data, loading: false, source, error, rawCount: data.length });
+    }).catch((err) => {
+      const fb = makeFallbackFlights();
+      setResult({ flights: fb, loading: false, source: 'fallback', error: `Hook error: ${err}`, rawCount: fb.length });
+    });
   }, []);
-  return { flights, loading };
+  return result;
 }
 
 // ---- Assignment lifecycle ----

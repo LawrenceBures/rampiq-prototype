@@ -163,7 +163,7 @@ function computeWarnings(
 
 export default function FlightsPage() {
   const [shift, setShift] = useState<ShiftWindow>('AM');
-  const { flights, loading: flightsLoading } = useFlights();
+  const { flights, loading: flightsLoading, source, error: flightsError, rawCount } = useFlights();
   const { assignments } = useCrewAssignments(shift);
   const { events } = useLiveEvents(5000);
   const [users, setUsers] = useState<UserLite[]>([]);
@@ -260,6 +260,21 @@ export default function FlightsPage() {
             {flights.filter(f => f.status !== 'DEPARTED' && f.gate_id && !gateAssignments.has(f.gate_id)).length}
           </div>
         </div>
+      </div>
+
+      {/* Debug box */}
+      <div style={{
+        margin: '4px 16px', padding: '6px 10px',
+        border: '1px solid var(--rq-line)',
+        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+        color: 'var(--rq-ink-4)',
+      }}>
+        source: <span style={{ color: source === 'supabase' ? 'var(--rq-green)' : source === 'fallback' ? 'var(--rq-amber)' : 'var(--rq-ink-3)' }}>{source}</span>
+        {' '}&middot; rows: {rawCount}
+        {' '}&middot; displayed: {flights.filter(f => f.status !== 'DEPARTED').length}
+        {' '}&middot; shift: {shift}
+        {' '}&middot; supabase: {typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL ? 'present' : 'missing'}
+        {flightsError && <> &middot; <span style={{ color: 'var(--rq-red)' }}>{flightsError}</span></>}
       </div>
 
       {/* Selection bar */}
@@ -402,9 +417,6 @@ export default function FlightsPage() {
 
       {flightsLoading && (
         <div className="rq-quiet" style={{ padding: '24px 16px' }}>Loading flights...</div>
-      )}
-      {!flightsLoading && flights.length === 0 && (
-        <div className="rq-quiet" style={{ padding: '24px 16px' }}>No flight data</div>
       )}
 
       <div style={{ height: 20 }} />
