@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useLiveEvents, updateEventStatus, resetEvents } from '@/lib/store';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLiveEvents, updateEventStatus, resetEvents, fetchZones } from '@/lib/store';
 import { formatTime, durationLabel, STATUS_LABELS } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
+import type { Zone } from '@/lib/rampiq-types';
 import { SeverityIndicator, OperationalStatus as OperationalStatusPill, ElapsedTime } from '@/components/rampiq';
 import {
   deriveDashboardState,
@@ -16,12 +17,23 @@ import {
   sortBySeverityThenAge,
 } from '@/lib/derived-operational-state';
 import type { EventFilters } from '@/lib/derived-operational-state';
+import {
+  createIncident,
+  transitionIncident,
+  fetchActiveIncidents,
+} from '@/lib/lifecycle-commands';
+import type { Incident } from '@/lib/lifecycle-types';
+import {
+  INCIDENT_STATUS_LABELS,
+  validTransitions,
+} from '@/lib/operational-states';
+import type { IncidentStatus } from '@/lib/operational-states';
 
 // ============================================================
 // TYPES
 // ============================================================
 
-type View = 'feed' | 'unresolved' | 'patterns';
+type View = 'feed' | 'unresolved' | 'patterns' | 'incidents';
 type FilterKey = keyof EventFilters;
 
 const EMPTY_FILTERS: EventFilters = {
@@ -48,6 +60,82 @@ export default function ManagerDashboard() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+
+  // ============================================================
+  // INCIDENT LIFECYCLE STATE
+  // ============================================================
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [incidentsLoading, setIncidentsLoading] = useState(true);
+  const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [incidentTransitioning, setIncidentTransitioning] = useState<string | null>(null);
+  const [zones, setZones] = useState<Zone[]>([]);
+
+  // Incident form state
+  const [incTitle, setIncTitle] = useState('');
+  const [incSeverity, setIncSeverity] = useState<Severity>('HIGH');
+  const [incZone, setIncZone] = useState('');
+  const [incGate, setIncGate] = useState('');
+  const [incDesc, setIncDesc] = useState('');
+  const [incSubmitting, setIncSubmitting] = useState(false);
+
+  const loadIncidents = useCallback(async () => {
+    const data = await fetchActiveIncidents('LAX');
+    setIncidents(data);
+    setIncidentsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadIncidents();
+    fetchZones('LAX').then(setZones);
+  }, [loadIncidents]);
+
+  // Reload incidents when events change (a lifecycle command may have emitted an event)
+  useEffect(() => {
+    loadIncidents();
+  }, [events.length, loadIncidents]);
+
+  async function handleCreateIncident() {
+    if (!incTitle.trim()) return;
+    setIncSubmitting(true);
+    await createIncident({
+      title: incTitle.trim(),
+      severity: incSeverity,
+      station: 'LAX',
+      zone_id: incZone || undefined,
+      gate_id: incGate || undefined,
+      description: incDesc.trim() || undefined,
+      created_by: 'CC01',
+    });
+    // Reset form
+    setIncTitle('');
+    setIncSeverity('HIGH');
+    setIncZone('');
+    setIncGate('');
+    setIncDesc('');
+    setShowIncidentForm(false);
+    setIncSubmitting(false);
+    await loadIncidents();
+    refresh();
+  }
+
+  async function handleIncidentTransition(incidentId: string, newStatus: IncidentStatus) {
+    setIncidentTransitioning(incidentId);
+    await transitionIncident({
+      incident_id: incidentId,
+      new_status: newStatus,
+      actor_id: 'CC01',
+      actor_role: 'CREW_CHIEF',
+    });
+    await loadIncidents();
+    refresh();
+    setIncidentTransitioning(null);
+  }
+
+  // Gates for the selected zone
+  const gatesForZone = incZone
+    ? zones.find(z => z.id === incZone)?.gate_ids ?? []
+    : zones.flatMap(z => z.gate_ids);
 
   // Track new event IDs for pulse animation
   useEffect(() => {
@@ -409,6 +497,220 @@ export default function ManagerDashboard() {
   }
 
   // ============================================================
+  // INCIDENTS VIEW
+  // ============================================================
+
+  function renderIncidents() {
+    const monoSm: React.CSSProperties = {
+      fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+      letterSpacing: '.06em', textTransform: 'uppercase',
+    };
+
+    return (
+      <>
+        {/* Create incident toggle */}
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--rq-line)' }}>
+          <button
+            className="rq-btn-secondary"
+            style={{ width: '100%' }}
+            onClick={() => setShowIncidentForm(!showIncidentForm)}
+          >
+            {showIncidentForm ? 'Cancel' : '+ Report Incident'}
+          </button>
+        </div>
+
+        {/* Inline creation form */}
+        {showIncidentForm && (
+          <div style={{
+            padding: '12px 16px', borderBottom: '1px solid var(--rq-line)',
+            background: 'var(--rq-bg-1)',
+          }}>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ ...monoSm, color: 'var(--rq-ink-4)', display: 'block', marginBottom: 4 }}>Title</label>
+              <input
+                type="text"
+                value={incTitle}
+                onChange={e => setIncTitle(e.target.value)}
+                placeholder="e.g., Belt loader failure at 52A"
+                style={{
+                  width: '100%', padding: '8px 10px',
+                  background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
+                  color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12, borderRadius: 3,
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ ...monoSm, color: 'var(--rq-ink-4)', display: 'block', marginBottom: 4 }}>Severity</label>
+                <select
+                  value={incSeverity}
+                  onChange={e => setIncSeverity(e.target.value as Severity)}
+                  style={{
+                    width: '100%', padding: '8px 10px',
+                    background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
+                    color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12, borderRadius: 3,
+                  }}
+                >
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ ...monoSm, color: 'var(--rq-ink-4)', display: 'block', marginBottom: 4 }}>Zone</label>
+                <select
+                  value={incZone}
+                  onChange={e => { setIncZone(e.target.value); setIncGate(''); }}
+                  style={{
+                    width: '100%', padding: '8px 10px',
+                    background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
+                    color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12, borderRadius: 3,
+                  }}
+                >
+                  <option value="">—</option>
+                  {zones.map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ ...monoSm, color: 'var(--rq-ink-4)', display: 'block', marginBottom: 4 }}>Gate</label>
+                <select
+                  value={incGate}
+                  onChange={e => setIncGate(e.target.value)}
+                  style={{
+                    width: '100%', padding: '8px 10px',
+                    background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
+                    color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 12, borderRadius: 3,
+                  }}
+                >
+                  <option value="">—</option>
+                  {gatesForZone.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...monoSm, color: 'var(--rq-ink-4)', display: 'block', marginBottom: 4 }}>Description</label>
+              <input
+                type="text"
+                value={incDesc}
+                onChange={e => setIncDesc(e.target.value)}
+                placeholder="Optional details"
+                style={{
+                  width: '100%', padding: '8px 10px',
+                  background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
+                  color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12, borderRadius: 3,
+                }}
+              />
+            </div>
+
+            <button
+              className="rq-qbtn qb-resolve"
+              style={{ width: '100%', padding: '10px' }}
+              disabled={!incTitle.trim() || incSubmitting}
+              onClick={handleCreateIncident}
+            >
+              {incSubmitting ? 'Creating...' : 'Create Incident'}
+            </button>
+          </div>
+        )}
+
+        {/* Active incidents list */}
+        {incidentsLoading && incidents.length === 0 && (
+          <div className="rq-quiet" style={{ padding: '24px 16px' }}>Loading incidents...</div>
+        )}
+        {!incidentsLoading && incidents.length === 0 && (
+          <div className="rq-quiet" style={{ padding: '24px 16px' }}>No active incidents</div>
+        )}
+
+        {incidents.map(inc => {
+          const transitioning = incidentTransitioning === inc.id;
+          const nextStatuses = validTransitions('incident', inc.status);
+
+          return (
+            <div
+              key={inc.id}
+              className={`rq-evt sev-${inc.severity.toLowerCase()}`}
+              style={{ cursor: 'default' }}
+            >
+              {/* Row 1: title + age */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
+                  color: 'var(--rq-ink)',
+                }}>
+                  {inc.title}
+                </span>
+                <span style={{ marginLeft: 'auto' }}>
+                  <ElapsedTime since={inc.opened_at} format="relative" showAgeColor />
+                </span>
+              </div>
+
+              {/* Row 2: status + severity + location */}
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                color: 'var(--rq-ink-3)', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap',
+                alignItems: 'center',
+              }}>
+                <OperationalStatusPill
+                  status={inc.status}
+                  label={INCIDENT_STATUS_LABELS[inc.status as IncidentStatus]}
+                  variant="pill"
+                />
+                <SeverityIndicator severity={inc.severity as Severity} variant="badge" />
+                {inc.zone_id && <span>{inc.zone_id}</span>}
+                {inc.gate_id && <span>{inc.gate_id}</span>}
+                {inc.assigned_to && <span>→ {inc.assigned_to}</span>}
+              </div>
+
+              {/* Description */}
+              {inc.description && (
+                <div style={{ fontSize: 12, color: 'var(--rq-ink-2)', marginTop: 5, lineHeight: 1.4 }}>
+                  {inc.description}
+                </div>
+              )}
+
+              {/* Transition buttons */}
+              {nextStatuses.length > 0 && (
+                <div className="rq-quick-actions">
+                  {nextStatuses.map(ns => (
+                    <button
+                      key={ns}
+                      className={`rq-qbtn ${ns === 'RESOLVED' || ns === 'CLOSED' ? 'qb-resolve' : ns === 'CONFIRMED' ? 'qb-ack' : 'qb-prog'}`}
+                      disabled={transitioning}
+                      onClick={() => handleIncidentTransition(inc.id, ns as IncidentStatus)}
+                    >
+                      {transitioning ? '...' : INCIDENT_STATUS_LABELS[ns as IncidentStatus]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Debug: incident metadata */}
+              <div style={{
+                marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--rq-line)',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                color: 'var(--rq-ink-4)', display: 'flex', gap: 8, flexWrap: 'wrap',
+              }}>
+                <span>id: {inc.id.slice(0, 8)}</span>
+                <span>corr: {inc.correlation_id.slice(0, 8)}</span>
+                <span>status: {inc.status}</span>
+                <span>by: {inc.created_by}</span>
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
+  // ============================================================
   // FILTER BAR
   // ============================================================
 
@@ -604,6 +906,7 @@ export default function ManagerDashboard() {
         {([
           { key: 'feed' as const, label: 'Live Feed', count: summary.total },
           { key: 'unresolved' as const, label: 'Unresolved', count: summary.openCount },
+          { key: 'incidents' as const, label: 'Incidents', count: incidents.length },
           { key: 'patterns' as const, label: 'Patterns', count: null },
         ]).map(tab => (
           <button
@@ -620,13 +923,13 @@ export default function ManagerDashboard() {
             }}
           >
             {tab.label}
-            {tab.key === 'unresolved' && summary.openCount > 0 && (
+            {tab.count != null && tab.count > 0 && (tab.key === 'unresolved' || tab.key === 'incidents') && (
               <span style={{
                 marginLeft: 5, padding: '1px 5px',
                 background: 'rgba(255,92,92,.12)', color: 'var(--rq-red)',
                 fontSize: 9,
               }}>
-                {summary.openCount}
+                {tab.count}
               </span>
             )}
           </button>
@@ -640,6 +943,7 @@ export default function ManagerDashboard() {
 
       {view === 'feed' && renderFeed()}
       {view === 'unresolved' && renderUnresolved()}
+      {view === 'incidents' && renderIncidents()}
       {view === 'patterns' && renderPatterns()}
 
       {/* Dev controls */}
