@@ -2,11 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useLiveEvents, updateEventStatus, resetEvents } from '@/lib/store';
-import {
-  formatTime, eventAge, durationLabel,
-  SEVERITY_ORDER, STATUS_LABELS,
-} from '@/lib/rampiq-types';
+import { formatTime, durationLabel, SEVERITY_ORDER, STATUS_LABELS } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
+import { SeverityIndicator, OperationalStatus as OperationalStatusPill, ElapsedTime } from '@/components/rampiq';
 
 // ============================================================
 // TYPES
@@ -125,8 +123,6 @@ export default function ManagerDashboard() {
   const oldestOpen = open.length > 0
     ? open.reduce((oldest, e) => e.created_at < oldest.created_at ? e : oldest)
     : null;
-  const oldestAge = oldestOpen ? eventAge(oldestOpen.created_at) : '--';
-
   // Resolution latency stats
   const resTimes = resolved
     .map(e => e.event_duration_seconds)
@@ -216,12 +212,12 @@ export default function ManagerDashboard() {
               {e.equipment_id}
             </span>
           )}
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-            color: isOpen(e) && ageMins(e.created_at) > 15 ? 'var(--rq-red)' : 'var(--rq-ink-3)',
-            marginLeft: 'auto', fontWeight: isOpen(e) && ageMins(e.created_at) > 15 ? 700 : 400,
-          }}>
-            {eventAge(e.created_at)}
+          <span style={{ marginLeft: 'auto' }}>
+            <ElapsedTime
+              since={e.created_at}
+              format="relative"
+              showAgeColor={isOpen(e)}
+            />
           </span>
         </div>
 
@@ -231,17 +227,12 @@ export default function ManagerDashboard() {
           color: 'var(--rq-ink-3)', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap',
           alignItems: 'center',
         }}>
-          <span style={{
-            padding: '1px 5px',
-            border: `1px solid ${statusBorderColor(e.operational_status as OperationalStatus)}`,
-            color: statusBorderColor(e.operational_status as OperationalStatus),
-            fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase' as const,
-          }}>
-            {STATUS_LABELS[e.operational_status as OperationalStatus]}
-          </span>
-          <span style={{ fontSize: 9, padding: '1px 4px', background: sevBg(e.severity as Severity), color: sevFg(e.severity as Severity) }}>
-            {e.severity}
-          </span>
+          <OperationalStatusPill
+            status={e.operational_status}
+            label={STATUS_LABELS[e.operational_status as OperationalStatus]}
+            variant="pill"
+          />
+          <SeverityIndicator severity={e.severity as Severity} variant="badge" />
           <span>{e.reported_by}</span>
           <span>{e.shift_window}</span>
           {e.event_duration_seconds != null && (
@@ -284,8 +275,16 @@ export default function ManagerDashboard() {
         {expanded && (
           <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--rq-line)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px' }}>
-              <DItem label="Severity" value={e.severity} />
-              <DItem label="Status" value={STATUS_LABELS[e.operational_status as OperationalStatus]} />
+              <DItem label="Severity">
+                <SeverityIndicator severity={e.severity as Severity} variant="pill" />
+              </DItem>
+              <DItem label="Status">
+                <OperationalStatusPill
+                  status={e.operational_status}
+                  label={STATUS_LABELS[e.operational_status as OperationalStatus]}
+                  variant="pill"
+                />
+              </DItem>
               <DItem label="Reporter" value={`${e.reported_by} (${e.role_type.replace(/_/g, ' ')})`} />
               <DItem label="Shift" value={e.shift_window} />
               <DItem label="Device" value={e.device_id} />
@@ -669,7 +668,10 @@ export default function ManagerDashboard() {
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Oldest Open</div>
           <div className={`rq-kpi-val${oldestOpen && ageMins(oldestOpen.created_at) > 15 ? ' rq-v-r' : ''}`}>
-            {oldestAge}
+            {oldestOpen
+              ? <ElapsedTime since={oldestOpen.created_at} format="relative" />
+              : '--'
+            }
           </div>
         </div>
       </div>
@@ -702,8 +704,10 @@ export default function ManagerDashboard() {
         .map(e => (
           <div className="rq-attn" key={e.id}>
             <div className="rq-attn-row">
-              <span className="rq-attn-tag">{e.severity}</span>
-              <span className="rq-attn-time">{eventAge(e.created_at)}</span>
+              <SeverityIndicator severity={e.severity as Severity} variant="text" />
+              <span className="rq-attn-time">
+                <ElapsedTime since={e.created_at} format="relative" />
+              </span>
             </div>
             <div className="rq-attn-msg">
               <b>{e.event_type.replace(/_/g, ' ')}</b>
@@ -791,38 +795,11 @@ export default function ManagerDashboard() {
 // HELPERS
 // ============================================================
 
-function statusBorderColor(status: OperationalStatus): string {
-  const map: Record<OperationalStatus, string> = {
-    OPEN: 'var(--rq-red)',
-    ACKNOWLEDGED: 'var(--rq-amber)',
-    IN_PROGRESS: 'var(--rq-blue)',
-    RESOLVED: 'var(--rq-green)',
-    CANCELLED: 'var(--rq-ink-4)',
-  };
-  return map[status] || 'var(--rq-line)';
-}
+// statusBorderColor, sevFg, sevBg removed — replaced by
+// SeverityIndicator and OperationalStatus primitives from
+// @/components/rampiq which derive colors from operational-states.ts.
 
-function sevFg(sev: Severity): string {
-  const map: Record<Severity, string> = {
-    CRITICAL: 'var(--rq-red)',
-    HIGH: 'var(--rq-red)',
-    MEDIUM: 'var(--rq-amber)',
-    LOW: 'var(--rq-ink-3)',
-  };
-  return map[sev];
-}
-
-function sevBg(sev: Severity): string {
-  const map: Record<Severity, string> = {
-    CRITICAL: 'rgba(255,92,92,.12)',
-    HIGH: 'rgba(255,92,92,.08)',
-    MEDIUM: 'rgba(245,177,61,.08)',
-    LOW: 'rgba(107,117,133,.08)',
-  };
-  return map[sev];
-}
-
-function DItem({ label, value }: { label: string; value: string }) {
+function DItem({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
   return (
     <div style={{ padding: '2px 0' }}>
       <span style={{
@@ -835,7 +812,7 @@ function DItem({ label, value }: { label: string; value: string }) {
         fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
         color: 'var(--rq-ink-2)',
       }}>
-        {value}
+        {children ?? value}
       </div>
     </div>
   );
