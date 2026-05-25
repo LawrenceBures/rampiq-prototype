@@ -910,6 +910,7 @@ export default function ManagerDashboard() {
           { key: 'patterns' as const, label: 'Patterns', count: null },
         ]).map(tab => (
           <button
+            type="button"
             key={tab.key}
             onClick={() => setView(tab.key)}
             style={{
