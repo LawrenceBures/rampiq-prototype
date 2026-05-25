@@ -2,67 +2,38 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useLiveEvents, updateEventStatus, resetEvents } from '@/lib/store';
-import { formatTime, durationLabel, SEVERITY_ORDER, STATUS_LABELS } from '@/lib/rampiq-types';
+import { formatTime, durationLabel, STATUS_LABELS } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
 import { SeverityIndicator, OperationalStatus as OperationalStatusPill, ElapsedTime } from '@/components/rampiq';
+import {
+  deriveDashboardState,
+  filterEvents,
+  activeFilterCount as countActiveFilters,
+  isOpen,
+  agingClass,
+  ageMinutes,
+  groupByAging,
+  sortBySeverityThenAge,
+} from '@/lib/derived-operational-state';
+import type { EventFilters } from '@/lib/derived-operational-state';
 
 // ============================================================
 // TYPES
 // ============================================================
 
 type View = 'feed' | 'unresolved' | 'patterns';
-type FilterKey = 'severity' | 'status' | 'gate' | 'equipment' | 'shift';
+type FilterKey = keyof EventFilters;
 
-interface Filters {
-  severity: string;
-  status: string;
-  gate: string;
-  equipment: string;
-  shift: string;
-}
-
-const EMPTY_FILTERS: Filters = {
+const EMPTY_FILTERS: EventFilters = {
   severity: 'ALL', status: 'ALL', gate: 'ALL', equipment: 'ALL', shift: 'ALL',
 };
 
 // ============================================================
-// HELPERS
+// HELPERS (presentation-only, kept local to page)
 // ============================================================
-
-function ageMins(createdAt: string): number {
-  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-}
-
-function ageSeconds(createdAt: string): number {
-  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
-}
-
-function agingClass(e: RampiqEvent): string {
-  if (e.operational_status === 'RESOLVED' || e.operational_status === 'CANCELLED') return '';
-  const m = ageMins(e.created_at);
-  if (m > 30) return 'aging-stale';
-  if (m > 15) return 'aging-hot';
-  if (m > 5) return 'aging-warm';
-  return '';
-}
 
 function sevClass(sev: Severity): string {
   return `sev-${sev.toLowerCase()}`;
-}
-
-function isNew(e: RampiqEvent): boolean {
-  return ageSeconds(e.created_at) < 60;
-}
-
-function isOpen(e: RampiqEvent): boolean {
-  return e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED';
-}
-
-// Percentile helper
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)];
 }
 
 // ============================================================
@@ -72,7 +43,7 @@ function percentile(sorted: number[], p: number): number {
 export default function ManagerDashboard() {
   const { events, loading, lastUpdated, refresh } = useLiveEvents(3000);
   const [view, setView] = useState<View>('feed');
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<EventFilters>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
@@ -107,35 +78,12 @@ export default function ManagerDashboard() {
   }, [events]);
 
   // ============================================================
-  // COMPUTED
+  // DERIVED STATE (from derived-operational-state.ts)
   // ============================================================
 
-  const open = events.filter(isOpen);
-  const resolved = events.filter(e => e.operational_status === 'RESOLVED');
-
-  const bySev = (sev: Severity) => open.filter(e => e.severity === sev).length;
-  const critCount = bySev('CRITICAL');
-  const highCount = bySev('HIGH');
-  const medCount = bySev('MEDIUM');
-  const lowCount = bySev('LOW');
-
-  // Oldest open event
-  const oldestOpen = open.length > 0
-    ? open.reduce((oldest, e) => e.created_at < oldest.created_at ? e : oldest)
-    : null;
-  // Resolution latency stats
-  const resTimes = resolved
-    .map(e => e.event_duration_seconds)
-    .filter((d): d is number => d != null && d > 0)
-    .sort((a, b) => a - b);
-  const avgRes = resTimes.length > 0 ? Math.round(resTimes.reduce((s, v) => s + v, 0) / resTimes.length) : null;
-  const p50Res = resTimes.length > 0 ? percentile(resTimes, 50) : null;
-  const p90Res = resTimes.length > 0 ? percentile(resTimes, 90) : null;
-
-  // Unique values for filter chips
-  const uniqueGates = Array.from(new Set(events.filter(e => e.gate_id).map(e => e.gate_id!)));
-  const uniqueEquip = Array.from(new Set(events.filter(e => e.equipment_id).map(e => e.equipment_id!)));
-  const uniqueShifts = Array.from(new Set(events.map(e => e.shift_window)));
+  const ds = deriveDashboardState(events);
+  const { summary, filterOptions, patterns, attentionEvents } = ds;
+  const { severity: sevCounts, resolutionLatency } = summary;
 
   // ============================================================
   // FILTERS
@@ -145,17 +93,9 @@ export default function ManagerDashboard() {
     setFilters(f => ({ ...f, [key]: val }));
   }
 
-  function applyFilters(list: RampiqEvent[]): RampiqEvent[] {
-    let out = list;
-    if (filters.severity !== 'ALL') out = out.filter(e => e.severity === filters.severity);
-    if (filters.status !== 'ALL') out = out.filter(e => e.operational_status === filters.status);
-    if (filters.gate !== 'ALL') out = out.filter(e => e.gate_id === filters.gate);
-    if (filters.equipment !== 'ALL') out = out.filter(e => e.equipment_id === filters.equipment);
-    if (filters.shift !== 'ALL') out = out.filter(e => e.shift_window === filters.shift);
-    return out;
-  }
-
-  const activeFilterCount = Object.values(filters).filter(v => v !== 'ALL').length;
+  const filteredEvents = filterEvents(events, filters);
+  const filteredOpen = filterEvents(events.filter(isOpen), filters);
+  const currentFilterCount = countActiveFilters(filters);
 
   // ============================================================
   // ACTIONS
@@ -306,16 +246,15 @@ export default function ManagerDashboard() {
   // ============================================================
 
   function renderFeed() {
-    const filtered = applyFilters(events);
     return (
       <>
         {renderFilterBar()}
-        {filtered.length === 0 && (
+        {filteredEvents.length === 0 && (
           <div className="rq-quiet" style={{ padding: '24px 16px' }}>
             {events.length === 0 ? 'No events yet — waiting for agent signals' : 'No events match filters'}
           </div>
         )}
-        {filtered.map(e => <EventCard key={e.id} e={e} showAging />)}
+        {filteredEvents.map(e => <EventCard key={e.id} e={e} showAging />)}
       </>
     );
   }
@@ -325,65 +264,26 @@ export default function ManagerDashboard() {
   // ============================================================
 
   function renderUnresolved() {
-    const unresolved = applyFilters(open)
-      .sort((a, b) => {
-        const sd = SEVERITY_ORDER[a.severity as Severity] - SEVERITY_ORDER[b.severity as Severity];
-        if (sd !== 0) return sd;
-        return a.created_at.localeCompare(b.created_at); // oldest first within same severity
-      });
-
-    // Group by aging band
-    const stale = unresolved.filter(e => ageMins(e.created_at) > 30);
-    const hot = unresolved.filter(e => { const m = ageMins(e.created_at); return m > 15 && m <= 30; });
-    const warm = unresolved.filter(e => { const m = ageMins(e.created_at); return m > 5 && m <= 15; });
-    const fresh = unresolved.filter(e => ageMins(e.created_at) <= 5);
+    // Apply filters to the pre-computed aging groups
+    const filteredOpenEvents = filterEvents(events.filter(isOpen), filters);
+    const agingGroups = groupByAging(sortBySeverityThenAge(filteredOpenEvents));
 
     return (
       <>
         {renderFilterBar()}
-        {unresolved.length === 0 && (
+        {filteredOpenEvents.length === 0 && (
           <div className="rq-quiet" style={{ padding: '24px 16px' }}>All clear — no unresolved events</div>
         )}
 
-        {stale.length > 0 && (
-          <>
-            <div className="rq-age-group ag-stale">
+        {agingGroups.map(group => (
+          <div key={group.cssClass}>
+            <div className={`rq-age-group ${group.cssClass}`}>
               <div className="rq-age-dot" />
-              <span>Stale &gt; 30 min ({stale.length})</span>
+              <span>{group.label}</span>
             </div>
-            {stale.map(e => <EventCard key={e.id} e={e} showAging />)}
-          </>
-        )}
-
-        {hot.length > 0 && (
-          <>
-            <div className="rq-age-group ag-hot">
-              <div className="rq-age-dot" />
-              <span>Aging 15–30 min ({hot.length})</span>
-            </div>
-            {hot.map(e => <EventCard key={e.id} e={e} showAging />)}
-          </>
-        )}
-
-        {warm.length > 0 && (
-          <>
-            <div className="rq-age-group ag-warm">
-              <div className="rq-age-dot" />
-              <span>Active 5–15 min ({warm.length})</span>
-            </div>
-            {warm.map(e => <EventCard key={e.id} e={e} showAging />)}
-          </>
-        )}
-
-        {fresh.length > 0 && (
-          <>
-            <div className="rq-age-group ag-fresh">
-              <div className="rq-age-dot" />
-              <span>Just reported &lt; 5 min ({fresh.length})</span>
-            </div>
-            {fresh.map(e => <EventCard key={e.id} e={e} showAging />)}
-          </>
-        )}
+            {group.events.map(e => <EventCard key={e.id} e={e} showAging />)}
+          </div>
+        ))}
       </>
     );
   }
@@ -397,37 +297,8 @@ export default function ManagerDashboard() {
       return <div className="rq-quiet" style={{ padding: '24px 16px' }}>No data yet</div>;
     }
 
-    // Resolution times by event type
-    const resByType: Record<string, { total: number; count: number }> = {};
-    resolved.forEach(e => {
-      if (!resByType[e.event_type]) resByType[e.event_type] = { total: 0, count: 0 };
-      resByType[e.event_type].total += e.event_duration_seconds || 0;
-      resByType[e.event_type].count++;
-    });
-
-    // By event type
-    const byType: Record<string, number> = {};
-    events.forEach(e => { byType[e.event_type] = (byType[e.event_type] || 0) + 1; });
-    const typeEntries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
-    const maxType = Math.max(...typeEntries.map(([, c]) => c), 1);
-
-    // By gate
-    const byGate: Record<string, number> = {};
-    events.filter(e => e.gate_id).forEach(e => { byGate[e.gate_id!] = (byGate[e.gate_id!] || 0) + 1; });
-    const gateEntries = Object.entries(byGate).sort((a, b) => b[1] - a[1]);
-    const maxGate = Math.max(...gateEntries.map(([, c]) => c), 1);
-
-    // By equipment
-    const byEquip: Record<string, number> = {};
-    events.filter(e => e.equipment_id).forEach(e => { byEquip[e.equipment_id!] = (byEquip[e.equipment_id!] || 0) + 1; });
-    const equipEntries = Object.entries(byEquip).sort((a, b) => b[1] - a[1]);
-    const maxEquip = Math.max(...equipEntries.map(([, c]) => c), 1);
-
-    // By shift
-    const byShift: Record<string, number> = {};
-    events.forEach(e => { byShift[e.shift_window] = (byShift[e.shift_window] || 0) + 1; });
-    const shiftEntries = Object.entries(byShift).sort((a, b) => b[1] - a[1]);
-    const maxShift = Math.max(...shiftEntries.map(([, c]) => c), 1);
+    const { byType, byGate, byEquipment, byShift } = patterns;
+    const { avg: avgRes, p50: p50Res, p90: p90Res } = resolutionLatency;
 
     return (
       <>
@@ -453,21 +324,21 @@ export default function ManagerDashboard() {
         </div>
 
         {/* By event type */}
-        {typeEntries.length > 0 && (
+        {byType.length > 0 && (
           <>
             <div className="rq-eyebrow">By event type</div>
-            {typeEntries.map(([type, count]) => (
-              <div className="rq-pat-row" key={type}>
-                <div className="rq-pat-label">{type.replace(/_/g, ' ')}</div>
+            {byType.map(d => (
+              <div className="rq-pat-row" key={d.key}>
+                <div className="rq-pat-label">{d.key.replace(/_/g, ' ')}</div>
                 <div className="rq-pat-bar-track">
                   <div className="rq-pat-bar-fill" style={{
-                    width: `${(count / maxType) * 100}%`,
+                    width: `${d.proportion * 100}%`,
                     background: 'var(--rq-accent)',
                   }} />
                 </div>
-                <div className="rq-pat-count">{count}</div>
+                <div className="rq-pat-count">{d.count}</div>
                 <div className="rq-pat-avg">
-                  {resByType[type] ? `avg ${durationLabel(Math.round(resByType[type].total / resByType[type].count))}` : ''}
+                  {d.avgResolution != null ? `avg ${durationLabel(d.avgResolution)}` : ''}
                 </div>
               </div>
             ))}
@@ -475,19 +346,19 @@ export default function ManagerDashboard() {
         )}
 
         {/* By gate */}
-        {gateEntries.length > 0 && (
+        {byGate.length > 0 && (
           <>
             <div className="rq-eyebrow">By gate</div>
-            {gateEntries.map(([gate, count]) => (
-              <div className="rq-pat-row" key={gate}>
-                <div className="rq-pat-label">Gate {gate}</div>
+            {byGate.map(d => (
+              <div className="rq-pat-row" key={d.key}>
+                <div className="rq-pat-label">Gate {d.key}</div>
                 <div className="rq-pat-bar-track">
                   <div className="rq-pat-bar-fill" style={{
-                    width: `${(count / maxGate) * 100}%`,
+                    width: `${d.proportion * 100}%`,
                     background: 'var(--rq-blue)',
                   }} />
                 </div>
-                <div className="rq-pat-count">{count}</div>
+                <div className="rq-pat-count">{d.count}</div>
                 <div className="rq-pat-avg" />
               </div>
             ))}
@@ -495,19 +366,19 @@ export default function ManagerDashboard() {
         )}
 
         {/* By equipment */}
-        {equipEntries.length > 0 && (
+        {byEquipment.length > 0 && (
           <>
             <div className="rq-eyebrow">By equipment</div>
-            {equipEntries.map(([equip, count]) => (
-              <div className="rq-pat-row" key={equip}>
-                <div className="rq-pat-label">{equip}</div>
+            {byEquipment.map(d => (
+              <div className="rq-pat-row" key={d.key}>
+                <div className="rq-pat-label">{d.key}</div>
                 <div className="rq-pat-bar-track">
                   <div className="rq-pat-bar-fill" style={{
-                    width: `${(count / maxEquip) * 100}%`,
+                    width: `${d.proportion * 100}%`,
                     background: 'var(--rq-amber)',
                   }} />
                 </div>
-                <div className="rq-pat-count">{count}</div>
+                <div className="rq-pat-count">{d.count}</div>
                 <div className="rq-pat-avg" />
               </div>
             ))}
@@ -515,19 +386,19 @@ export default function ManagerDashboard() {
         )}
 
         {/* By shift */}
-        {shiftEntries.length > 0 && (
+        {byShift.length > 0 && (
           <>
             <div className="rq-eyebrow">By shift</div>
-            {shiftEntries.map(([shift, count]) => (
-              <div className="rq-pat-row" key={shift}>
-                <div className="rq-pat-label">{shift}</div>
+            {byShift.map(d => (
+              <div className="rq-pat-row" key={d.key}>
+                <div className="rq-pat-label">{d.key}</div>
                 <div className="rq-pat-bar-track">
                   <div className="rq-pat-bar-fill" style={{
-                    width: `${(count / maxShift) * 100}%`,
+                    width: `${d.proportion * 100}%`,
                     background: 'var(--rq-green)',
                   }} />
                 </div>
-                <div className="rq-pat-count">{count}</div>
+                <div className="rq-pat-count">{d.count}</div>
                 <div className="rq-pat-avg" />
               </div>
             ))}
@@ -562,37 +433,37 @@ export default function ManagerDashboard() {
         </div>
 
         {/* Gate / Equipment / Shift row — only if there's data */}
-        {(uniqueGates.length > 0 || uniqueEquip.length > 0 || uniqueShifts.length > 0) && (
+        {(filterOptions.gates.length > 0 || filterOptions.equipment.length > 0 || filterOptions.shifts.length > 0) && (
           <div className="rq-filters">
-            {uniqueGates.length > 0 && (
+            {filterOptions.gates.length > 0 && (
               <>
-                {['ALL', ...uniqueGates].map(g => (
+                {['ALL', ...filterOptions.gates].map(g => (
                   <button key={`g-${g}`} className={`rq-chip${filters.gate === g ? ' active' : ''}`}
                     onClick={() => setFilter('gate', g)}>
                     {g === 'ALL' ? 'All Gates' : g}
                   </button>
                 ))}
-                {(uniqueEquip.length > 0 || uniqueShifts.length > 0) && (
+                {(filterOptions.equipment.length > 0 || filterOptions.shifts.length > 0) && (
                   <span style={{ width: 1, background: 'var(--rq-line)', margin: '0 2px' }} />
                 )}
               </>
             )}
-            {uniqueEquip.length > 0 && (
+            {filterOptions.equipment.length > 0 && (
               <>
-                {['ALL', ...uniqueEquip].map(eq => (
+                {['ALL', ...filterOptions.equipment].map(eq => (
                   <button key={`e-${eq}`} className={`rq-chip${filters.equipment === eq ? ' active' : ''}`}
                     onClick={() => setFilter('equipment', eq)}>
                     {eq === 'ALL' ? 'All Equip' : eq}
                   </button>
                 ))}
-                {uniqueShifts.length > 0 && (
+                {filterOptions.shifts.length > 0 && (
                   <span style={{ width: 1, background: 'var(--rq-line)', margin: '0 2px' }} />
                 )}
               </>
             )}
-            {uniqueShifts.length > 0 && (
+            {filterOptions.shifts.length > 0 && (
               <>
-                {['ALL', ...uniqueShifts].map(sh => (
+                {['ALL', ...filterOptions.shifts].map(sh => (
                   <button key={`s-${sh}`} className={`rq-chip${filters.shift === sh ? ' active' : ''}`}
                     onClick={() => setFilter('shift', sh)}>
                     {sh === 'ALL' ? 'All Shifts' : sh}
@@ -604,12 +475,12 @@ export default function ManagerDashboard() {
         )}
 
         {/* Active filter count indicator */}
-        {activeFilterCount > 0 && (
+        {currentFilterCount > 0 && (
           <div style={{
             padding: '4px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)' }}>
-              {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+              {currentFilterCount} filter{currentFilterCount > 1 ? 's' : ''} active
             </span>
             <button
               onClick={() => setFilters(EMPTY_FILTERS)}
@@ -655,21 +526,21 @@ export default function ManagerDashboard() {
       <div className="rq-kpis rq-kpis-4">
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Open</div>
-          <div className={`rq-kpi-val${open.length > 0 ? ' rq-v-a' : ''}`}>{open.length}</div>
+          <div className={`rq-kpi-val${summary.openCount > 0 ? ' rq-v-a' : ''}`}>{summary.openCount}</div>
         </div>
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Crit+High</div>
-          <div className={`rq-kpi-val${(critCount + highCount) > 0 ? ' rq-v-r' : ''}`}>{critCount + highCount}</div>
+          <div className={`rq-kpi-val${summary.critHighCount > 0 ? ' rq-v-r' : ''}`}>{summary.critHighCount}</div>
         </div>
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Resolved</div>
-          <div className={`rq-kpi-val${resolved.length > 0 ? ' rq-v-g' : ''}`}>{resolved.length}</div>
+          <div className={`rq-kpi-val${summary.resolvedCount > 0 ? ' rq-v-g' : ''}`}>{summary.resolvedCount}</div>
         </div>
         <div className="rq-kpi">
           <div className="rq-kpi-lbl">Oldest Open</div>
-          <div className={`rq-kpi-val${oldestOpen && ageMins(oldestOpen.created_at) > 15 ? ' rq-v-r' : ''}`}>
-            {oldestOpen
-              ? <ElapsedTime since={oldestOpen.created_at} format="relative" />
+          <div className={`rq-kpi-val${summary.oldestOpen && ageMinutes(summary.oldestOpen.created_at) > 15 ? ' rq-v-r' : ''}`}>
+            {summary.oldestOpen
+              ? <ElapsedTime since={summary.oldestOpen.created_at} format="relative" />
               : '--'
             }
           </div>
@@ -679,29 +550,25 @@ export default function ManagerDashboard() {
       {/* Severity breakdown */}
       <div className="rq-sev-counters">
         <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: critCount > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{critCount}</div>
+          <div className="rq-sev-count-n" style={{ color: sevCounts.CRITICAL > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.CRITICAL}</div>
           <div className="rq-sev-count-l">Critical</div>
         </div>
         <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: highCount > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{highCount}</div>
+          <div className="rq-sev-count-n" style={{ color: sevCounts.HIGH > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.HIGH}</div>
           <div className="rq-sev-count-l">High</div>
         </div>
         <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: medCount > 0 ? 'var(--rq-amber)' : 'var(--rq-ink-4)' }}>{medCount}</div>
+          <div className="rq-sev-count-n" style={{ color: sevCounts.MEDIUM > 0 ? 'var(--rq-amber)' : 'var(--rq-ink-4)' }}>{sevCounts.MEDIUM}</div>
           <div className="rq-sev-count-l">Medium</div>
         </div>
         <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: lowCount > 0 ? 'var(--rq-ink-3)' : 'var(--rq-ink-4)' }}>{lowCount}</div>
+          <div className="rq-sev-count-n" style={{ color: sevCounts.LOW > 0 ? 'var(--rq-ink-3)' : 'var(--rq-ink-4)' }}>{sevCounts.LOW}</div>
           <div className="rq-sev-count-l">Low</div>
         </div>
       </div>
 
       {/* Critical/High attention banners */}
-      {open
-        .filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH')
-        .sort((a, b) => SEVERITY_ORDER[a.severity as Severity] - SEVERITY_ORDER[b.severity as Severity])
-        .slice(0, 3)
-        .map(e => (
+      {attentionEvents.map(e => (
           <div className="rq-attn" key={e.id}>
             <div className="rq-attn-row">
               <SeverityIndicator severity={e.severity as Severity} variant="text" />
@@ -735,8 +602,8 @@ export default function ManagerDashboard() {
         margin: '14px 0 0',
       }}>
         {([
-          { key: 'feed' as const, label: 'Live Feed', count: events.length },
-          { key: 'unresolved' as const, label: 'Unresolved', count: open.length },
+          { key: 'feed' as const, label: 'Live Feed', count: summary.total },
+          { key: 'unresolved' as const, label: 'Unresolved', count: summary.openCount },
           { key: 'patterns' as const, label: 'Patterns', count: null },
         ]).map(tab => (
           <button
@@ -753,13 +620,13 @@ export default function ManagerDashboard() {
             }}
           >
             {tab.label}
-            {tab.key === 'unresolved' && open.length > 0 && (
+            {tab.key === 'unresolved' && summary.openCount > 0 && (
               <span style={{
                 marginLeft: 5, padding: '1px 5px',
                 background: 'rgba(255,92,92,.12)', color: 'var(--rq-red)',
                 fontSize: 9,
               }}>
-                {open.length}
+                {summary.openCount}
               </span>
             )}
           </button>
