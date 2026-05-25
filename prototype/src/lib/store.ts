@@ -61,12 +61,94 @@ export async function fetchEvents(filters?: {
   return events.sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+// ---- Spine hardening: entity + zone resolution ----
+
+/**
+ * Derive entity_type and entity_id from existing submission fields.
+ * Priority: equipment > gate > flight (most specific wins).
+ * Callers can override by setting entity_type/entity_id explicitly.
+ */
+function deriveEntityContext(submission: EventSubmission): {
+  entity_type: string | null;
+  entity_id: string | null;
+} {
+  if (submission.entity_type && submission.entity_id) {
+    return { entity_type: submission.entity_type, entity_id: submission.entity_id };
+  }
+  if (submission.equipment_id) {
+    return { entity_type: 'equipment', entity_id: submission.equipment_id };
+  }
+  if (submission.gate_id) {
+    return { entity_type: 'gate', entity_id: submission.gate_id };
+  }
+  if (submission.flight_id) {
+    return { entity_type: 'flight', entity_id: submission.flight_id };
+  }
+  return { entity_type: null, entity_id: null };
+}
+
+/**
+ * Cached zone lookup: gate_id → zone_id.
+ * Loaded once per session, then reused. Avoids repeated Supabase calls
+ * on every postEvent(). Cache invalidated on page reload.
+ */
+let _zoneCache: Map<string, string> | null = null;
+let _zoneCachePromise: Promise<Map<string, string>> | null = null;
+
+async function getGateToZoneMap(): Promise<Map<string, string>> {
+  if (_zoneCache) return _zoneCache;
+  if (_zoneCachePromise) return _zoneCachePromise;
+
+  _zoneCachePromise = (async () => {
+    const zones = await fetchZones();
+    const map = new Map<string, string>();
+    for (const zone of zones) {
+      for (const gateId of zone.gate_ids) {
+        map.set(gateId, zone.id);
+      }
+    }
+    _zoneCache = map;
+    return map;
+  })();
+
+  return _zoneCachePromise;
+}
+
+/**
+ * Resolve zone_id for a submission. Uses explicit zone_id if provided,
+ * otherwise looks up from gate_id via cached zone mapping.
+ */
+async function resolveZoneId(submission: EventSubmission): Promise<string | null> {
+  if (submission.zone_id) return submission.zone_id;
+  if (!submission.gate_id) return null;
+  try {
+    const map = await getGateToZoneMap();
+    return map.get(submission.gate_id) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function postEvent(submission: EventSubmission): Promise<RampiqEvent> {
   const sb = getSupabase();
+
+  // Derive replay-compatible fields
+  const { entity_type, entity_id } = deriveEntityContext(submission);
+  const zone_id = await resolveZoneId(submission);
+
   const row = {
     ...submission,
     operational_status: 'OPEN',
     sync_status: 'SYNCED',
+    // Spine hardening fields
+    entity_type,
+    entity_id,
+    state_before: submission.state_before || null,
+    state_after: submission.state_after || 'OPEN',
+    causation_event_id: submission.causation_event_id || null,
+    correlation_id: submission.correlation_id || null,
+    zone_id,
+    event_version: 1,
   };
 
   if (sb) {
@@ -104,6 +186,15 @@ export async function postEvent(submission: EventSubmission): Promise<RampiqEven
     event_duration_seconds: null,
     sync_status: 'SYNCED',
     details_json: submission.details_json || null,
+    // Spine hardening fields
+    entity_type,
+    entity_id,
+    state_before: submission.state_before || null,
+    state_after: submission.state_after || 'OPEN',
+    causation_event_id: submission.causation_event_id || null,
+    correlation_id: submission.correlation_id || null,
+    zone_id,
+    event_version: 1,
   };
   const events = lsRead();
   events.push(full);
@@ -116,13 +207,30 @@ export async function updateEventStatus(
   status: OperationalStatus,
   resolvedBy?: string,
 ): Promise<RampiqEvent | null> {
-  const updates: Record<string, unknown> = { operational_status: status };
+  const sb = getSupabase();
+
+  // Fetch current state for state_before tracking
+  let stateBefore: string | null = null;
+  if (sb) {
+    const { data: current } = await sb
+      .from('rampiq_events')
+      .select('operational_status')
+      .eq('id', eventId)
+      .single();
+    stateBefore = current?.operational_status ?? null;
+  }
+
+  const updates: Record<string, unknown> = {
+    operational_status: status,
+    // Spine hardening: record the transition
+    state_before: stateBefore,
+    state_after: status,
+  };
   if (status === 'RESOLVED') {
     updates.resolved_at = new Date().toISOString();
     updates.resolved_by = resolvedBy || 'manager';
   }
 
-  const sb = getSupabase();
   if (sb) {
     const { data, error } = await sb
       .from('rampiq_events')
@@ -141,6 +249,8 @@ export async function updateEventStatus(
   const events = lsRead();
   const idx = events.findIndex(e => e.id === eventId);
   if (idx === -1) return null;
+  // Capture state_before from localStorage
+  updates.state_before = events[idx].operational_status;
   events[idx] = { ...events[idx], ...updates } as RampiqEvent;
   if (status === 'RESOLVED') {
     const created = new Date(events[idx].created_at).getTime();

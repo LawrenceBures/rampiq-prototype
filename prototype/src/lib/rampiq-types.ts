@@ -137,6 +137,16 @@ export interface RampiqEvent {
 
   sync_status: SyncStatus;
   details_json: Record<string, unknown> | null;
+
+  // Spine hardening: replay-compatible fields (Phase 1 Step 0)
+  entity_type: string | null;
+  entity_id: string | null;
+  state_before: string | null;
+  state_after: string | null;
+  causation_event_id: string | null;
+  correlation_id: string | null;
+  zone_id: string | null;
+  event_version: number;
 }
 
 // ============================================================
@@ -171,6 +181,15 @@ export interface EventSubmission {
   source_platform: SourcePlatform;
   offline_created_at?: string;
   details_json?: Record<string, unknown>;
+
+  // Spine hardening: optional overrides (auto-derived if omitted)
+  entity_type?: string;
+  entity_id?: string;
+  state_before?: string;
+  state_after?: string;
+  causation_event_id?: string;
+  correlation_id?: string;
+  zone_id?: string;
 }
 
 // ============================================================

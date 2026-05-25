@@ -28,6 +28,15 @@ interface MemoryEvent {
   resolved_by: string | null;
   event_duration_seconds: number | null;
   sync_status: string;
+  // Spine hardening fields
+  entity_type: string | null;
+  entity_id: string | null;
+  state_before: string | null;
+  state_after: string | null;
+  causation_event_id: string | null;
+  correlation_id: string | null;
+  zone_id: string | null;
+  event_version: number;
 }
 
 const memoryStore: MemoryEvent[] = [];
@@ -94,6 +103,15 @@ export async function POST(req: NextRequest) {
     resolved_by: null,
     event_duration_seconds: null,
     sync_status: 'SYNCED',
+    // Spine hardening fields (pass through from client)
+    entity_type: body.entity_type || null,
+    entity_id: body.entity_id || null,
+    state_before: body.state_before || null,
+    state_after: body.state_after || 'OPEN',
+    causation_event_id: body.causation_event_id || null,
+    correlation_id: body.correlation_id || null,
+    zone_id: body.zone_id || null,
+    event_version: body.event_version || 1,
   };
   memoryStore.push(event);
   return NextResponse.json(event, { status: 201 });
