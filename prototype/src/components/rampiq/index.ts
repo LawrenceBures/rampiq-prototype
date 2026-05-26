@@ -36,4 +36,6 @@ export { IncidentCard } from './IncidentCard';
 
 export { KpiStrip } from './KpiStrip';
 
+export { IncidentDetailPanel } from './IncidentDetailPanel';
+
 export { CommandBar } from './CommandBar';

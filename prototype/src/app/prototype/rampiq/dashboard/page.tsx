@@ -5,7 +5,7 @@ import { useLiveEvents, useRealtimeIncidents, useRecoveryActions, updateEventSta
 import { durationLabel } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
 import type { Zone } from '@/lib/rampiq-types';
-import { SeverityIndicator, ElapsedTime, EventCard, IncidentCard, KpiStrip, CommandBar, ZoneTile } from '@/components/rampiq';
+import { SeverityIndicator, ElapsedTime, EventCard, IncidentCard, KpiStrip, CommandBar, ZoneTile, IncidentDetailPanel } from '@/components/rampiq';
 import {
   deriveDashboardState,
   filterEvents,
@@ -21,9 +21,9 @@ import {
   createRecoveryAction,
   transitionRecoveryAction,
 } from '@/lib/lifecycle-commands';
+import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
-import { RECOVERY_ACTION_STATUS_LABELS, validTransitions as getValidTransitions } from '@/lib/operational-states';
 
 // ============================================================
 // TYPES
@@ -77,6 +77,11 @@ export default function ManagerDashboard() {
     fetchZones('LAX').then(setZones);
   }, []);
 
+  // Auto-fill incident form zone when zone is selected
+  useEffect(() => {
+    if (selectedZoneId) setIncZone(selectedZoneId);
+  }, [selectedZoneId]);
+
   async function handleCreateIncident() {
     if (!incTitle.trim()) return;
     setIncSubmitting(true);
@@ -122,28 +127,20 @@ export default function ManagerDashboard() {
 
   const { actions: recoveryActions, refresh: refreshRecovery } = useRecoveryActions(selectedIncidentId);
   const [showRecoveryForm, setShowRecoveryForm] = useState(false);
-  const [raTitle, setRaTitle] = useState('');
-  const [raType, setRaType] = useState('');
-  const [raRole, setRaRole] = useState('');
-  const [raDesc, setRaDesc] = useState('');
   const [raSubmitting, setRaSubmitting] = useState(false);
   const [raTransitioning, setRaTransitioning] = useState<string | null>(null);
 
-  async function handleCreateRecoveryAction() {
-    if (!raTitle.trim() || !selectedIncidentId) return;
+  async function handleCreateRecoveryAction(title: string, actionType: string, assignedTo: string, description: string) {
+    if (!title || !selectedIncidentId) return;
     setRaSubmitting(true);
     await createRecoveryAction({
       incident_id: selectedIncidentId,
-      title: raTitle.trim(),
-      action_type: raType || undefined,
+      title,
+      action_type: actionType || undefined,
       proposed_by: 'CC01',
-      assigned_to: raRole || undefined,
-      description: raDesc.trim() || undefined,
+      assigned_to: assignedTo || undefined,
+      description: description || undefined,
     });
-    setRaTitle('');
-    setRaType('');
-    setRaRole('');
-    setRaDesc('');
     setShowRecoveryForm(false);
     setRaSubmitting(false);
     refreshRecovery();
@@ -850,14 +847,24 @@ export default function ManagerDashboard() {
             {view === 'incidents' && renderIncidents()}
             {view === 'patterns' && renderPatterns()}
 
-            {/* Dev controls */}
-            <div style={{ padding: '14px 16px', display: 'flex', gap: 8 }}>
+            {/* Dev / demo controls */}
+            <div style={{ padding: '10px 16px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
                 Refresh
               </button>
-              <button className="rq-btn-secondary" onClick={() => { resetEvents(); refresh(); }}
-                style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
-                Reset (Dev)
+              <button className="rq-btn-secondary" onClick={async () => {
+                await seedDemoScenario();
+                refreshIncidents();
+                refresh();
+              }} style={{ flex: 1, color: 'var(--rq-accent)', borderColor: 'rgba(201,255,58,.3)' }}>
+                Seed Demo
+              </button>
+              <button className="rq-btn-secondary" onClick={async () => {
+                await clearDemoData();
+                refreshIncidents();
+                refresh();
+              }} style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
+                Clear All
               </button>
             </div>
           </div>
@@ -866,214 +873,23 @@ export default function ManagerDashboard() {
         {/* ── RIGHT RAIL: Incident triage / detail / event memory ── */}
         <div className="rq-console-rail-right">
           {selectedIncident ? (
-            /* ── Selected incident detail ── */
-            <>
-              <div className="rq-rail-header">
-                <span>Incident Detail</span>
-                <button type="button" onClick={() => setSelectedIncidentId(null)}
-                  style={{ background: 'none', border: 'none', color: 'var(--rq-ink-3)',
-                    cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }}>
-                  back
-                </button>
-              </div>
-              <div style={{ padding: '0 8px' }}>
-                <IncidentCard
-                  incident={selectedIncident}
-                  isTransitioning={incidentTransitioning === selectedIncident.id}
-                  onTransition={handleIncidentTransition}
-                  isSelected
-                />
-              </div>
-
-              {/* Lifecycle event timeline */}
-              {incidentEvents.length > 0 && (
-                <div style={{ padding: '6px 12px' }}>
-                  <div className="rq-rail-header" style={{ padding: '4px 0' }}>Event Timeline</div>
-                  {incidentEvents.map(ev => (
-                    <div key={ev.id} style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                      color: 'var(--rq-ink-3)', padding: '3px 0',
-                      borderBottom: '1px solid var(--rq-line)',
-                      display: 'flex', justifyContent: 'space-between', gap: 8,
-                    }}>
-                      <span style={{ color: ev.state_after ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
-                        {ev.event_type.replace(/_/g, ' ')}
-                      </span>
-                      <ElapsedTime since={ev.created_at} format="relative" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── Recovery Actions ── */}
-              <div style={{ padding: '4px 12px' }}>
-                <div className="rq-rail-header" style={{ padding: '4px 0' }}>
-                  <span>Recovery Actions</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)' }}>
-                    {recoveryActions.length}
-                  </span>
-                </div>
-
-                {/* Create toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowRecoveryForm(!showRecoveryForm)}
-                  style={{
-                    width: '100%', padding: '4px 8px', marginBottom: 4,
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                    letterSpacing: '.06em', textTransform: 'uppercase',
-                    background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
-                    color: 'var(--rq-ink-3)', cursor: 'pointer',
-                  }}
-                >
-                  {showRecoveryForm ? 'Cancel' : '+ Propose Action'}
-                </button>
-
-                {/* Inline creation form */}
-                {showRecoveryForm && (
-                  <div style={{
-                    padding: '6px 0', borderBottom: '1px solid var(--rq-line)', marginBottom: 4,
-                  }}>
-                    <input
-                      type="text" value={raTitle} onChange={e => setRaTitle(e.target.value)}
-                      placeholder="Action title"
-                      style={{
-                        width: '100%', padding: '5px 8px', marginBottom: 4,
-                        background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
-                        color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-                      }}
-                    />
-                    <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                      <select value={raType} onChange={e => setRaType(e.target.value)}
-                        style={{
-                          flex: 1, padding: '4px 6px',
-                          background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
-                          color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                        }}
-                      >
-                        <option value="">Type</option>
-                        <option value="DISPATCH">Dispatch</option>
-                        <option value="EQUIPMENT_SWAP">Equip Swap</option>
-                        <option value="PERSONNEL">Personnel</option>
-                        <option value="ESCALATION">Escalation</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                      <select value={raRole} onChange={e => setRaRole(e.target.value)}
-                        style={{
-                          flex: 1, padding: '4px 6px',
-                          background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
-                          color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                        }}
-                      >
-                        <option value="">Assign</option>
-                        <option value="CREW_CHIEF">Crew Chief</option>
-                        <option value="LT_RUNNER">LT / Runner</option>
-                        <option value="RAMP_AGENT">Ramp Agent</option>
-                        <option value="LAV_TECH">LAV Tech</option>
-                        <option value="OPS">Ops</option>
-                      </select>
-                    </div>
-                    <input
-                      type="text" value={raDesc} onChange={e => setRaDesc(e.target.value)}
-                      placeholder="Notes (optional)"
-                      style={{
-                        width: '100%', padding: '5px 8px', marginBottom: 4,
-                        background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line-2)',
-                        color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                      }}
-                    />
-                    <button
-                      type="button"
-                      disabled={!raTitle.trim() || raSubmitting}
-                      onClick={handleCreateRecoveryAction}
-                      className="rq-qbtn qb-ack"
-                      style={{ width: '100%', padding: '5px', fontSize: 9 }}
-                    >
-                      {raSubmitting ? 'Creating...' : 'Create Action'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Recovery actions list */}
-                {recoveryActions.length === 0 && !showRecoveryForm && (
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    color: 'var(--rq-ink-4)', padding: '4px 0',
-                  }}>
-                    No recovery actions yet
-                  </div>
-                )}
-                {recoveryActions.map(ra => {
-                  const nextStatuses = getValidTransitions('recovery_action', ra.status);
-                  const transitioning = raTransitioning === ra.id;
-                  const statusColor = ra.status === 'ACTIVE' ? 'var(--rq-green)'
-                    : ra.status === 'BLOCKED' ? 'var(--rq-red)'
-                    : ra.status === 'COMPLETE' ? 'var(--rq-green)'
-                    : 'var(--rq-ink-3)';
-
-                  return (
-                    <div key={ra.id} style={{
-                      padding: '5px 0', borderBottom: '1px solid var(--rq-line)',
-                    }}>
-                      <div style={{
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
-                        color: 'var(--rq-ink)', display: 'flex', justifyContent: 'space-between',
-                      }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
-                          {ra.title}
-                        </span>
-                        <ElapsedTime since={ra.created_at} format="relative" />
-                      </div>
-                      <div style={{
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                        color: 'var(--rq-ink-4)', marginTop: 1, display: 'flex', gap: 6,
-                      }}>
-                        <span style={{ color: statusColor, fontWeight: 600 }}>
-                          {RECOVERY_ACTION_STATUS_LABELS[ra.status]}
-                        </span>
-                        {ra.action_type && <span>{ra.action_type}</span>}
-                        {ra.assigned_to && <span>&rarr; {ra.assigned_to}</span>}
-                      </div>
-                      {ra.description && (
-                        <div style={{
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                          color: 'var(--rq-ink-3)', marginTop: 2,
-                        }}>
-                          {ra.description}
-                        </div>
-                      )}
-                      {nextStatuses.length > 0 && (
-                        <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
-                          {nextStatuses.map(ns => (
-                            <button key={ns} type="button"
-                              className={`rq-qbtn ${ns === 'COMPLETE' ? 'qb-resolve' : ns === 'ACKNOWLEDGED' ? 'qb-ack' : ns === 'WITHDRAWN' || ns === 'ESCALATED' ? 'qb-resolve' : 'qb-prog'}`}
-                              style={{ padding: '1px 6px', fontSize: 8 }}
-                              disabled={transitioning}
-                              onClick={() => handleRecoveryTransition(ra.id, ns as RecoveryActionStatus)}
-                            >
-                              {transitioning ? '...' : RECOVERY_ACTION_STATUS_LABELS[ns as RecoveryActionStatus]}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Compact metadata */}
-              <div style={{
-                padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 8, color: 'var(--rq-ink-4)', display: 'flex', gap: 8, flexWrap: 'wrap',
-              }}>
-                <span>id: {selectedIncident.id.slice(0, 8)}</span>
-                <span>corr: {selectedIncident.correlation_id.slice(0, 8)}</span>
-                <span>by: {selectedIncident.created_by}</span>
-              </div>
-            </>
+            <IncidentDetailPanel
+              incident={selectedIncident}
+              incidentEvents={incidentEvents}
+              recoveryActions={recoveryActions}
+              isTransitioning={incidentTransitioning === selectedIncident.id}
+              onTransition={handleIncidentTransition}
+              onBack={() => setSelectedIncidentId(null)}
+              onCreateRecoveryAction={handleCreateRecoveryAction}
+              onRecoveryTransition={handleRecoveryTransition}
+              raTransitioning={raTransitioning}
+              raSubmitting={raSubmitting}
+              showRecoveryForm={showRecoveryForm}
+              onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
+            />
 
           ) : triageIncidents.length > 0 ? (
-            /* ── Active incidents triage list (default when incidents exist) ── */
+            /* ── Active incidents triage list ── */
             <>
               <div className="rq-rail-header">
                 <span>Active Incidents</span>
@@ -1084,6 +900,11 @@ export default function ManagerDashboard() {
               {triageIncidents.map(inc => {
                 const sevColor = inc.severity === 'CRITICAL' || inc.severity === 'HIGH'
                   ? 'var(--rq-red)' : inc.severity === 'MEDIUM' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                // Count active recovery actions for this incident
+                const incRecoveryActive = events.filter(e =>
+                  e.entity_type === 'recovery_action' && e.correlation_id === inc.correlation_id
+                  && e.state_after && !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(e.state_after)
+                ).length;
                 return (
                   <div
                     key={inc.id}
@@ -1101,25 +922,34 @@ export default function ManagerDashboard() {
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
                       color: 'var(--rq-ink)', display: 'flex', justifyContent: 'space-between',
                     }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
                         {inc.title}
                       </span>
                       <ElapsedTime since={inc.opened_at} format="relative" />
                     </div>
                     <div style={{
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                      color: 'var(--rq-ink-4)', marginTop: 2, display: 'flex', gap: 6,
+                      color: 'var(--rq-ink-4)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center',
                     }}>
                       <span style={{ color: sevColor, fontWeight: 600 }}>{inc.severity}</span>
                       <span>{inc.status}</span>
                       {inc.zone_id && <span>{inc.zone_id}</span>}
                       {inc.gate_id && <span>{inc.gate_id}</span>}
+                      {incRecoveryActive > 0 && (
+                        <span style={{
+                          marginLeft: 'auto', padding: '0 4px',
+                          background: 'rgba(62,213,152,.1)', color: 'var(--rq-green)',
+                          fontSize: 8, fontWeight: 600,
+                        }}>
+                          {incRecoveryActive} action{incRecoveryActive !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })}
 
-              {/* Event memory below triage list */}
+              {/* Event memory */}
               <div className="rq-rail-header" style={{ marginTop: 4 }}>Event Memory</div>
               {eventMemory.slice(0, 8).map(ev => (
                 <div key={ev.id} style={{
@@ -1128,7 +958,7 @@ export default function ManagerDashboard() {
                   borderBottom: '1px solid var(--rq-line)',
                   display: 'flex', justifyContent: 'space-between',
                 }}>
-                  <span style={{ color: ev.entity_type === 'incident' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
+                  <span style={{ color: ev.entity_type === 'incident' || ev.entity_type === 'recovery_action' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
                     {ev.event_type.replace(/_/g, ' ')}
                   </span>
                   <ElapsedTime since={ev.created_at} format="relative" />
@@ -1137,7 +967,7 @@ export default function ManagerDashboard() {
             </>
 
           ) : (
-            /* ── No incidents — show filtered event memory ── */
+            /* ── No incidents — show event memory ── */
             <>
               <div className="rq-rail-header">Event Memory</div>
               {eventMemory.length === 0 && (
@@ -1150,7 +980,7 @@ export default function ManagerDashboard() {
                   borderBottom: '1px solid var(--rq-line)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: ev.entity_type === 'incident' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
+                    <span style={{ color: ev.entity_type === 'incident' || ev.entity_type === 'recovery_action' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
                       {ev.event_type.replace(/_/g, ' ')}
                     </span>
                     <ElapsedTime since={ev.created_at} format="relative" />
