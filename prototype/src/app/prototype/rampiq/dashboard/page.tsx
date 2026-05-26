@@ -24,6 +24,8 @@ import {
 import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
+import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
+import type { PatternInsight, InsightCategory } from '@/lib/operational-patterns';
 
 // ============================================================
 // TYPES
@@ -71,6 +73,7 @@ export default function ManagerDashboard() {
   const [incGate, setIncGate] = useState('');
   const [incDesc, setIncDesc] = useState('');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [expandedInsight, setExpandedInsight] = useState<number | null>(null);
   const [incSubmitting, setIncSubmitting] = useState(false);
 
   useEffect(() => {
@@ -233,7 +236,11 @@ export default function ManagerDashboard() {
   const zonePatterns = selectedZoneId ? zoneDerivedState.patterns : patterns;
   const zoneFilterOptions = selectedZoneId ? zoneDerivedState.filterOptions : filterOptions;
   const zoneResolutionLatency = zoneSummary.resolutionLatency;
-  const zoneInsights = selectedZoneId ? zoneDerivedState.insights : insights;
+
+  // ── Pattern Engine ──
+  const patternOutput = analyzeOperationalPatterns(zoneScopedEvents, zoneScopedIncidents, recoveryActions);
+  const patternInsights = patternOutput.insights;
+  const { trends } = patternOutput;
 
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
@@ -746,23 +753,66 @@ export default function ManagerDashboard() {
 
             <KpiStrip summary={zoneSummary} />
 
-            {/* Operational insights */}
-            {zoneInsights.length > 0 && (
-              <div style={{ margin: '0 16px 4px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {zoneInsights.slice(0, 4).map((ins, i) => {
-                  const color = ins.severity === 'alert' ? 'var(--rq-red)' : ins.severity === 'watch' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
-                  return (
-                    <div key={i} title={ins.detail} style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                      padding: '2px 8px', borderRadius: 2,
-                      color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
-                      border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
-                      cursor: 'default',
+            {/* Operational pattern insights */}
+            {patternInsights.length > 0 && (
+              <div style={{ margin: '0 16px 4px' }}>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {trends.pressureDirection !== 'stable' && (
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                      padding: '2px 6px', borderRadius: 2,
+                      color: trends.pressureDirection === 'rising' ? 'var(--rq-red)' : 'var(--rq-green)',
+                      background: trends.pressureDirection === 'rising' ? 'rgba(255,92,92,.08)' : 'rgba(62,213,152,.08)',
+                      border: `1px solid ${trends.pressureDirection === 'rising' ? 'rgba(255,92,92,.2)' : 'rgba(62,213,152,.2)'}`,
+                      letterSpacing: '.06em', textTransform: 'uppercase',
                     }}>
-                      {ins.title}
+                      {trends.pressureDirection === 'rising' ? '▲ pressure rising' : '▼ pressure falling'}
+                    </span>
+                  )}
+                  {patternInsights.slice(0, 5).map((ins, i) => {
+                    const color = ins.severity === 'alert' ? 'var(--rq-red)' : ins.severity === 'watch' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                    const isExpanded = expandedInsight === i;
+                    const categoryLabel: Record<InsightCategory, string> = {
+                      gate_pattern: 'GATE', equipment_risk: 'EQUIP', recovery_friction: 'RECOVERY', zone_instability: 'ZONE',
+                    };
+                    return (
+                      <div key={i}
+                        onClick={() => setExpandedInsight(isExpanded ? null : i)}
+                        style={{
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                          padding: '2px 8px', borderRadius: 2, cursor: 'pointer',
+                          color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
+                          border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
+                        }}>
+                        <span style={{ fontSize: 7, opacity: 0.7, marginRight: 4 }}>{categoryLabel[ins.category]}</span>
+                        {ins.title}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Expanded insight explanation */}
+                {expandedInsight !== null && patternInsights[expandedInsight] && (
+                  <div style={{
+                    marginTop: 4, padding: '6px 10px',
+                    background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                    color: 'var(--rq-ink-2)', lineHeight: 1.4,
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: 3, color: 'var(--rq-ink)' }}>
+                      {patternInsights[expandedInsight].title}
                     </div>
-                  );
-                })}
+                    <div>{patternInsights[expandedInsight].explanation}</div>
+                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
+                      Score: {patternInsights[expandedInsight].score}
+                      {patternInsights[expandedInsight].contributingIncidentIds.length > 0 && (
+                        <> · {patternInsights[expandedInsight].contributingIncidentIds.length} incident{patternInsights[expandedInsight].contributingIncidentIds.length !== 1 ? 's' : ''}</>
+                      )}
+                      {patternInsights[expandedInsight].contributingEventIds.length > 0 && (
+                        <> · {patternInsights[expandedInsight].contributingEventIds.length} event{patternInsights[expandedInsight].contributingEventIds.length !== 1 ? 's' : ''}</>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
