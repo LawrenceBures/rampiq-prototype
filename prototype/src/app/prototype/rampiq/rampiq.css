@@ -1572,3 +1572,96 @@
   color: var(--rq-ink-2);
   line-height: 1.5;
 }
+
+/* ================================================
+   DESKTOP OPERATIONS CONSOLE — Phase 3
+   ================================================ */
+
+/* Break out of mobile .rq-device constraint when console is present */
+.rq-device:has(.rq-console) {
+  max-width: none;
+}
+
+.rq-console {
+  width: 100%;
+}
+
+/* Remove ops-board width cap inside console */
+.rq-console .rq-ops-board {
+  max-width: none;
+}
+
+/* ---- Command bar ---- */
+.rq-console-command {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rq-line);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ---- Three-panel grid ---- */
+.rq-console-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: calc(100vh - 110px);
+}
+
+/* Tablet: center + right rail */
+@media (min-width: 768px) {
+  .rq-console-grid {
+    grid-template-columns: 1fr 280px;
+  }
+}
+
+/* Desktop: left rail + center + right rail */
+@media (min-width: 1200px) {
+  .rq-console-grid {
+    grid-template-columns: 240px 1fr 300px;
+  }
+}
+
+/* ---- Rail panels ---- */
+.rq-console-rail-left {
+  border-right: 1px solid var(--rq-line);
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
+  padding: 8px 0;
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .rq-console-rail-left {
+    display: block;
+  }
+}
+
+.rq-console-center {
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
+}
+
+.rq-console-rail-right {
+  border-left: 1px solid var(--rq-line);
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
+  padding: 8px 0;
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .rq-console-rail-right {
+    display: block;
+  }
+}
+
+/* ---- Console footer ---- */
+.rq-console-footer {
+  border-top: 1px solid var(--rq-line);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

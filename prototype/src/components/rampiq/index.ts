@@ -29,3 +29,11 @@ export type { GateCardVariant } from './GateCard';
 export { EventRow } from './EventRow';
 
 export { ZoneTile } from './ZoneTile';
+
+export { EventCard } from './EventCard';
+
+export { IncidentCard } from './IncidentCard';
+
+export { KpiStrip } from './KpiStrip';
+
+export { CommandBar } from './CommandBar';

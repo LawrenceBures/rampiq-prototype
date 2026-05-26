@@ -2,17 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useLiveEvents, useRealtimeIncidents, updateEventStatus, resetEvents, fetchZones } from '@/lib/store';
-import { formatTime, durationLabel, STATUS_LABELS } from '@/lib/rampiq-types';
+import { durationLabel } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
 import type { Zone } from '@/lib/rampiq-types';
-import { SeverityIndicator, OperationalStatus as OperationalStatusPill, ElapsedTime } from '@/components/rampiq';
+import { SeverityIndicator, ElapsedTime, EventCard, IncidentCard, KpiStrip, CommandBar, ZoneTile } from '@/components/rampiq';
 import {
   deriveDashboardState,
   filterEvents,
   activeFilterCount as countActiveFilters,
   isOpen,
-  agingClass,
-  ageMinutes,
   groupByAging,
   sortBySeverityThenAge,
 } from '@/lib/derived-operational-state';
@@ -22,10 +20,6 @@ import {
   transitionIncident,
 } from '@/lib/lifecycle-commands';
 import type { Incident } from '@/lib/lifecycle-types';
-import {
-  INCIDENT_STATUS_LABELS,
-  validTransitions,
-} from '@/lib/operational-states';
 import type { IncidentStatus } from '@/lib/operational-states';
 
 // ============================================================
@@ -43,9 +37,6 @@ const EMPTY_FILTERS: EventFilters = {
 // HELPERS (presentation-only, kept local to page)
 // ============================================================
 
-function sevClass(sev: Severity): string {
-  return `sev-${sev.toLowerCase()}`;
-}
 
 // ============================================================
 // MAIN COMPONENT
@@ -75,6 +66,7 @@ export default function ManagerDashboard() {
   const [incZone, setIncZone] = useState('');
   const [incGate, setIncGate] = useState('');
   const [incDesc, setIncDesc] = useState('');
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [incSubmitting, setIncSubmitting] = useState(false);
 
   useEffect(() => {
@@ -159,7 +151,7 @@ export default function ManagerDashboard() {
 
   const ds = deriveDashboardState(events);
   const { summary, filterOptions, patterns, attentionEvents } = ds;
-  const { severity: sevCounts, resolutionLatency } = summary;
+  const { resolutionLatency } = summary;
 
   // ============================================================
   // FILTERS
@@ -185,137 +177,7 @@ export default function ManagerDashboard() {
     setUpdatingId(null);
   }
 
-  // ============================================================
-  // EVENT CARD
-  // ============================================================
-
-  function EventCard({ e, showAging = false }: { e: RampiqEvent; showAging?: boolean }) {
-    const expanded = expandedId === e.id;
-    const updating = updatingId === e.id;
-    const classes = [
-      'rq-evt',
-      sevClass(e.severity as Severity),
-      showAging ? agingClass(e) : '',
-      newIds.has(e.id) ? 'is-new' : '',
-    ].filter(Boolean).join(' ');
-
-    return (
-      <div
-        className={classes}
-        onClick={() => setExpandedId(expanded ? null : e.id)}
-      >
-        {/* Row 1: severity + type + location + age */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
-            color: 'var(--rq-ink)',
-          }}>
-            {e.event_type.replace(/_/g, ' ')}
-          </span>
-          {e.gate_id && (
-            <span style={{
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-              color: 'var(--rq-ink-3)',
-            }}>
-              {e.gate_id}
-            </span>
-          )}
-          {e.equipment_id && (
-            <span style={{
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-              color: 'var(--rq-ink-3)',
-            }}>
-              {e.equipment_id}
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto' }}>
-            <ElapsedTime
-              since={e.created_at}
-              format="relative"
-              showAgeColor={isOpen(e)}
-            />
-          </span>
-        </div>
-
-        {/* Row 2: status + reporter + severity tag */}
-        <div style={{
-          fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-          color: 'var(--rq-ink-3)', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap',
-          alignItems: 'center',
-        }}>
-          <OperationalStatusPill
-            status={e.operational_status}
-            label={STATUS_LABELS[e.operational_status as OperationalStatus]}
-            variant="pill"
-          />
-          <SeverityIndicator severity={e.severity as Severity} variant="badge" />
-          <span>{e.reported_by}</span>
-          <span>{e.shift_window}</span>
-          {e.event_duration_seconds != null && (
-            <span style={{ color: 'var(--rq-ink-4)' }}>{durationLabel(e.event_duration_seconds)}</span>
-          )}
-        </div>
-
-        {/* Notes */}
-        {e.notes && (
-          <div style={{
-            fontSize: 12, color: 'var(--rq-ink-2)', marginTop: 5, lineHeight: 1.4,
-          }}>
-            {e.notes}
-          </div>
-        )}
-
-        {/* Quick actions — always visible for open events */}
-        {isOpen(e) && (
-          <div className="rq-quick-actions">
-            {e.operational_status === 'OPEN' && (
-              <button className="rq-qbtn qb-ack" disabled={updating}
-                onClick={(ev) => handleStatus(e.id, 'ACKNOWLEDGED', ev)}>
-                Ack
-              </button>
-            )}
-            {(e.operational_status === 'OPEN' || e.operational_status === 'ACKNOWLEDGED') && (
-              <button className="rq-qbtn qb-prog" disabled={updating}
-                onClick={(ev) => handleStatus(e.id, 'IN_PROGRESS', ev)}>
-                In Prog
-              </button>
-            )}
-            <button className="rq-qbtn qb-resolve" disabled={updating}
-              onClick={(ev) => handleStatus(e.id, 'RESOLVED', ev)}>
-              {updating ? '...' : 'Resolve'}
-            </button>
-          </div>
-        )}
-
-        {/* Expanded detail panel */}
-        {expanded && (
-          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--rq-line)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px' }}>
-              <DItem label="Severity">
-                <SeverityIndicator severity={e.severity as Severity} variant="pill" />
-              </DItem>
-              <DItem label="Status">
-                <OperationalStatusPill
-                  status={e.operational_status}
-                  label={STATUS_LABELS[e.operational_status as OperationalStatus]}
-                  variant="pill"
-                />
-              </DItem>
-              <DItem label="Reporter" value={`${e.reported_by} (${e.role_type.replace(/_/g, ' ')})`} />
-              <DItem label="Shift" value={e.shift_window} />
-              <DItem label="Device" value={e.device_id} />
-              <DItem label="Platform" value={e.source_platform} />
-              <DItem label="Target" value={`${e.qr_target_type} · ${e.qr_target_id}`} />
-              <DItem label="Reported" value={formatTime(e.created_at)} />
-              {e.resolved_at && <DItem label="Resolved at" value={formatTime(e.resolved_at)} />}
-              {e.resolved_by && <DItem label="Resolved by" value={e.resolved_by} />}
-              {e.event_duration_seconds != null && <DItem label="Duration" value={durationLabel(e.event_duration_seconds)} />}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+  // EventCard — extracted to components/rampiq/EventCard.tsx
 
   // ============================================================
   // FEED VIEW
@@ -330,7 +192,7 @@ export default function ManagerDashboard() {
             {events.length === 0 ? 'No events yet — waiting for agent signals' : 'No events match filters'}
           </div>
         )}
-        {filteredEvents.map(e => <EventCard key={e.id} e={e} showAging />)}
+        {filteredEvents.map(e => <EventCard key={e.id} event={e} showAging isExpanded={expandedId === e.id} isUpdating={updatingId === e.id} isNew={newIds.has(e.id)} onToggleExpand={() => setExpandedId(expandedId === e.id ? null : e.id)} onStatusChange={handleStatus} />)}
       </>
     );
   }
@@ -357,7 +219,7 @@ export default function ManagerDashboard() {
               <div className="rq-age-dot" />
               <span>{group.label}</span>
             </div>
-            {group.events.map(e => <EventCard key={e.id} e={e} showAging />)}
+            {group.events.map(e => <EventCard key={e.id} event={e} showAging isExpanded={expandedId === e.id} isUpdating={updatingId === e.id} isNew={newIds.has(e.id)} onToggleExpand={() => setExpandedId(expandedId === e.id ? null : e.id)} onStatusChange={handleStatus} />)}
           </div>
         ))}
       </>
@@ -617,83 +479,16 @@ export default function ManagerDashboard() {
           <div className="rq-quiet" style={{ padding: '24px 16px' }}>No active incidents</div>
         )}
 
-        {incidents.map(inc => {
-          const transitioning = incidentTransitioning === inc.id;
-          const nextStatuses = validTransitions('incident', inc.status);
-
-          return (
-            <div
-              key={inc.id}
-              className={`rq-evt sev-${inc.severity.toLowerCase()}`}
-              style={{ cursor: 'default' }}
-            >
-              {/* Row 1: title + age */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
-                  color: 'var(--rq-ink)',
-                }}>
-                  {inc.title}
-                </span>
-                <span style={{ marginLeft: 'auto' }}>
-                  <ElapsedTime since={inc.opened_at} format="relative" showAgeColor />
-                </span>
-              </div>
-
-              {/* Row 2: status + severity + location */}
-              <div style={{
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                color: 'var(--rq-ink-3)', marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap',
-                alignItems: 'center',
-              }}>
-                <OperationalStatusPill
-                  status={inc.status}
-                  label={INCIDENT_STATUS_LABELS[inc.status as IncidentStatus]}
-                  variant="pill"
-                />
-                <SeverityIndicator severity={inc.severity as Severity} variant="badge" />
-                {inc.zone_id && <span>{inc.zone_id}</span>}
-                {inc.gate_id && <span>{inc.gate_id}</span>}
-                {inc.assigned_to && <span>→ {inc.assigned_to}</span>}
-              </div>
-
-              {/* Description */}
-              {inc.description && (
-                <div style={{ fontSize: 12, color: 'var(--rq-ink-2)', marginTop: 5, lineHeight: 1.4 }}>
-                  {inc.description}
-                </div>
-              )}
-
-              {/* Transition buttons */}
-              {nextStatuses.length > 0 && (
-                <div className="rq-quick-actions">
-                  {nextStatuses.map(ns => (
-                    <button
-                      key={ns}
-                      className={`rq-qbtn ${ns === 'RESOLVED' || ns === 'CLOSED' ? 'qb-resolve' : ns === 'CONFIRMED' ? 'qb-ack' : 'qb-prog'}`}
-                      disabled={transitioning}
-                      onClick={() => handleIncidentTransition(inc.id, ns as IncidentStatus)}
-                    >
-                      {transitioning ? '...' : INCIDENT_STATUS_LABELS[ns as IncidentStatus]}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Debug: incident metadata */}
-              <div style={{
-                marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--rq-line)',
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-                color: 'var(--rq-ink-4)', display: 'flex', gap: 8, flexWrap: 'wrap',
-              }}>
-                <span>id: {inc.id.slice(0, 8)}</span>
-                <span>corr: {inc.correlation_id.slice(0, 8)}</span>
-                <span>status: {inc.status}</span>
-                <span>by: {inc.created_by}</span>
-              </div>
-            </div>
-          );
-        })}
+        {incidents.map(inc => (
+          <IncidentCard
+            key={inc.id}
+            incident={inc}
+            isTransitioning={incidentTransitioning === inc.id}
+            onTransition={handleIncidentTransition}
+            onClick={() => setSelectedIncidentId(selectedIncidentId === inc.id ? null : inc.id)}
+            isSelected={selectedIncidentId === inc.id}
+          />
+        ))}
       </>
     );
   }
@@ -792,172 +587,231 @@ export default function ManagerDashboard() {
   // RENDER
   // ============================================================
 
+  const selectedIncident = selectedIncidentId ? incidents.find(i => i.id === selectedIncidentId) ?? null : null;
+  const incidentEvents = selectedIncidentId
+    ? events.filter(e => e.entity_id === selectedIncidentId).slice(0, 20)
+    : [];
+
   return (
-    <div className="rq-ops-board">
-      {/* Header */}
-      <div className="rq-gate-header">
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <div className="rq-gate-id" style={{ fontSize: 20 }}>Operations</div>
-          <div className="rq-pulse" />
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-            color: 'var(--rq-ink-3)', letterSpacing: '.12em', textTransform: 'uppercase' as const,
+    <>
+      {/* Command bar — full width */}
+      <CommandBar
+        station="LAX"
+        role="Crew Chief"
+        lastEventSync={lastUpdated}
+        lastIncidentSync={incidentLastSync}
+        activeIncidentCount={incidents.length}
+        openEventCount={summary.openCount}
+      />
+
+      {/* Three-panel grid */}
+      <div className="rq-console-grid">
+
+        {/* ── LEFT RAIL: Zone overview ── */}
+        <div className="rq-console-rail-left">
+          <div style={{
+            padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
+            textTransform: 'uppercase',
           }}>
-            LIVE
-          </span>
-        </div>
-        <div className="rq-gate-meta">
-          LAX &middot; <b>Manager</b> &middot; 3s
-          {lastUpdated && <> &middot; {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</>}
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="rq-kpis rq-kpis-4">
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Open</div>
-          <div className={`rq-kpi-val${summary.openCount > 0 ? ' rq-v-a' : ''}`}>{summary.openCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Crit+High</div>
-          <div className={`rq-kpi-val${summary.critHighCount > 0 ? ' rq-v-r' : ''}`}>{summary.critHighCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Resolved</div>
-          <div className={`rq-kpi-val${summary.resolvedCount > 0 ? ' rq-v-g' : ''}`}>{summary.resolvedCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Oldest Open</div>
-          <div className={`rq-kpi-val${summary.oldestOpen && ageMinutes(summary.oldestOpen.created_at) > 15 ? ' rq-v-r' : ''}`}>
-            {summary.oldestOpen
-              ? <ElapsedTime since={summary.oldestOpen.created_at} format="relative" />
-              : '--'
-            }
+            Zones
           </div>
+          {zones.length === 0 && (
+            <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No zones loaded</div>
+          )}
+          {zones.map(z => (
+            <ZoneTile
+              key={z.id}
+              name={z.label}
+              gateCount={z.gate_ids.length}
+              pressure={0}
+              incidentCount={incidents.filter(i => i.zone_id === z.id).length}
+            />
+          ))}
         </div>
-      </div>
 
-      {/* Severity breakdown */}
-      <div className="rq-sev-counters">
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.CRITICAL > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.CRITICAL}</div>
-          <div className="rq-sev-count-l">Critical</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.HIGH > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.HIGH}</div>
-          <div className="rq-sev-count-l">High</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.MEDIUM > 0 ? 'var(--rq-amber)' : 'var(--rq-ink-4)' }}>{sevCounts.MEDIUM}</div>
-          <div className="rq-sev-count-l">Medium</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.LOW > 0 ? 'var(--rq-ink-3)' : 'var(--rq-ink-4)' }}>{sevCounts.LOW}</div>
-          <div className="rq-sev-count-l">Low</div>
-        </div>
-      </div>
+        {/* ── CENTER: Main operational surface ── */}
+        <div className="rq-console-center">
+          <div className="rq-ops-board">
 
-      {/* Critical/High attention banners */}
-      {attentionEvents.map(e => (
-          <div className="rq-attn" key={e.id}>
-            <div className="rq-attn-row">
-              <SeverityIndicator severity={e.severity as Severity} variant="text" />
-              <span className="rq-attn-time">
-                <ElapsedTime since={e.created_at} format="relative" />
-              </span>
+            <KpiStrip summary={summary} />
+
+            {/* Attention banners */}
+            {attentionEvents.map(e => (
+              <div className="rq-attn" key={e.id}>
+                <div className="rq-attn-row">
+                  <SeverityIndicator severity={e.severity as Severity} variant="text" />
+                  <span className="rq-attn-time">
+                    <ElapsedTime since={e.created_at} format="relative" />
+                  </span>
+                </div>
+                <div className="rq-attn-msg">
+                  <b>{e.event_type.replace(/_/g, ' ')}</b>
+                  {e.gate_id && <> — {e.gate_id}</>}
+                  {e.equipment_id && <> — {e.equipment_id}</>}
+                  {e.notes && <> — {e.notes}</>}
+                </div>
+                <div className="rq-quick-actions" style={{ marginTop: 6 }}>
+                  {e.operational_status === 'OPEN' && (
+                    <button className="rq-qbtn qb-ack" disabled={updatingId === e.id}
+                      onClick={(ev) => handleStatus(e.id, 'ACKNOWLEDGED', ev)}>Ack</button>
+                  )}
+                  <button className="rq-qbtn qb-resolve" disabled={updatingId === e.id}
+                    onClick={(ev) => handleStatus(e.id, 'RESOLVED', ev)}>
+                    {updatingId === e.id ? '...' : 'Resolve'}
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Tabs */}
+            <div style={{
+              display: 'flex', borderBottom: '1px solid var(--rq-line)',
+              margin: '14px 0 0',
+            }}>
+              {([
+                { key: 'feed' as const, label: 'Live Feed', count: summary.total },
+                { key: 'unresolved' as const, label: 'Unresolved', count: summary.openCount },
+                { key: 'incidents' as const, label: 'Incidents', count: incidents.length },
+                { key: 'patterns' as const, label: 'Patterns', count: null },
+              ]).map(tab => (
+                <button
+                  type="button"
+                  key={tab.key}
+                  onClick={() => setView(tab.key)}
+                  style={{
+                    flex: 1, padding: '10px', cursor: 'pointer',
+                    background: 'transparent', border: 'none',
+                    borderBottom: view === tab.key ? '2px solid var(--rq-accent)' : '2px solid transparent',
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                    letterSpacing: '.1em', textTransform: 'uppercase' as const,
+                    color: view === tab.key ? 'var(--rq-accent)' : 'var(--rq-ink-3)',
+                    fontWeight: view === tab.key ? 700 : 400,
+                  }}
+                >
+                  {tab.label}
+                  {tab.count != null && tab.count > 0 && (tab.key === 'unresolved' || tab.key === 'incidents') && (
+                    <span style={{
+                      marginLeft: 5, padding: '1px 5px',
+                      background: 'rgba(255,92,92,.12)', color: 'var(--rq-red)',
+                      fontSize: 9,
+                    }}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="rq-attn-msg">
-              <b>{e.event_type.replace(/_/g, ' ')}</b>
-              {e.gate_id && <> — {e.gate_id}</>}
-              {e.equipment_id && <> — {e.equipment_id}</>}
-              {e.notes && <> — {e.notes}</>}
-            </div>
-            <div className="rq-quick-actions" style={{ marginTop: 6 }}>
-              {e.operational_status === 'OPEN' && (
-                <button className="rq-qbtn qb-ack" disabled={updatingId === e.id}
-                  onClick={(ev) => handleStatus(e.id, 'ACKNOWLEDGED', ev)}>Ack</button>
-              )}
-              <button className="rq-qbtn qb-resolve" disabled={updatingId === e.id}
-                onClick={(ev) => handleStatus(e.id, 'RESOLVED', ev)}>
-                {updatingId === e.id ? '...' : 'Resolve'}
+
+            {/* View content */}
+            {loading && events.length === 0 && (
+              <div className="rq-quiet" style={{ padding: '32px 16px' }}>Loading operational state...</div>
+            )}
+
+            {view === 'feed' && renderFeed()}
+            {view === 'unresolved' && renderUnresolved()}
+            {view === 'incidents' && renderIncidents()}
+            {view === 'patterns' && renderPatterns()}
+
+            {/* Dev controls */}
+            <div style={{ padding: '14px 16px', display: 'flex', gap: 8 }}>
+              <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
+                Refresh
+              </button>
+              <button className="rq-btn-secondary" onClick={() => { resetEvents(); refresh(); }}
+                style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
+                Reset (Dev)
               </button>
             </div>
           </div>
-        ))
-      }
+        </div>
 
-      {/* Tabs */}
-      <div style={{
-        display: 'flex', borderBottom: '1px solid var(--rq-line)',
-        margin: '14px 0 0',
-      }}>
-        {([
-          { key: 'feed' as const, label: 'Live Feed', count: summary.total },
-          { key: 'unresolved' as const, label: 'Unresolved', count: summary.openCount },
-          { key: 'incidents' as const, label: 'Incidents', count: incidents.length },
-          { key: 'patterns' as const, label: 'Patterns', count: null },
-        ]).map(tab => (
-          <button
-            type="button"
-            key={tab.key}
-            onClick={() => setView(tab.key)}
-            style={{
-              flex: 1, padding: '10px', cursor: 'pointer',
-              background: 'transparent', border: 'none',
-              borderBottom: view === tab.key ? '2px solid var(--rq-accent)' : '2px solid transparent',
-              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-              letterSpacing: '.1em', textTransform: 'uppercase' as const,
-              color: view === tab.key ? 'var(--rq-accent)' : 'var(--rq-ink-3)',
-              fontWeight: view === tab.key ? 700 : 400,
-            }}
-          >
-            {tab.label}
-            {tab.count != null && tab.count > 0 && (tab.key === 'unresolved' || tab.key === 'incidents') && (
-              <span style={{
-                marginLeft: 5, padding: '1px 5px',
-                background: 'rgba(255,92,92,.12)', color: 'var(--rq-red)',
-                fontSize: 9,
+        {/* ── RIGHT RAIL: Incident detail + event memory ── */}
+        <div className="rq-console-rail-right">
+          {selectedIncident ? (
+            <>
+              <div style={{
+                padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
+                textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between',
               }}>
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
+                <span>Incident Detail</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIncidentId(null)}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--rq-ink-3)',
+                    cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                  }}
+                >
+                  close
+                </button>
+              </div>
+              <div style={{ padding: '0 8px' }}>
+                <IncidentCard
+                  incident={selectedIncident}
+                  isTransitioning={incidentTransitioning === selectedIncident.id}
+                  onTransition={handleIncidentTransition}
+                  isSelected
+                />
+              </div>
+              {/* Related lifecycle events */}
+              {incidentEvents.length > 0 && (
+                <div style={{ padding: '8px 12px' }}>
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                    color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}>
+                    Event Timeline
+                  </div>
+                  {incidentEvents.map(ev => (
+                    <div key={ev.id} style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                      color: 'var(--rq-ink-3)', padding: '3px 0',
+                      borderBottom: '1px solid var(--rq-line)',
+                      display: 'flex', justifyContent: 'space-between',
+                    }}>
+                      <span>{ev.event_type.replace(/_/g, ' ')}</span>
+                      <ElapsedTime since={ev.created_at} format="relative" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{
+                padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
+                textTransform: 'uppercase',
+              }}>
+                Recent Events
+              </div>
+              {events.slice(0, 15).map(ev => (
+                <div key={ev.id} style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                  color: 'var(--rq-ink-3)', padding: '4px 12px',
+                  borderBottom: '1px solid var(--rq-line)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--rq-ink-2)' }}>{ev.event_type.replace(/_/g, ' ')}</span>
+                    <ElapsedTime since={ev.created_at} format="relative" />
+                  </div>
+                  {ev.gate_id && <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>{ev.gate_id}</span>}
+                </div>
+              ))}
+              {events.length === 0 && (
+                <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No events yet</div>
+              )}
+            </>
+          )}
+        </div>
+
       </div>
 
-      {/* View content */}
-      {loading && events.length === 0 && (
-        <div className="rq-quiet" style={{ padding: '32px 16px' }}>Loading operational state...</div>
-      )}
-
-      {view === 'feed' && renderFeed()}
-      {view === 'unresolved' && renderUnresolved()}
-      {view === 'incidents' && renderIncidents()}
-      {view === 'patterns' && renderPatterns()}
-
-      {/* Dev controls */}
-      <div style={{ padding: '14px 16px', display: 'flex', gap: 8 }}>
-        <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
-          Refresh
-        </button>
-        <button className="rq-btn-secondary" onClick={() => { resetEvents(); refresh(); }}
-          style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
-          Reset (Dev)
-        </button>
-      </div>
-
-      {/* Realtime sync status (dev) */}
-      <div style={{
-        padding: '6px 16px', fontFamily: "'JetBrains Mono', monospace",
-        fontSize: 8, color: 'var(--rq-ink-4)', display: 'flex', gap: 12,
-      }}>
-        <span>events: {lastUpdated ? lastUpdated.toLocaleTimeString('en-US', { hour12: false }) : '—'}</span>
-        <span>incidents: {incidentLastSync ? incidentLastSync.toLocaleTimeString('en-US', { hour12: false }) : '—'}</span>
-        <span>active: {incidents.length}</span>
-      </div>
-
-      <div className="rq-quiet">RampIQ · Operational Memory</div>
-    </div>
+      <div className="rq-quiet" style={{ padding: '6px 16px' }}>RampIQ · Operational Memory</div>
+    </>
   );
 }
 
@@ -969,21 +823,3 @@ export default function ManagerDashboard() {
 // SeverityIndicator and OperationalStatus primitives from
 // @/components/rampiq which derive colors from operational-states.ts.
 
-function DItem({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
-  return (
-    <div style={{ padding: '2px 0' }}>
-      <span style={{
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-        color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase' as const,
-      }}>
-        {label}
-      </span>
-      <div style={{
-        fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-        color: 'var(--rq-ink-2)',
-      }}>
-        {children ?? value}
-      </div>
-    </div>
-  );
-}
