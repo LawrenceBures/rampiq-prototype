@@ -53,6 +53,7 @@ export default function ManagerDashboard() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   // ============================================================
   // INCIDENT LIFECYCLE STATE (realtime-synced)
@@ -211,8 +212,33 @@ export default function ManagerDashboard() {
     setFilters(f => ({ ...f, [key]: val }));
   }
 
-  const filteredEvents = filterEvents(events, filters);
-  const filteredOpen = filterEvents(events.filter(isOpen), filters);
+  // ============================================================
+  // ZONE-SCOPED DATA
+  // ============================================================
+
+  const selectedZone = selectedZoneId ? zones.find(z => z.id === selectedZoneId) ?? null : null;
+  const selectedZoneGates = selectedZone?.gate_ids ?? [];
+
+  // Zone-scoped events: events at gates belonging to the selected zone
+  const zoneScopedEvents = selectedZoneId
+    ? events.filter(e => e.gate_id && selectedZoneGates.includes(e.gate_id))
+    : events;
+
+  // Zone-scoped incidents: incidents in the selected zone
+  const zoneScopedIncidents = selectedZoneId
+    ? incidents.filter(i => i.zone_id === selectedZoneId || (i.gate_id && selectedZoneGates.includes(i.gate_id)))
+    : incidents;
+
+  // Zone-scoped derived state
+  const zoneDerivedState = selectedZoneId ? deriveDashboardState(zoneScopedEvents) : ds;
+  const zoneSummary = selectedZoneId ? zoneDerivedState.summary : summary;
+  const zoneAttentionEvents = selectedZoneId ? zoneDerivedState.attentionEvents : attentionEvents;
+  const zonePatterns = selectedZoneId ? zoneDerivedState.patterns : patterns;
+  const zoneFilterOptions = selectedZoneId ? zoneDerivedState.filterOptions : filterOptions;
+  const zoneResolutionLatency = zoneSummary.resolutionLatency;
+
+  const filteredEvents = filterEvents(zoneScopedEvents, filters);
+  const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
   const currentFilterCount = countActiveFilters(filters);
 
   // ============================================================
@@ -281,12 +307,12 @@ export default function ManagerDashboard() {
   // ============================================================
 
   function renderPatterns() {
-    if (events.length === 0) {
+    if (zoneScopedEvents.length === 0) {
       return <div className="rq-quiet" style={{ padding: '24px 16px' }}>No data yet</div>;
     }
 
-    const { byType, byGate, byEquipment, byShift } = patterns;
-    const { avg: avgRes, p50: p50Res, p90: p90Res } = resolutionLatency;
+    const { byType, byGate, byEquipment, byShift } = zonePatterns;
+    const { avg: avgRes, p50: p50Res, p90: p90Res } = zoneResolutionLatency;
 
     return (
       <>
@@ -521,15 +547,17 @@ export default function ManagerDashboard() {
           </div>
         )}
 
-        {/* Active incidents list */}
-        {incidentsLoading && incidents.length === 0 && (
+        {/* Active incidents list (zone-scoped) */}
+        {incidentsLoading && zoneScopedIncidents.length === 0 && (
           <div className="rq-quiet" style={{ padding: '24px 16px' }}>Loading incidents...</div>
         )}
-        {!incidentsLoading && incidents.length === 0 && (
-          <div className="rq-quiet" style={{ padding: '24px 16px' }}>No active incidents</div>
+        {!incidentsLoading && zoneScopedIncidents.length === 0 && (
+          <div className="rq-quiet" style={{ padding: '24px 16px' }}>
+            {selectedZoneId ? 'No active incidents in this zone' : 'No active incidents'}
+          </div>
         )}
 
-        {incidents.map(inc => (
+        {zoneScopedIncidents.map(inc => (
           <IncidentCard
             key={inc.id}
             incident={inc}
@@ -568,37 +596,37 @@ export default function ManagerDashboard() {
         </div>
 
         {/* Gate / Equipment / Shift row — only if there's data */}
-        {(filterOptions.gates.length > 0 || filterOptions.equipment.length > 0 || filterOptions.shifts.length > 0) && (
+        {(zoneFilterOptions.gates.length > 0 || zoneFilterOptions.equipment.length > 0 || zoneFilterOptions.shifts.length > 0) && (
           <div className="rq-filters">
-            {filterOptions.gates.length > 0 && (
+            {zoneFilterOptions.gates.length > 0 && (
               <>
-                {['ALL', ...filterOptions.gates].map(g => (
+                {['ALL', ...zoneFilterOptions.gates].map(g => (
                   <button key={`g-${g}`} className={`rq-chip${filters.gate === g ? ' active' : ''}`}
                     onClick={() => setFilter('gate', g)}>
                     {g === 'ALL' ? 'All Gates' : g}
                   </button>
                 ))}
-                {(filterOptions.equipment.length > 0 || filterOptions.shifts.length > 0) && (
+                {(zoneFilterOptions.equipment.length > 0 || zoneFilterOptions.shifts.length > 0) && (
                   <span style={{ width: 1, background: 'var(--rq-line)', margin: '0 2px' }} />
                 )}
               </>
             )}
-            {filterOptions.equipment.length > 0 && (
+            {zoneFilterOptions.equipment.length > 0 && (
               <>
-                {['ALL', ...filterOptions.equipment].map(eq => (
+                {['ALL', ...zoneFilterOptions.equipment].map(eq => (
                   <button key={`e-${eq}`} className={`rq-chip${filters.equipment === eq ? ' active' : ''}`}
                     onClick={() => setFilter('equipment', eq)}>
                     {eq === 'ALL' ? 'All Equip' : eq}
                   </button>
                 ))}
-                {filterOptions.shifts.length > 0 && (
+                {zoneFilterOptions.shifts.length > 0 && (
                   <span style={{ width: 1, background: 'var(--rq-line)', margin: '0 2px' }} />
                 )}
               </>
             )}
-            {filterOptions.shifts.length > 0 && (
+            {zoneFilterOptions.shifts.length > 0 && (
               <>
-                {['ALL', ...filterOptions.shifts].map(sh => (
+                {['ALL', ...zoneFilterOptions.shifts].map(sh => (
                   <button key={`s-${sh}`} className={`rq-chip${filters.shift === sh ? ' active' : ''}`}
                     onClick={() => setFilter('shift', sh)}>
                     {sh === 'ALL' ? 'All Shifts' : sh}
@@ -647,8 +675,8 @@ export default function ManagerDashboard() {
       ).slice(0, 30)
     : [];
 
-  // Triage-sorted incidents: severity (CRITICAL first), then oldest first
-  const triageIncidents = [...incidents].sort((a, b) => {
+  // Triage-sorted incidents: zone-scoped, severity (CRITICAL first), then oldest first
+  const triageIncidents = [...zoneScopedIncidents].sort((a, b) => {
     const sevRank: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
     const sa = sevRank[a.severity] ?? 9;
     const sb = sevRank[b.severity] ?? 9;
@@ -656,53 +684,59 @@ export default function ManagerDashboard() {
     return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
   });
 
-  // Filtered event memory: lifecycle transitions + high-severity, newest first
-  const eventMemory = events
-    .filter(e => e.entity_type === 'incident' || e.severity === 'CRITICAL' || e.severity === 'HIGH' || isOpen(e))
+  // Filtered event memory: zone-scoped lifecycle transitions + high-severity, newest first
+  const eventMemory = zoneScopedEvents
+    .filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action' || e.severity === 'CRITICAL' || e.severity === 'HIGH' || isOpen(e))
     .slice(0, 20);
 
   return (
     <>
       {/* Command bar — full width */}
       <CommandBar
-        station="LAX"
+        station={selectedZone ? `LAX · ${selectedZone.label}` : 'LAX'}
         role="Crew Chief"
         lastEventSync={lastUpdated}
         lastIncidentSync={incidentLastSync}
-        activeIncidentCount={incidents.length}
-        openEventCount={summary.openCount}
+        activeIncidentCount={zoneScopedIncidents.length}
+        openEventCount={zoneSummary.openCount}
       />
 
       {/* Three-panel grid */}
       <div className="rq-console-grid">
 
-        {/* ── LEFT RAIL: Zone overview ── */}
+        {/* ── LEFT RAIL: Zone overview (interactive territory selector) ── */}
         <div className="rq-console-rail-left">
-          <div style={{
-            padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
-            textTransform: 'uppercase',
-          }}>
-            Zones
+          <div className="rq-rail-header">
+            <span>Zones</span>
+            {selectedZoneId && (
+              <button type="button" onClick={() => setSelectedZoneId(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--rq-accent)',
+                  cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }}>
+                all
+              </button>
+            )}
           </div>
           {zones.length === 0 && (
             <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No zones loaded</div>
           )}
           {zones.map(z => {
-            // Derive zone pressure from open events at zone gates
-            const zoneOpenEvents = events.filter(e =>
-              e.gate_id && z.gate_ids.includes(e.gate_id) && isOpen(e)
-            ).length;
-            const zoneIncidents = incidents.filter(i => i.zone_id === z.id).length;
-            // Pressure: open events * 12 + incidents * 25, capped at 100
-            const pressure = Math.min(100, zoneOpenEvents * 12 + zoneIncidents * 25);
+            // Derive zone pressure: open events (weighted by severity) + incidents
+            const zoneEvents = events.filter(e => e.gate_id && z.gate_ids.includes(e.gate_id) && isOpen(e));
+            const sevWeight: Record<string, number> = { CRITICAL: 20, HIGH: 15, MEDIUM: 8, LOW: 4 };
+            const eventPressure = zoneEvents.reduce((sum, e) => sum + (sevWeight[e.severity] ?? 5), 0);
+            const zoneIncs = incidents.filter(i => i.zone_id === z.id);
+            const incPressure = zoneIncs.length * 25;
+            const pressure = Math.min(100, eventPressure + incPressure);
+            const isActive = selectedZoneId === z.id;
             return (
               <ZoneTile
                 key={z.id}
                 name={z.label}
                 gateCount={z.gate_ids.length}
                 pressure={pressure}
-                incidentCount={zoneIncidents}
+                incidentCount={zoneIncs.length}
+                isActive={isActive}
+                onClick={() => setSelectedZoneId(isActive ? null : z.id)}
               />
             );
           })}
@@ -712,10 +746,10 @@ export default function ManagerDashboard() {
         <div className="rq-console-center">
           <div className="rq-ops-board">
 
-            <KpiStrip summary={summary} />
+            <KpiStrip summary={zoneSummary} />
 
             {/* Compact attention strip — desktop: inline details, mobile: summary */}
-            {attentionEvents.length > 0 && (
+            {zoneAttentionEvents.length > 0 && (
               <div style={{
                 margin: '0 16px', padding: '5px 10px',
                 border: '1px solid var(--rq-red)', borderLeft: '3px solid var(--rq-red)',
@@ -726,22 +760,22 @@ export default function ManagerDashboard() {
                   fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
                   color: 'var(--rq-red)', letterSpacing: '.08em', textTransform: 'uppercase',
                 }}>
-                  {attentionEvents.length} attention
+                  {zoneAttentionEvents.length} attention
                 </span>
 
                 {/* Mobile: compact summary */}
                 <span className="rq-attention-summary" style={{
                   fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-2)',
                 }}>
-                  {attentionEvents.filter(e => e.severity === 'CRITICAL').length > 0
-                    ? `${attentionEvents.filter(e => e.severity === 'CRITICAL').length} critical · `
+                  {zoneAttentionEvents.filter(e => e.severity === 'CRITICAL').length > 0
+                    ? `${zoneAttentionEvents.filter(e => e.severity === 'CRITICAL').length} critical · `
                     : ''
                   }
-                  {attentionEvents.filter(e => e.severity === 'HIGH').length} high requiring action
+                  {zoneAttentionEvents.filter(e => e.severity === 'HIGH').length} high requiring action
                 </span>
 
                 {/* Desktop: inline event details with actions */}
-                {attentionEvents.map(e => (
+                {zoneAttentionEvents.map(e => (
                   <span key={e.id} className="rq-attention-detail" style={{
                     fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                     color: 'var(--rq-ink-2)',
@@ -773,9 +807,9 @@ export default function ManagerDashboard() {
               margin: '14px 0 0',
             }}>
               {([
-                { key: 'feed' as const, label: 'Live Feed', count: summary.total },
-                { key: 'unresolved' as const, label: 'Unresolved', count: summary.openCount },
-                { key: 'incidents' as const, label: 'Incidents', count: incidents.length },
+                { key: 'feed' as const, label: 'Live Feed', count: zoneSummary.total },
+                { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
+                { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
                 { key: 'patterns' as const, label: 'Patterns', count: null },
               ]).map(tab => (
                 <button
