@@ -27,6 +27,7 @@ import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
 import { reconstructIncidents, reconstructRecoveryActions } from '@/lib/replay-lifecycle';
 import { deriveWorkforceCoordination } from '@/lib/workforce-coordination';
+import { emitReplayAudit } from '@/lib/governance-audit';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
@@ -90,10 +91,8 @@ export default function ManagerDashboard() {
   const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function startReplay() {
-    // Compute bounds at start time — use events (available now) to find window
     const eventTs = events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0);
     const twoHoursAgo = Date.now() - 2 * 60 * 60_000;
-    // Find lifecycle events (they indicate when operational activity started)
     const lifecycleTs = events.filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action')
       .map(e => new Date(e.created_at).getTime());
     const startTime = lifecycleTs.length > 0
@@ -102,6 +101,22 @@ export default function ManagerDashboard() {
     setReplayMode(true);
     setReplayTimestamp(new Date(startTime));
     setReplayPlaying(false);
+
+    // Governance: log replay access for accountability-capable roles
+    if (operator.viewerRole === 'ops_director') {
+      emitReplayAudit({
+        viewerId: operator.userId, viewerRole: operator.role,
+        accessType: 'accountability_review',
+        replayTimestamp: new Date(startTime).toISOString(),
+      });
+    } else if (selectedZoneId && operator.viewerRole === 'manager') {
+      emitReplayAudit({
+        viewerId: operator.userId, viewerRole: operator.role,
+        accessType: 'cross_zone',
+        zoneScope: selectedZoneId,
+        replayTimestamp: new Date(startTime).toISOString(),
+      });
+    }
   }
 
   function exitReplay() {

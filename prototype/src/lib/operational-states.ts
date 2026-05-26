@@ -354,6 +354,11 @@ export const EVENT_TYPES = {
   ESCALATION_ACKNOWLEDGED:     'escalation.acknowledged',
   ESCALATION_DISMISSED:        'escalation.dismissed',
 
+  // Governance audit
+  REPLAY_INDIVIDUAL_ACCESSED:   'replay.individual_accessed',
+  REPLAY_CROSS_ZONE_ACCESSED:   'replay.cross_zone_accessed',
+  REPLAY_ACCOUNTABILITY_REVIEWED: 'replay.accountability_reviewed',
+
   // Position / scanning
   GATE_SCANNED:    'gate.scanned',
   POSITION_CHECKIN:'position.checkin',
