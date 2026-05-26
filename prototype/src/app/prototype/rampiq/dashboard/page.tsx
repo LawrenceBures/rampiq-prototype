@@ -31,6 +31,9 @@ import { emitReplayAudit } from '@/lib/governance-audit';
 import { deriveRecommendations, emitRecommendationOverride } from '@/lib/recommendation-engine';
 import type { Recommendation } from '@/lib/recommendation-engine';
 import { deriveOperationalOutcomes } from '@/lib/outcome-measurement';
+import { deriveInstitutionalMemory } from '@/lib/institutional-memory';
+import { deriveShiftContext, FIXTURE_OPERATORS } from '@/lib/auth-identity';
+import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
@@ -55,28 +58,13 @@ const EMPTY_FILTERS: EventFilters = {
 // MAIN COMPONENT
 // ============================================================
 
-// Operator identity for the current session
-type ViewerRole = 'coordinator' | 'manager' | 'ops_director';
-
-interface OperatorSession {
-  userId: string;
-  displayName: string;
-  role: string;
-  viewerRole: ViewerRole;
-  zoneId?: string;
-}
-
-const OPERATORS: OperatorSession[] = [
-  { userId: 'CC01', displayName: 'Martinez J.', role: 'CREW_CHIEF', viewerRole: 'coordinator', zoneId: 'GATES-52ABC' },
-  { userId: 'CC02', displayName: 'Reyes M.', role: 'CREW_CHIEF', viewerRole: 'coordinator', zoneId: 'GATES-52DEF' },
-  { userId: 'OPS01', displayName: 'Kim D.', role: 'OPS', viewerRole: 'manager' },
-  { userId: 'DIR01', displayName: 'Chen L.', role: 'OPS_DIRECTOR', viewerRole: 'ops_director' },
-];
+// Operator identity — uses auth-identity module
+const OPERATORS = FIXTURE_OPERATORS;
 
 export default function ManagerDashboard() {
   const { events, loading, lastUpdated, refresh } = useLiveEvents(3000);
   const [view, setView] = useState<View>('feed');
-  const [operator, setOperator] = useState<OperatorSession>(OPERATORS[0]);
+  const [operator, setOperator] = useState<AuthenticatedOperator>(OPERATORS[0]);
   const [filters, setFilters] = useState<EventFilters>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -379,6 +367,10 @@ export default function ManagerDashboard() {
 
   // ── Workforce Coordination ──
   const workforce = deriveWorkforceCoordination(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
+
+  // ── Institutional Memory + Shift Context ──
+  const institutionalMemory = deriveInstitutionalMemory(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
+  const shiftContext = deriveShiftContext(operator.userId, operator.shiftWindow, temporalIncidents, temporalEvents, asOf);
 
   // ── Operational Outcomes + Recommendations ──
   const outcomes = deriveOperationalOutcomes(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
@@ -849,6 +841,35 @@ export default function ManagerDashboard() {
         activeIncidentCount={zoneScopedIncidents.length}
         openEventCount={zoneSummary.openCount}
       />
+
+      {/* Shift context + institutional memory */}
+      {(shiftContext.inheritedIncidentCount > 0 || institutionalMemory.recurringConditions.length > 0) && (
+        <div style={{
+          padding: '2px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+          borderBottom: '1px solid var(--rq-line)',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          {shiftContext.inheritedIncidentCount > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
+              {shiftContext.inheritedIncidentCount} inherited from prior shift
+            </span>
+          )}
+          {institutionalMemory.recurringConditions.filter(c => c.significance === 'systemic').slice(0, 2).map((c, i) => (
+            <span key={i} style={{
+              fontSize: 8, padding: '1px 5px', borderRadius: 2,
+              color: 'var(--rq-amber)', background: 'rgba(232,161,58,.06)',
+              border: '1px solid rgba(232,161,58,.12)',
+            }}>
+              {c.condition}
+            </span>
+          ))}
+          {institutionalMemory.shiftHandoff && institutionalMemory.shiftHandoff.handoffNotes.length > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
+              handoff: {institutionalMemory.shiftHandoff.handoffNotes[0]}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Workforce coordination strip (role-aware) */}
       {(workforce.escalations.length > 0 || workforce.summary.needsSupportCount > 0 || workforce.ownershipGaps.length > 0) && (

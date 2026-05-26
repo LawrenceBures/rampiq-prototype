@@ -180,10 +180,57 @@ function buildSimilarityRecommendation(
     title: `Similar to ${similar.length} prior incidents`,
     explanation: `This incident matches ${similar.length} previously resolved incidents (${matchReasons.join(', ')}).${avgResolution ? ` Average resolution time: ${avgResolution} minutes.` : ''} Recovery patterns from prior incidents are listed below.`,
     evidenceIncidentIds: similar.map(s => s.incident.id),
-    confidenceNarrative: `Based on ${similar.length} resolved incidents with matching characteristics. ${resolvedSimilar.length} had measured outcomes.`,
+    confidenceNarrative: buildConfidenceNarrative(similar, resolvedSimilar, avgResolution),
     suggestedActions: topActions.length > 0 ? topActions : ['No completed recovery patterns found in similar incidents'],
     generatedAt: new Date().toISOString(),
   };
+}
+
+function buildConfidenceNarrative(
+  similar: { incident: Incident; factors: SimilarityFactors }[],
+  resolvedSimilar: { incident: Incident; factors: SimilarityFactors }[],
+  avgResolution: number | null,
+): string {
+  const parts: string[] = [];
+  parts.push(`Based on ${similar.length} resolved incidents with matching characteristics.`);
+
+  if (resolvedSimilar.length > 0) {
+    parts.push(`${resolvedSimilar.length} had measured outcomes.`);
+
+    if (avgResolution !== null) {
+      // Outcome variability
+      const times = resolvedSimilar.map(s => s.factors.outcome?.totalResolutionTime).filter((t): t is number => t != null);
+      if (times.length >= 2) {
+        const min = Math.min(...times);
+        const max = Math.max(...times);
+        if (max - min <= 10) {
+          parts.push(`Resolution time consistent: ${min}–${max}m.`);
+        } else {
+          parts.push(`Resolution time varied: ${min}–${max}m (avg ${avgResolution}m). Conditions may differ.`);
+        }
+      }
+
+      // Escalation correlation
+      const escalated = resolvedSimilar.filter(s => s.factors.outcome?.escalated);
+      const nonEscalated = resolvedSimilar.filter(s => !s.factors.outcome?.escalated);
+      if (escalated.length > 0 && nonEscalated.length > 0) {
+        const escAvg = escalated.reduce((s, e) => s + (e.factors.outcome?.totalResolutionTime ?? 0), 0) / escalated.length;
+        const nonEscAvg = nonEscalated.reduce((s, e) => s + (e.factors.outcome?.totalResolutionTime ?? 0), 0) / nonEscalated.length;
+        if (escAvg < nonEscAvg * 0.8) {
+          parts.push(`Early escalation correlated with faster stabilization in prior incidents.`);
+        }
+      }
+    }
+  } else {
+    parts.push('No measured outcomes available — pattern based on incident similarity only.');
+  }
+
+  // Confidence limitation
+  if (similar.length < 5) {
+    parts.push(`Small sample size — confidence limited.`);
+  }
+
+  return parts.join(' ');
 }
 
 function deriveZonePressureRecommendation(

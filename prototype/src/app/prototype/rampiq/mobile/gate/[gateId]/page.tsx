@@ -90,6 +90,22 @@ export default function GateReadinessPage() {
       }
       setGateRecoveryActions(allActions);
     })();
+
+    // Mobile realtime: lightweight 10s poll for operational updates
+    const pollInterval = setInterval(async () => {
+      const { fetchActiveIncidents, fetchRecoveryActions: fetchRA2 } = await import('@/lib/lifecycle-commands');
+      const refreshedIncidents = await fetchActiveIncidents('LAX');
+      const refreshedGateIncs = refreshedIncidents.filter(i => i.gate_id === gateId);
+      setGateIncidents(refreshedGateIncs);
+      const refreshedActions: RecoveryAction[] = [];
+      for (const inc of refreshedGateIncs) {
+        const actions = await fetchRA2(inc.id);
+        refreshedActions.push(...actions.filter(a => !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(a.status)));
+      }
+      setGateRecoveryActions(refreshedActions);
+    }, 10_000);
+
+    return () => clearInterval(pollInterval);
   }, [targetQr, gateId]);
 
   function toggleItem(key: string) {
