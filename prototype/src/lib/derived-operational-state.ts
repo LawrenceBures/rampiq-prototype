@@ -491,6 +491,9 @@ export interface DashboardState {
 
   /** Attention events (CRITICAL + HIGH, sorted by severity). */
   attentionEvents: RampiqEvent[];
+
+  /** Operational insights — pattern detection signals. */
+  insights: OperationalInsight[];
 }
 
 /**
@@ -530,5 +533,128 @@ export function deriveDashboardState(
     unresolvedByAging,
     patterns: { byType, byGate, byEquipment, byShift },
     attentionEvents,
+    insights: deriveInsights(events, openEvents, summary, asOf),
   };
+}
+
+// ============================================================
+// OPERATIONAL INTELLIGENCE — Phase 5 Option C
+// ============================================================
+// Pure pattern detection on existing event data.
+// No AI, no ML — deterministic signal extraction.
+
+export interface OperationalInsight {
+  type: 'recurring_gate' | 'equipment_risk' | 'zone_clustering' | 'resolution_slow' | 'severity_escalation';
+  severity: 'info' | 'watch' | 'alert';
+  title: string;
+  detail: string;
+  gate?: string;
+  equipment?: string;
+}
+
+function deriveInsights(
+  events: readonly RampiqEvent[],
+  openEvents: readonly RampiqEvent[],
+  summary: EventSummary,
+  asOf?: Date,
+): OperationalInsight[] {
+  const insights: OperationalInsight[] = [];
+  const now = asOf ?? new Date();
+
+  // ── Recurring gate issues ──
+  // Gates with 3+ open events suggest systemic problems
+  const gateOpenCounts = new Map<string, number>();
+  for (const e of openEvents) {
+    if (e.gate_id) gateOpenCounts.set(e.gate_id, (gateOpenCounts.get(e.gate_id) ?? 0) + 1);
+  }
+  for (const [gate, count] of gateOpenCounts) {
+    if (count >= 3) {
+      insights.push({
+        type: 'recurring_gate',
+        severity: count >= 5 ? 'alert' : 'watch',
+        title: `Gate ${gate}: ${count} open events`,
+        detail: `Recurring issues at this gate may indicate systemic equipment or staffing problem.`,
+        gate,
+      });
+    }
+  }
+
+  // ── Equipment appearing in multiple events ──
+  const equipCounts = new Map<string, number>();
+  for (const e of events) {
+    if (e.equipment_id) equipCounts.set(e.equipment_id, (equipCounts.get(e.equipment_id) ?? 0) + 1);
+  }
+  for (const [equip, count] of equipCounts) {
+    if (count >= 2) {
+      const openForEquip = openEvents.filter(e => e.equipment_id === equip).length;
+      if (openForEquip > 0) {
+        insights.push({
+          type: 'equipment_risk',
+          severity: openForEquip >= 2 ? 'alert' : 'watch',
+          title: `${equip}: ${count} events (${openForEquip} open)`,
+          detail: `Equipment involved in multiple operational events. Consider maintenance review.`,
+          equipment: equip,
+        });
+      }
+    }
+  }
+
+  // ── Zone clustering ──
+  // Multiple high-severity open events in nearby gates
+  const highOpenByGate = new Map<string, RampiqEvent[]>();
+  for (const e of openEvents) {
+    if (e.gate_id && (e.severity === 'CRITICAL' || e.severity === 'HIGH')) {
+      const existing = highOpenByGate.get(e.gate_id) ?? [];
+      existing.push(e);
+      highOpenByGate.set(e.gate_id, existing);
+    }
+  }
+  const critHighGates = [...highOpenByGate.keys()];
+  if (critHighGates.length >= 2) {
+    insights.push({
+      type: 'zone_clustering',
+      severity: critHighGates.length >= 3 ? 'alert' : 'watch',
+      title: `${critHighGates.length} gates with HIGH+ events`,
+      detail: `Critical/high events at gates ${critHighGates.join(', ')}. Zone may need additional resources.`,
+    });
+  }
+
+  // ── Slow resolution detection ──
+  // Any open event older than 30 minutes
+  const staleThreshold = 30 * 60_000;
+  const staleEvents = openEvents.filter(e => {
+    const age = now.getTime() - new Date(replayTimestamp(e)).getTime();
+    return age > staleThreshold;
+  });
+  if (staleEvents.length > 0) {
+    const oldest = staleEvents.reduce((a, b) =>
+      new Date(replayTimestamp(a)).getTime() < new Date(replayTimestamp(b)).getTime() ? a : b
+    );
+    const ageMin = Math.round((now.getTime() - new Date(replayTimestamp(oldest)).getTime()) / 60_000);
+    insights.push({
+      type: 'resolution_slow',
+      severity: ageMin >= 60 ? 'alert' : 'watch',
+      title: `${staleEvents.length} event${staleEvents.length > 1 ? 's' : ''} open > 30 min`,
+      detail: `Oldest unresolved event is ${ageMin}m old. Consider escalation or additional resources.`,
+    });
+  }
+
+  // ── Severity escalation pattern ──
+  // More than half of open events are CRITICAL or HIGH
+  if (openEvents.length >= 3) {
+    const critHigh = openEvents.filter(e => e.severity === 'CRITICAL' || e.severity === 'HIGH').length;
+    const ratio = critHigh / openEvents.length;
+    if (ratio >= 0.6) {
+      insights.push({
+        type: 'severity_escalation',
+        severity: ratio >= 0.8 ? 'alert' : 'watch',
+        title: `${Math.round(ratio * 100)}% of open events are HIGH+`,
+        detail: `${critHigh} of ${openEvents.length} open events are critical or high severity. Elevated operational pressure.`,
+      });
+    }
+  }
+
+  // Sort: alerts first, then watch, then info
+  const sevOrder = { alert: 0, watch: 1, info: 2 };
+  return insights.sort((a, b) => sevOrder[a.severity] - sevOrder[b.severity]);
 }

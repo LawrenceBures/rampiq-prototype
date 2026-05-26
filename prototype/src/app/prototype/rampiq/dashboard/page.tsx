@@ -198,7 +198,7 @@ export default function ManagerDashboard() {
   // ============================================================
 
   const ds = deriveDashboardState(events);
-  const { summary, filterOptions, patterns, attentionEvents } = ds;
+  const { summary, filterOptions, patterns, attentionEvents, insights } = ds;
   const { resolutionLatency } = summary;
 
   // ============================================================
@@ -233,6 +233,7 @@ export default function ManagerDashboard() {
   const zonePatterns = selectedZoneId ? zoneDerivedState.patterns : patterns;
   const zoneFilterOptions = selectedZoneId ? zoneDerivedState.filterOptions : filterOptions;
   const zoneResolutionLatency = zoneSummary.resolutionLatency;
+  const zoneInsights = selectedZoneId ? zoneDerivedState.insights : insights;
 
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
@@ -744,6 +745,26 @@ export default function ManagerDashboard() {
           <div className="rq-ops-board">
 
             <KpiStrip summary={zoneSummary} />
+
+            {/* Operational insights */}
+            {zoneInsights.length > 0 && (
+              <div style={{ margin: '0 16px 4px', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {zoneInsights.slice(0, 4).map((ins, i) => {
+                  const color = ins.severity === 'alert' ? 'var(--rq-red)' : ins.severity === 'watch' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                  return (
+                    <div key={i} title={ins.detail} style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                      padding: '2px 8px', borderRadius: 2,
+                      color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
+                      cursor: 'default',
+                    }}>
+                      {ins.title}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Compact attention strip — desktop: inline details, mobile: summary */}
             {zoneAttentionEvents.length > 0 && (
