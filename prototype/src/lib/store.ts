@@ -482,6 +482,91 @@ export function useLiveEvents(intervalMs = 3000): {
   return { events, loading, lastUpdated, refresh };
 }
 
+// ============================================================
+// REALTIME INCIDENTS — Phase 2 Step 3
+// ============================================================
+// Subscribes to rampiq_events for entity_type='incident' changes.
+// On any incident lifecycle event, refetches the canonical incident
+// list from rampiq_incidents (lifecycle table = current truth).
+//
+// Why rampiq_events not rampiq_incidents?
+//   rampiq_incidents is not in supabase_realtime publication.
+//   Every lifecycle command already appends to rampiq_events with
+//   entity_type='incident', so we piggyback on the existing channel.
+
+import { fetchActiveIncidents } from './lifecycle-commands';
+import type { Incident } from './lifecycle-types';
+
+export function useRealtimeIncidents(station = 'LAX'): {
+  incidents: Incident[];
+  loading: boolean;
+  lastSync: Date | null;
+  refresh: () => void;
+} {
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = useCallback(() => {
+    fetchActiveIncidents(station).then(data => {
+      if (mountedRef.current) {
+        setIncidents(data);
+        setLoading(false);
+        setLastSync(new Date());
+      }
+    }).catch(() => {});
+  }, [station]);
+
+  // Debounced refetch — collapses bursts (create emits 2 writes: incident + event)
+  const debouncedRefresh = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      refresh();
+    }, 300);
+  }, [refresh]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    // Initial fetch
+    refresh();
+
+    // Supabase Realtime — listen for incident lifecycle events
+    const sb = getSupabase();
+    type Channel = ReturnType<NonNullable<typeof sb>['channel']>;
+    let channel: Channel | null = null;
+
+    if (sb) {
+      channel = sb
+        .channel('rampiq_incidents_sync')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'rampiq_events' },
+          (payload) => {
+            const row = payload.new as Record<string, unknown> | undefined;
+            if (row?.entity_type === 'incident') {
+              console.log('[realtime] incident event received:', row.event_type, row.entity_id);
+              debouncedRefresh();
+            }
+          })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[realtime] incidents channel subscribed');
+          }
+        });
+    }
+
+    return () => {
+      mountedRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (channel) channel.unsubscribe();
+    };
+  }, [station, refresh, debouncedRefresh]);
+
+  return { incidents, loading, lastSync, refresh };
+}
+
 export function useEventTypes(): EventType[] {
   const [types, setTypes] = useState<EventType[]>([]);
   useEffect(() => { fetchEventTypes().then(setTypes); }, []);

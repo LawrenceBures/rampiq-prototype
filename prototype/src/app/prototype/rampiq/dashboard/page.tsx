@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useLiveEvents, updateEventStatus, resetEvents, fetchZones } from '@/lib/store';
+import { useState, useRef, useEffect } from 'react';
+import { useLiveEvents, useRealtimeIncidents, updateEventStatus, resetEvents, fetchZones } from '@/lib/store';
 import { formatTime, durationLabel, STATUS_LABELS } from '@/lib/rampiq-types';
 import type { RampiqEvent, Severity, OperationalStatus } from '@/lib/rampiq-types';
 import type { Zone } from '@/lib/rampiq-types';
@@ -20,7 +20,6 @@ import type { EventFilters } from '@/lib/derived-operational-state';
 import {
   createIncident,
   transitionIncident,
-  fetchActiveIncidents,
 } from '@/lib/lifecycle-commands';
 import type { Incident } from '@/lib/lifecycle-types';
 import {
@@ -62,11 +61,10 @@ export default function ManagerDashboard() {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
   // ============================================================
-  // INCIDENT LIFECYCLE STATE
+  // INCIDENT LIFECYCLE STATE (realtime-synced)
   // ============================================================
 
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [incidentsLoading, setIncidentsLoading] = useState(true);
+  const { incidents, loading: incidentsLoading, lastSync: incidentLastSync, refresh: refreshIncidents } = useRealtimeIncidents('LAX');
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [incidentTransitioning, setIncidentTransitioning] = useState<string | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
@@ -79,21 +77,9 @@ export default function ManagerDashboard() {
   const [incDesc, setIncDesc] = useState('');
   const [incSubmitting, setIncSubmitting] = useState(false);
 
-  const loadIncidents = useCallback(async () => {
-    const data = await fetchActiveIncidents('LAX');
-    setIncidents(data);
-    setIncidentsLoading(false);
-  }, []);
-
   useEffect(() => {
-    loadIncidents();
     fetchZones('LAX').then(setZones);
-  }, [loadIncidents]);
-
-  // Reload incidents when events change (a lifecycle command may have emitted an event)
-  useEffect(() => {
-    loadIncidents();
-  }, [events.length, loadIncidents]);
+  }, []);
 
   async function handleCreateIncident() {
     if (!incTitle.trim()) return;
@@ -115,7 +101,8 @@ export default function ManagerDashboard() {
     setIncDesc('');
     setShowIncidentForm(false);
     setIncSubmitting(false);
-    await loadIncidents();
+    // Eager refresh for the actor; other sessions get it via realtime
+    refreshIncidents();
     refresh();
   }
 
@@ -127,7 +114,8 @@ export default function ManagerDashboard() {
       actor_id: 'CC01',
       actor_role: 'CREW_CHIEF',
     });
-    await loadIncidents();
+    // Eager refresh for the actor; other sessions get it via realtime
+    refreshIncidents();
     refresh();
     setIncidentTransitioning(null);
   }
@@ -956,6 +944,16 @@ export default function ManagerDashboard() {
           style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
           Reset (Dev)
         </button>
+      </div>
+
+      {/* Realtime sync status (dev) */}
+      <div style={{
+        padding: '6px 16px', fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 8, color: 'var(--rq-ink-4)', display: 'flex', gap: 12,
+      }}>
+        <span>events: {lastUpdated ? lastUpdated.toLocaleTimeString('en-US', { hour12: false }) : '—'}</span>
+        <span>incidents: {incidentLastSync ? incidentLastSync.toLocaleTimeString('en-US', { hour12: false }) : '—'}</span>
+        <span>active: {incidents.length}</span>
       </div>
 
       <div className="rq-quiet">RampIQ · Operational Memory</div>
