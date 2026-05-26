@@ -24,6 +24,7 @@ import {
 import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
+import { reconstructIncidents, reconstructRecoveryActions } from '@/lib/replay-lifecycle';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
 
@@ -264,10 +265,13 @@ export default function ManagerDashboard() {
   }, [events]);
 
   // ============================================================
-  // TEMPORAL FILTER (replay mode)
+  // TEMPORAL FILTER + LIFECYCLE RECONSTRUCTION (replay mode)
   // ============================================================
-  // When replay is active, filter ALL data to events before replay timestamp.
-  // The same derivation pipeline powers both live and replay modes.
+  // When replay is active:
+  //   1. Filter events to those before replay timestamp
+  //   2. Reconstruct historical incident/recovery states from lifecycle events
+  //   3. Pass reconstructed data through the same derivation pipeline
+  // Live mode passes data through unchanged.
 
   const asOf = replayMode && replayTimestamp ? replayTimestamp : undefined;
   const replayCutoff = replayTimestamp?.getTime() ?? Infinity;
@@ -276,12 +280,12 @@ export default function ManagerDashboard() {
     ? events.filter(e => new Date(e.created_at).getTime() <= replayCutoff)
     : events;
 
-  const temporalIncidents = replayMode
-    ? incidents.filter(i => new Date(i.created_at).getTime() <= replayCutoff)
+  const temporalIncidents = replayMode && replayTimestamp
+    ? reconstructIncidents(incidents, events, replayTimestamp)
     : incidents;
 
-  const temporalRecoveryActions = replayMode
-    ? recoveryActions.filter(a => new Date(a.created_at).getTime() <= replayCutoff)
+  const temporalRecoveryActions = replayMode && replayTimestamp
+    ? reconstructRecoveryActions(recoveryActions, events, replayTimestamp)
     : recoveryActions;
 
   // ============================================================
