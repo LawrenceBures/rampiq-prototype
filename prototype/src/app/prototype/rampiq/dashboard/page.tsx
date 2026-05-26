@@ -58,6 +58,73 @@ export default function ManagerDashboard() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   // ============================================================
+  // REPLAY MODE
+  // ============================================================
+
+  const [replayMode, setReplayMode] = useState(false);
+  const [replayTimestamp, setReplayTimestamp] = useState<Date | null>(null);
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Compute replay time bounds from actual event data
+  const eventTimes = events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0);
+  const replayEarliest = eventTimes.length > 0 ? new Date(Math.min(...eventTimes)) : null;
+  const replayLatest = new Date();
+
+  function startReplay() {
+    if (!replayEarliest) return;
+    setReplayMode(true);
+    setReplayTimestamp(replayEarliest);
+    setReplayPlaying(false);
+  }
+
+  function exitReplay() {
+    setReplayMode(false);
+    setReplayTimestamp(null);
+    setReplayPlaying(false);
+    if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
+    replayIntervalRef.current = null;
+  }
+
+  function stepReplay(minutes: number) {
+    setReplayTimestamp(prev => {
+      if (!prev) return prev;
+      const next = new Date(prev.getTime() + minutes * 60_000);
+      if (next.getTime() >= Date.now()) { exitReplay(); return null; }
+      return next;
+    });
+  }
+
+  function togglePlayback() {
+    if (replayPlaying) {
+      if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
+      replayIntervalRef.current = null;
+      setReplayPlaying(false);
+    } else {
+      setReplayPlaying(true);
+      replayIntervalRef.current = setInterval(() => {
+        setReplayTimestamp(prev => {
+          if (!prev) return prev;
+          const next = new Date(prev.getTime() + 5 * 60_000); // 5 min per tick
+          if (next.getTime() >= Date.now()) {
+            if (replayIntervalRef.current) clearInterval(replayIntervalRef.current);
+            replayIntervalRef.current = null;
+            setReplayPlaying(false);
+            setReplayMode(false);
+            return null;
+          }
+          return next;
+        });
+      }, 1500); // tick every 1.5 seconds
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { if (replayIntervalRef.current) clearInterval(replayIntervalRef.current); };
+  }, []);
+
+  // ============================================================
   // INCIDENT LIFECYCLE STATE (realtime-synced)
   // ============================================================
 
@@ -197,10 +264,31 @@ export default function ManagerDashboard() {
   }, [events]);
 
   // ============================================================
+  // TEMPORAL FILTER (replay mode)
+  // ============================================================
+  // When replay is active, filter ALL data to events before replay timestamp.
+  // The same derivation pipeline powers both live and replay modes.
+
+  const asOf = replayMode && replayTimestamp ? replayTimestamp : undefined;
+  const replayCutoff = replayTimestamp?.getTime() ?? Infinity;
+
+  const temporalEvents = replayMode
+    ? events.filter(e => new Date(e.created_at).getTime() <= replayCutoff)
+    : events;
+
+  const temporalIncidents = replayMode
+    ? incidents.filter(i => new Date(i.created_at).getTime() <= replayCutoff)
+    : incidents;
+
+  const temporalRecoveryActions = replayMode
+    ? recoveryActions.filter(a => new Date(a.created_at).getTime() <= replayCutoff)
+    : recoveryActions;
+
+  // ============================================================
   // DERIVED STATE (from derived-operational-state.ts)
   // ============================================================
 
-  const ds = deriveDashboardState(events);
+  const ds = deriveDashboardState(temporalEvents, asOf);
   const { summary, filterOptions, patterns, attentionEvents, insights } = ds;
   const { resolutionLatency } = summary;
 
@@ -219,18 +307,15 @@ export default function ManagerDashboard() {
   const selectedZone = selectedZoneId ? zones.find(z => z.id === selectedZoneId) ?? null : null;
   const selectedZoneGates = selectedZone?.gate_ids ?? [];
 
-  // Zone-scoped events: events at gates belonging to the selected zone
   const zoneScopedEvents = selectedZoneId
-    ? events.filter(e => e.gate_id && selectedZoneGates.includes(e.gate_id))
-    : events;
+    ? temporalEvents.filter(e => e.gate_id && selectedZoneGates.includes(e.gate_id))
+    : temporalEvents;
 
-  // Zone-scoped incidents: incidents in the selected zone
   const zoneScopedIncidents = selectedZoneId
-    ? incidents.filter(i => i.zone_id === selectedZoneId || (i.gate_id && selectedZoneGates.includes(i.gate_id)))
-    : incidents;
+    ? temporalIncidents.filter(i => i.zone_id === selectedZoneId || (i.gate_id && selectedZoneGates.includes(i.gate_id)))
+    : temporalIncidents;
 
-  // Zone-scoped derived state
-  const zoneDerivedState = selectedZoneId ? deriveDashboardState(zoneScopedEvents) : ds;
+  const zoneDerivedState = selectedZoneId ? deriveDashboardState(zoneScopedEvents, asOf) : ds;
   const zoneSummary = selectedZoneId ? zoneDerivedState.summary : summary;
   const zoneAttentionEvents = selectedZoneId ? zoneDerivedState.attentionEvents : attentionEvents;
   const zonePatterns = selectedZoneId ? zoneDerivedState.patterns : patterns;
@@ -238,7 +323,7 @@ export default function ManagerDashboard() {
   const zoneResolutionLatency = zoneSummary.resolutionLatency;
 
   // ── Pattern Engine ──
-  const patternOutput = analyzeOperationalPatterns(zoneScopedEvents, zoneScopedIncidents, recoveryActions);
+  const patternOutput = analyzeOperationalPatterns(zoneScopedEvents, zoneScopedIncidents, temporalRecoveryActions, asOf);
   const patternInsights = patternOutput.insights;
   const { trends } = patternOutput;
 
@@ -706,6 +791,49 @@ export default function ManagerDashboard() {
         openEventCount={zoneSummary.openCount}
       />
 
+      {/* Replay controls */}
+      {replayMode && replayTimestamp && (
+        <div style={{
+          padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(90,169,255,.06)', borderBottom: '1px solid rgba(90,169,255,.2)',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          <span style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+            replay
+          </span>
+          <button type="button" onClick={() => stepReplay(-15)}
+            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
+            &laquo; 15m
+          </button>
+          <button type="button" onClick={() => stepReplay(-5)}
+            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
+            &lsaquo; 5m
+          </button>
+          <button type="button" onClick={togglePlayback}
+            style={{ background: replayPlaying ? 'rgba(90,169,255,.15)' : 'none', border: '1px solid var(--rq-blue)', color: 'var(--rq-blue)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
+            {replayPlaying ? '⏸ pause' : '▶ play'}
+          </button>
+          <button type="button" onClick={() => stepReplay(5)}
+            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
+            5m &rsaquo;
+          </button>
+          <button type="button" onClick={() => stepReplay(15)}
+            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
+            15m &raquo;
+          </button>
+          <span style={{ fontSize: 11, color: 'var(--rq-blue)', fontWeight: 600, marginLeft: 4 }}>
+            {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+          </span>
+          <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>
+            {temporalEvents.length} events · {temporalIncidents.length} incidents
+          </span>
+          <button type="button" onClick={exitReplay}
+            style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
+            exit replay
+          </button>
+        </div>
+      )}
+
       {/* Three-panel grid */}
       <div className="rq-console-grid">
 
@@ -965,6 +1093,12 @@ export default function ManagerDashboard() {
               <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
                 Refresh
               </button>
+              {!replayMode && (
+                <button className="rq-btn-secondary" onClick={startReplay}
+                  style={{ flex: 1, color: 'var(--rq-blue)', borderColor: 'rgba(90,169,255,.3)' }}>
+                  Replay
+                </button>
+              )}
               <button className="rq-btn-secondary" onClick={async () => {
                 await seedDemoScenario();
                 refreshIncidents();
