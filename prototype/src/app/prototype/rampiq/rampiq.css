@@ -1657,6 +1657,28 @@
   }
 }
 
+/* ---- Rail section headers ---- */
+.rq-rail-header {
+  padding: 6px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--rq-ink-4);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ---- Mobile attention strip ---- */
+.rq-attention-detail { display: inline-flex; align-items: center; gap: 4px; }
+.rq-attention-summary { display: none; }
+
+@media (max-width: 767px) {
+  .rq-attention-detail { display: none !important; }
+  .rq-attention-summary { display: inline !important; }
+}
+
 /* ---- Console footer ---- */
 .rq-console-footer {
   border-top: 1px solid var(--rq-line);

@@ -592,6 +592,20 @@ export default function ManagerDashboard() {
     ? events.filter(e => e.entity_id === selectedIncidentId).slice(0, 20)
     : [];
 
+  // Triage-sorted incidents: severity (CRITICAL first), then oldest first
+  const triageIncidents = [...incidents].sort((a, b) => {
+    const sevRank: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+    const sa = sevRank[a.severity] ?? 9;
+    const sb = sevRank[b.severity] ?? 9;
+    if (sa !== sb) return sa - sb;
+    return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
+  });
+
+  // Filtered event memory: lifecycle transitions + high-severity, newest first
+  const eventMemory = events
+    .filter(e => e.entity_type === 'incident' || e.severity === 'CRITICAL' || e.severity === 'HIGH' || isOpen(e))
+    .slice(0, 20);
+
   return (
     <>
       {/* Command bar — full width */}
@@ -645,7 +659,7 @@ export default function ManagerDashboard() {
 
             <KpiStrip summary={summary} />
 
-            {/* Compact attention strip — collapsed urgency alerts */}
+            {/* Compact attention strip — desktop: inline details, mobile: summary */}
             {attentionEvents.length > 0 && (
               <div style={{
                 margin: '0 16px', padding: '5px 10px',
@@ -659,10 +673,23 @@ export default function ManagerDashboard() {
                 }}>
                   {attentionEvents.length} attention
                 </span>
+
+                {/* Mobile: compact summary */}
+                <span className="rq-attention-summary" style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-2)',
+                }}>
+                  {attentionEvents.filter(e => e.severity === 'CRITICAL').length > 0
+                    ? `${attentionEvents.filter(e => e.severity === 'CRITICAL').length} critical · `
+                    : ''
+                  }
+                  {attentionEvents.filter(e => e.severity === 'HIGH').length} high requiring action
+                </span>
+
+                {/* Desktop: inline event details with actions */}
                 {attentionEvents.map(e => (
-                  <span key={e.id} style={{
+                  <span key={e.id} className="rq-attention-detail" style={{
                     fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    color: 'var(--rq-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 4,
+                    color: 'var(--rq-ink-2)',
                   }}>
                     <SeverityIndicator severity={e.severity as Severity} variant="dot" />
                     <span>{e.event_type.replace(/_/g, ' ')}</span>
@@ -747,25 +774,17 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        {/* ── RIGHT RAIL: Incident detail + event memory ── */}
+        {/* ── RIGHT RAIL: Incident triage / detail / event memory ── */}
         <div className="rq-console-rail-right">
           {selectedIncident ? (
+            /* ── Selected incident detail ── */
             <>
-              <div style={{
-                padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
-                textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between',
-              }}>
+              <div className="rq-rail-header">
                 <span>Incident Detail</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIncidentId(null)}
-                  style={{
-                    background: 'none', border: 'none', color: 'var(--rq-ink-3)',
-                    cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                  }}
-                >
-                  close
+                <button type="button" onClick={() => setSelectedIncidentId(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--rq-ink-3)',
+                    cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }}>
+                  back
                 </button>
               </div>
               <div style={{ padding: '0 8px' }}>
@@ -776,55 +795,124 @@ export default function ManagerDashboard() {
                   isSelected
                 />
               </div>
-              {/* Related lifecycle events */}
+
+              {/* Lifecycle event timeline */}
               {incidentEvents.length > 0 && (
-                <div style={{ padding: '8px 12px' }}>
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                    color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase',
-                    marginBottom: 6,
-                  }}>
-                    Event Timeline
-                  </div>
+                <div style={{ padding: '6px 12px' }}>
+                  <div className="rq-rail-header" style={{ padding: '4px 0' }}>Event Timeline</div>
                   {incidentEvents.map(ev => (
                     <div key={ev.id} style={{
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                       color: 'var(--rq-ink-3)', padding: '3px 0',
                       borderBottom: '1px solid var(--rq-line)',
-                      display: 'flex', justifyContent: 'space-between',
+                      display: 'flex', justifyContent: 'space-between', gap: 8,
                     }}>
-                      <span>{ev.event_type.replace(/_/g, ' ')}</span>
+                      <span style={{ color: ev.state_after ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
+                        {ev.event_type.replace(/_/g, ' ')}
+                      </span>
                       <ElapsedTime since={ev.created_at} format="relative" />
                     </div>
                   ))}
                 </div>
               )}
-            </>
-          ) : (
-            <>
+
+              {/* Compact metadata */}
               <div style={{
                 padding: '6px 12px', fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 9, color: 'var(--rq-ink-4)', letterSpacing: '.1em',
-                textTransform: 'uppercase',
+                fontSize: 8, color: 'var(--rq-ink-4)', display: 'flex', gap: 8, flexWrap: 'wrap',
               }}>
-                Recent Events
+                <span>id: {selectedIncident.id.slice(0, 8)}</span>
+                <span>corr: {selectedIncident.correlation_id.slice(0, 8)}</span>
+                <span>by: {selectedIncident.created_by}</span>
               </div>
-              {events.slice(0, 15).map(ev => (
+            </>
+
+          ) : triageIncidents.length > 0 ? (
+            /* ── Active incidents triage list (default when incidents exist) ── */
+            <>
+              <div className="rq-rail-header">
+                <span>Active Incidents</span>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)' }}>
+                  {triageIncidents.length}
+                </span>
+              </div>
+              {triageIncidents.map(inc => {
+                const sevColor = inc.severity === 'CRITICAL' || inc.severity === 'HIGH'
+                  ? 'var(--rq-red)' : inc.severity === 'MEDIUM' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                return (
+                  <div
+                    key={inc.id}
+                    onClick={() => setSelectedIncidentId(inc.id)}
+                    style={{
+                      padding: '6px 12px', cursor: 'pointer',
+                      borderBottom: '1px solid var(--rq-line)',
+                      borderLeft: `2px solid ${sevColor}`,
+                      transition: 'background .1s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--rq-bg-2)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+                      color: 'var(--rq-ink)', display: 'flex', justifyContent: 'space-between',
+                    }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                        {inc.title}
+                      </span>
+                      <ElapsedTime since={inc.opened_at} format="relative" />
+                    </div>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                      color: 'var(--rq-ink-4)', marginTop: 2, display: 'flex', gap: 6,
+                    }}>
+                      <span style={{ color: sevColor, fontWeight: 600 }}>{inc.severity}</span>
+                      <span>{inc.status}</span>
+                      {inc.zone_id && <span>{inc.zone_id}</span>}
+                      {inc.gate_id && <span>{inc.gate_id}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Event memory below triage list */}
+              <div className="rq-rail-header" style={{ marginTop: 4 }}>Event Memory</div>
+              {eventMemory.slice(0, 8).map(ev => (
+                <div key={ev.id} style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                  color: 'var(--rq-ink-4)', padding: '3px 12px',
+                  borderBottom: '1px solid var(--rq-line)',
+                  display: 'flex', justifyContent: 'space-between',
+                }}>
+                  <span style={{ color: ev.entity_type === 'incident' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
+                    {ev.event_type.replace(/_/g, ' ')}
+                  </span>
+                  <ElapsedTime since={ev.created_at} format="relative" />
+                </div>
+              ))}
+            </>
+
+          ) : (
+            /* ── No incidents — show filtered event memory ── */
+            <>
+              <div className="rq-rail-header">Event Memory</div>
+              {eventMemory.length === 0 && (
+                <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No events yet</div>
+              )}
+              {eventMemory.slice(0, 15).map(ev => (
                 <div key={ev.id} style={{
                   fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                   color: 'var(--rq-ink-3)', padding: '4px 12px',
                   borderBottom: '1px solid var(--rq-line)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--rq-ink-2)' }}>{ev.event_type.replace(/_/g, ' ')}</span>
+                    <span style={{ color: ev.entity_type === 'incident' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
+                      {ev.event_type.replace(/_/g, ' ')}
+                    </span>
                     <ElapsedTime since={ev.created_at} format="relative" />
                   </div>
                   {ev.gate_id && <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>{ev.gate_id}</span>}
                 </div>
               ))}
-              {events.length === 0 && (
-                <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No events yet</div>
-              )}
             </>
           )}
         </div>
