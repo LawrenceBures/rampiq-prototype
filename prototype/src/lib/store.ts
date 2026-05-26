@@ -494,8 +494,8 @@ export function useLiveEvents(intervalMs = 3000): {
 //   Every lifecycle command already appends to rampiq_events with
 //   entity_type='incident', so we piggyback on the existing channel.
 
-import { fetchActiveIncidents } from './lifecycle-commands';
-import type { Incident } from './lifecycle-types';
+import { fetchActiveIncidents, fetchRecoveryActions } from './lifecycle-commands';
+import type { Incident, RecoveryAction } from './lifecycle-types';
 
 export function useRealtimeIncidents(station = 'LAX'): {
   incidents: Incident[];
@@ -565,6 +565,86 @@ export function useRealtimeIncidents(station = 'LAX'): {
   }, [station, refresh, debouncedRefresh]);
 
   return { incidents, loading, lastSync, refresh };
+}
+
+// ============================================================
+// REALTIME RECOVERY ACTIONS — Phase 4 Step 1
+// ============================================================
+// Fetches recovery actions for a specific incident.
+// Subscribes to rampiq_events for entity_type='recovery_action'.
+// Refetches when a recovery action event matches the incident's
+// correlation_id chain (recovery actions inherit the parent
+// incident's correlation_id).
+
+export function useRecoveryActions(incidentId: string | null): {
+  actions: RecoveryAction[];
+  loading: boolean;
+  refresh: () => void;
+} {
+  const [actions, setActions] = useState<RecoveryAction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const incidentIdRef = useRef(incidentId);
+  incidentIdRef.current = incidentId;
+
+  const refresh = useCallback(() => {
+    const id = incidentIdRef.current;
+    if (!id) { setActions([]); setLoading(false); return; }
+    fetchRecoveryActions(id).then(data => {
+      if (mountedRef.current) {
+        setActions(data);
+        setLoading(false);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const debouncedRefresh = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => refresh(), 300);
+  }, [refresh]);
+
+  // Refetch when selected incident changes
+  useEffect(() => {
+    setLoading(true);
+    refresh();
+  }, [incidentId, refresh]);
+
+  // Realtime subscription
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const sb = getSupabase();
+    type Channel = ReturnType<NonNullable<typeof sb>['channel']>;
+    let channel: Channel | null = null;
+
+    if (sb) {
+      channel = sb
+        .channel('rampiq_recovery_sync')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'rampiq_events' },
+          (payload) => {
+            const row = payload.new as Record<string, unknown> | undefined;
+            if (row?.entity_type === 'recovery_action' && incidentIdRef.current) {
+              console.log('[realtime] recovery event received:', row.event_type, row.entity_id);
+              debouncedRefresh();
+            }
+          })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log('[realtime] recovery actions channel subscribed');
+          }
+        });
+    }
+
+    return () => {
+      mountedRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (channel) channel.unsubscribe();
+    };
+  }, [debouncedRefresh]);
+
+  return { actions, loading, refresh };
 }
 
 export function useEventTypes(): EventType[] {
