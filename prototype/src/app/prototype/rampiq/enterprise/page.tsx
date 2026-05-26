@@ -14,6 +14,8 @@ import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import { emitWorkforceAudit } from '@/lib/governance-audit';
 import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
 import { generateOperationalNarratives } from '@/lib/operational-narrative';
+import { deriveOrganizationalResilience } from '@/lib/organizational-resilience';
+import { deriveConnectionHealth } from '@/lib/production-resilience';
 import { ElapsedTime } from '@/components/rampiq';
 
 // ============================================================
@@ -59,6 +61,8 @@ export default function EnterpriseWorkspace() {
   const shiftCtx = deriveShiftContext(operator.userId, operator.shiftWindow, incidents, events);
   const anticipatory = deriveAnticipatoryState(incidents, recoveryActions, events);
   const narratives = generateOperationalNarratives(incidents, recoveryActions, events, anticipatory.stability, shiftCtx);
+  const resilience = deriveOrganizationalResilience(incidents, recoveryActions, events);
+  const connectionHealth = deriveConnectionHealth(lastUpdated, null);
 
   const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
 
@@ -73,8 +77,11 @@ export default function EnterpriseWorkspace() {
           Enterprise Operations · {operator.displayName}
         </span>
         <div className="rq-pulse" />
-        <span style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', marginLeft: 'auto' }}>
-          {lastUpdated ? lastUpdated.toLocaleTimeString('en-US', { hour12: false }) : '—'}
+        <span style={{
+          ...mono, fontSize: 8, marginLeft: 'auto',
+          color: connectionHealth.state === 'connected' ? 'var(--rq-green)' : connectionHealth.state === 'degraded' ? 'var(--rq-amber)' : 'var(--rq-red)',
+        }}>
+          {connectionHealth.statusText}
         </span>
       </div>
 
@@ -243,6 +250,56 @@ export default function EnterpriseWorkspace() {
       {/* ── RESILIENCE ── */}
       {section === 'resilience' && (
         <div>
+          {/* Organizational resilience overview */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <MetricCard label="Organizational Resilience" value={resilience.overallState}
+              detail={resilience.narrative}
+              color={resilience.overallState === 'degraded' ? 'var(--rq-red)' : resilience.overallState === 'strained' ? 'var(--rq-amber)' : 'var(--rq-green)'} />
+            <MetricCard label="Operational Debt" value={`${resilience.debt.debtScore} (${resilience.debt.trend})`}
+              detail={resilience.debt.narrative}
+              color={resilience.debt.trend === 'accumulating' ? 'var(--rq-red)' : resilience.debt.trend === 'reducing' ? 'var(--rq-green)' : 'var(--rq-ink-3)'} />
+          </div>
+
+          {/* Resilience dimensions */}
+          <SectionHeader>Resilience Dimensions</SectionHeader>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+            {resilience.indicators.map((ind, i) => (
+              <div key={i} style={{
+                ...mono, fontSize: 10, padding: '8px 10px', background: 'var(--rq-bg-1)',
+                borderLeft: `2px solid ${ind.state === 'weakening' ? 'var(--rq-red)' : ind.state === 'strengthening' ? 'var(--rq-green)' : 'var(--rq-ink-3)'}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--rq-ink)' }}>{ind.dimension.replace(/_/g, ' ')}</span>
+                  <span style={{ color: ind.state === 'weakening' ? 'var(--rq-red)' : ind.state === 'strengthening' ? 'var(--rq-green)' : 'var(--rq-ink-3)', textTransform: 'uppercase', fontSize: 8 }}>
+                    {ind.state}
+                  </span>
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginTop: 2 }}>{ind.evidence}</div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 1, fontStyle: 'italic' }}>{ind.trend}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Recovery structure effectiveness */}
+          {resilience.recoveryStructures.length > 0 && (
+            <>
+              <SectionHeader>Recovery Structure Effectiveness</SectionHeader>
+              {resilience.recoveryStructures.map((rs, i) => (
+                <div key={i} style={{
+                  ...mono, fontSize: 10, padding: '4px 10px', marginBottom: 4,
+                  borderLeft: `2px solid ${rs.successRate >= 0.6 ? 'var(--rq-green)' : rs.successRate >= 0.3 ? 'var(--rq-amber)' : 'var(--rq-red)'}`,
+                  color: 'var(--rq-ink-2)',
+                }}>
+                  <span style={{ fontWeight: 600 }}>{rs.pattern}</span>
+                  <span style={{ marginLeft: 8, color: 'var(--rq-ink-4)' }}>
+                    {rs.occurrences}× · {Math.round(rs.successRate * 100)}% success
+                    {rs.avgStabilizationMin !== null ? ` · avg ${rs.avgStabilizationMin}m` : ''}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+
           <SectionHeader>Recurring Operational Conditions</SectionHeader>
           {institutional.recurringConditions.length === 0 && <EmptyState>No recurring conditions detected</EmptyState>}
           {institutional.recurringConditions.map((cond, i) => (
