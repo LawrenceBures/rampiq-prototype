@@ -16,6 +16,8 @@ import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
 import { generateOperationalNarratives } from '@/lib/operational-narrative';
 import { deriveOrganizationalResilience } from '@/lib/organizational-resilience';
 import { deriveConnectionHealth } from '@/lib/production-resilience';
+import { deriveAutonomyState, startAutonomyWindow, terminateAutonomyWindow, AUTONOMY_TIER_LABELS } from '@/lib/bounded-autonomy';
+import type { AutonomyTier, AutonomyScope } from '@/lib/bounded-autonomy';
 import { ElapsedTime } from '@/components/rampiq';
 
 // ============================================================
@@ -26,7 +28,7 @@ import { ElapsedTime } from '@/components/rampiq';
 // All data from the same operational truth pipeline.
 // All access governance-audited.
 
-type Section = 'health' | 'stability' | 'resilience' | 'replay' | 'workforce' | 'recommendations';
+type Section = 'health' | 'stability' | 'resilience' | 'replay' | 'workforce' | 'recommendations' | 'autonomy';
 
 export default function EnterpriseWorkspace() {
   const { events, lastUpdated } = useLiveEvents(5000);
@@ -63,6 +65,7 @@ export default function EnterpriseWorkspace() {
   const narratives = generateOperationalNarratives(incidents, recoveryActions, events, anticipatory.stability, shiftCtx);
   const resilience = deriveOrganizationalResilience(incidents, recoveryActions, events);
   const connectionHealth = deriveConnectionHealth(lastUpdated, null);
+  const autonomy = deriveAutonomyState(events);
 
   const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
 
@@ -94,6 +97,7 @@ export default function EnterpriseWorkspace() {
           { key: 'replay' as const, label: 'Investigation' },
           { key: 'workforce' as const, label: 'Workforce' },
           { key: 'recommendations' as const, label: 'Intelligence' },
+          { key: 'autonomy' as const, label: 'Autonomy' },
         ]).map(tab => (
           <button key={tab.key} type="button" onClick={() => setSection(tab.key)}
             style={{
@@ -446,6 +450,105 @@ export default function EnterpriseWorkspace() {
             <MetricCard label="Recovery Rate" value={outcomes.aggregate.recoverySuccessRate !== null ? `${Math.round(outcomes.aggregate.recoverySuccessRate * 100)}%` : '—'} detail="" color={outcomes.aggregate.recoverySuccessRate !== null && outcomes.aggregate.recoverySuccessRate >= 0.6 ? 'var(--rq-green)' : 'var(--rq-amber)'} />
             <MetricCard label="Escalation Rate" value={outcomes.aggregate.escalationRate !== null ? `${Math.round(outcomes.aggregate.escalationRate * 100)}%` : '—'} detail="" color="var(--rq-ink-3)" />
           </div>
+        </div>
+      )}
+
+      {/* ── AUTONOMY ── */}
+      {section === 'autonomy' && (
+        <div>
+          <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', padding: '0 0 8px', letterSpacing: '.06em' }}>
+            GOVERNANCE: Autonomy windows require authorized leadership. All actions replayable. Override always immediate.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <MetricCard label="Autonomy Status" value={autonomy.isActive ? `Active (Tier ${autonomy.highestActiveTier})` : 'Inactive'}
+              detail={autonomy.isActive ? `${autonomy.activeWindows.length} window${autonomy.activeWindows.length !== 1 ? 's' : ''} · ${autonomy.overrideCount} overrides` : 'No active autonomy windows'}
+              color={autonomy.isActive ? 'var(--rq-blue)' : 'var(--rq-ink-3)'} />
+            <MetricCard label="Governance" value={autonomy.governanceIntact ? 'Intact' : 'ALERT'}
+              detail={`${autonomy.recentActions.length} recent actions · ${autonomy.overrideCount} overrides`}
+              color={autonomy.governanceIntact ? 'var(--rq-green)' : 'var(--rq-red)'} />
+          </div>
+
+          <SectionHeader>Autonomy Tiers</SectionHeader>
+          {([0, 1, 2, 3] as const).map(tier => (
+            <div key={tier} style={{
+              ...mono, fontSize: 10, padding: '4px 10px', marginBottom: 4,
+              borderLeft: `2px solid ${tier === 0 ? 'var(--rq-green)' : tier === 1 ? 'var(--rq-blue)' : tier === 2 ? 'var(--rq-amber)' : 'var(--rq-red)'}`,
+              color: 'var(--rq-ink-2)',
+              opacity: autonomy.highestActiveTier >= tier ? 1 : 0.4,
+            }}>
+              <span style={{ fontWeight: 600 }}>Tier {tier}</span> — {AUTONOMY_TIER_LABELS[tier]}
+            </div>
+          ))}
+
+          {autonomy.activeWindows.length > 0 && (
+            <>
+              <SectionHeader>Active Windows</SectionHeader>
+              {autonomy.activeWindows.map(w => (
+                <div key={w.id} style={{
+                  ...mono, fontSize: 10, padding: '6px 10px', marginBottom: 6,
+                  background: 'rgba(90,169,255,.04)', border: '1px solid rgba(90,169,255,.12)',
+                  borderLeft: '2px solid var(--rq-blue)',
+                }}>
+                  <div style={{ fontWeight: 600, color: 'var(--rq-ink)' }}>
+                    Tier {w.tier} — {w.zone ?? 'station-wide'}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginTop: 2 }}>
+                    Scopes: {w.allowedScopes.join(', ')} · Auth: {w.authorizedBy}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 1 }}>
+                    Expires: {new Date(w.expiresAt).toLocaleTimeString('en-US', { hour12: false })}
+                  </div>
+                  <button type="button" onClick={async () => {
+                    await terminateAutonomyWindow({ windowId: w.id, terminatedBy: operator.userId, terminatedRole: operator.role, reason: 'Manual termination' });
+                  }} style={{
+                    ...mono, fontSize: 8, marginTop: 4, padding: '2px 8px',
+                    background: 'none', border: '1px solid var(--rq-red)', color: 'var(--rq-red)', cursor: 'pointer',
+                  }}>
+                    Terminate
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+
+          {autonomy.recentActions.length > 0 && (
+            <>
+              <SectionHeader>Recent Autonomous Actions</SectionHeader>
+              {autonomy.recentActions.map((action, i) => (
+                <div key={i} style={{
+                  ...mono, fontSize: 10, padding: '4px 10px', marginBottom: 4,
+                  borderLeft: `2px solid ${action.result === 'overridden' ? 'var(--rq-amber)' : 'var(--rq-green)'}`,
+                  color: 'var(--rq-ink-2)',
+                }}>
+                  <span style={{ fontWeight: 600 }}>{action.actionType}</span>
+                  <span style={{ marginLeft: 8, fontSize: 8, color: action.result === 'overridden' ? 'var(--rq-amber)' : 'var(--rq-green)' }}>
+                    {action.result}
+                  </span>
+                  <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 1 }}>{action.rationale}</div>
+                </div>
+              ))}
+            </>
+          )}
+
+          <SectionHeader>Start Autonomy Window</SectionHeader>
+          {operator.viewerRole === 'ops_director' ? (
+            <button type="button" onClick={async () => {
+              const id = await startAutonomyWindow({
+                authorizedBy: operator.userId, authorizedRole: operator.role,
+                tier: 1, allowedScopes: ['escalation_prioritization', 'recommendation_staging'],
+                durationMinutes: 30, reason: 'Operational assistance during elevated pressure',
+              });
+              if (id) alert('Autonomy window started: ' + id);
+            }} style={{
+              ...mono, fontSize: 10, padding: '8px 16px',
+              background: 'none', border: '1px solid var(--rq-blue)', color: 'var(--rq-blue)', cursor: 'pointer',
+            }}>
+              Start Tier 1 Window (30 min)
+            </button>
+          ) : (
+            <EmptyState>Autonomy window creation requires Ops Director authorization.</EmptyState>
+          )}
         </div>
       )}
 

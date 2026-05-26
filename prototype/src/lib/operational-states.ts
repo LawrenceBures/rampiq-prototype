@@ -364,6 +364,15 @@ export const EVENT_TYPES = {
   WORKFORCE_INDIVIDUAL_OPENED:    'workforce.individual_context_opened',
   WORKFORCE_PATTERN_REVIEWED:     'workforce.pattern_reviewed',
 
+  // Bounded autonomy
+  AUTONOMY_WINDOW_STARTED:     'autonomy.window_started',
+  AUTONOMY_WINDOW_EXPIRED:     'autonomy.window_expired',
+  AUTONOMY_WINDOW_TERMINATED:  'autonomy.window_terminated',
+  AUTONOMY_ACTION_EXECUTED:    'autonomy.action_executed',
+  AUTONOMY_ACTION_OVERRIDDEN:  'autonomy.action_overridden',
+  AUTONOMY_PAUSE_REQUESTED:    'autonomy.pause_requested',
+  AUTONOMY_RESUME_REQUESTED:   'autonomy.resume_requested',
+
   // Position / scanning
   GATE_SCANNED:    'gate.scanned',
   POSITION_CHECKIN:'position.checkin',
