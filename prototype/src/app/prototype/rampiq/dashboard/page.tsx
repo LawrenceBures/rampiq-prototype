@@ -28,6 +28,9 @@ import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-sta
 import { reconstructIncidents, reconstructRecoveryActions } from '@/lib/replay-lifecycle';
 import { deriveWorkforceCoordination } from '@/lib/workforce-coordination';
 import { emitReplayAudit } from '@/lib/governance-audit';
+import { deriveRecommendations, emitRecommendationOverride } from '@/lib/recommendation-engine';
+import type { Recommendation } from '@/lib/recommendation-engine';
+import { deriveOperationalOutcomes } from '@/lib/outcome-measurement';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
@@ -90,7 +93,9 @@ export default function ManagerDashboard() {
   const [replayPlaying, setReplayPlaying] = useState(false);
   const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  function startReplay() {
+  const [replayAuditFailed, setReplayAuditFailed] = useState(false);
+
+  async function startReplay() {
     const eventTs = events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0);
     const twoHoursAgo = Date.now() - 2 * 60 * 60_000;
     const lifecycleTs = events.filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action')
@@ -98,25 +103,26 @@ export default function ManagerDashboard() {
     const startTime = lifecycleTs.length > 0
       ? Math.max(Math.min(...lifecycleTs) - 10 * 60_000, twoHoursAgo)
       : eventTs.length > 0 ? Math.max(Math.min(...eventTs), twoHoursAgo) : twoHoursAgo;
+
+    // Governance: fail-closed audit for accountability-capable roles
+    const needsAudit = operator.viewerRole === 'ops_director' || (operator.viewerRole === 'manager' && selectedZoneId);
+    if (needsAudit) {
+      const auditOk = await emitReplayAudit({
+        viewerId: operator.userId, viewerRole: operator.role,
+        accessType: operator.viewerRole === 'ops_director' ? 'accountability_review' : 'cross_zone',
+        zoneScope: selectedZoneId ?? undefined,
+        replayTimestamp: new Date(startTime).toISOString(),
+      });
+      if (!auditOk) {
+        setReplayAuditFailed(true);
+        return; // fail-closed: do NOT render replay without audit
+      }
+    }
+
+    setReplayAuditFailed(false);
     setReplayMode(true);
     setReplayTimestamp(new Date(startTime));
     setReplayPlaying(false);
-
-    // Governance: log replay access for accountability-capable roles
-    if (operator.viewerRole === 'ops_director') {
-      emitReplayAudit({
-        viewerId: operator.userId, viewerRole: operator.role,
-        accessType: 'accountability_review',
-        replayTimestamp: new Date(startTime).toISOString(),
-      });
-    } else if (selectedZoneId && operator.viewerRole === 'manager') {
-      emitReplayAudit({
-        viewerId: operator.userId, viewerRole: operator.role,
-        accessType: 'cross_zone',
-        zoneScope: selectedZoneId,
-        replayTimestamp: new Date(startTime).toISOString(),
-      });
-    }
   }
 
   function exitReplay() {
@@ -373,6 +379,12 @@ export default function ManagerDashboard() {
 
   // ── Workforce Coordination ──
   const workforce = deriveWorkforceCoordination(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
+
+  // ── Operational Outcomes + Recommendations ──
+  const outcomes = deriveOperationalOutcomes(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
+  const recommendations = deriveRecommendations(
+    zoneScopedIncidents, temporalIncidents, temporalRecoveryActions, temporalEvents, asOf
+  );
 
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
@@ -1017,6 +1029,29 @@ export default function ManagerDashboard() {
 
             <KpiStrip summary={zoneSummary} />
 
+            {/* Outcome metrics */}
+            {(outcomes.aggregate.avgTotalResolution !== null || recommendations.some(r => r.type === 'zone_pressure_balance')) && (
+              <div style={{
+                margin: '0 16px 2px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                {outcomes.aggregate.avgTotalResolution !== null && (
+                  <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>avg resolution {outcomes.aggregate.avgTotalResolution}m</span>
+                )}
+                {outcomes.aggregate.recoverySuccessRate !== null && (
+                  <span style={{ fontSize: 8, color: outcomes.aggregate.recoverySuccessRate >= 0.6 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
+                    recovery {Math.round(outcomes.aggregate.recoverySuccessRate * 100)}%
+                  </span>
+                )}
+                {recommendations.filter(r => r.type === 'zone_pressure_balance').map(rec => (
+                  <span key={rec.id} style={{ fontSize: 8, padding: '1px 6px', borderRadius: 2,
+                    color: 'var(--rq-blue)', background: 'rgba(90,169,255,.06)', border: '1px solid rgba(90,169,255,.15)' }}>
+                    {rec.title}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Operational trend strip + pattern insights */}
             {(patternInsights.length > 0 || trends.incidentVolume.some(t => t.count > 0)) && (
               <div style={{ margin: '0 16px 4px' }}>
@@ -1267,6 +1302,7 @@ export default function ManagerDashboard() {
         {/* ── RIGHT RAIL: Incident triage / detail / event memory ── */}
         <div className="rq-console-rail-right">
           {selectedIncident ? (
+            <>
             <IncidentDetailPanel
               incident={selectedIncident}
               incidentEvents={incidentEvents}
@@ -1282,6 +1318,59 @@ export default function ManagerDashboard() {
               onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
             />
 
+            {/* Recommendations for selected incident */}
+            {recommendations.filter(r => r.incidentId === selectedIncident.id).map(rec => (
+              <div key={rec.id} style={{
+                margin: '4px 12px', padding: '6px 8px',
+                background: 'rgba(90,169,255,.04)', border: '1px solid rgba(90,169,255,.15)',
+                borderLeft: '2px solid var(--rq-blue)',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <div style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 }}>
+                  operational memory suggests
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600, marginBottom: 2 }}>
+                  {rec.title}
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', lineHeight: 1.3, marginBottom: 4 }}>
+                  {rec.explanation}
+                </div>
+                {rec.suggestedActions.length > 0 && (
+                  <div style={{ fontSize: 9, color: 'var(--rq-ink-2)', marginBottom: 4 }}>
+                    {rec.suggestedActions.map((a, i) => (
+                      <div key={i} style={{ padding: '1px 0' }}>· {a}</div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 4 }}>
+                  {rec.confidenceNarrative}
+                </div>
+                {!replayMode && (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button type="button" onClick={async () => {
+                      await emitRecommendationOverride({ recommendationId: rec.id, action: 'accepted', actorId: operator.userId, actorRole: operator.role });
+                      refresh();
+                    }} style={{
+                      flex: 1, padding: '3px', fontSize: 8, fontFamily: 'inherit',
+                      background: 'none', border: '1px solid rgba(90,169,255,.3)', color: 'var(--rq-blue)', cursor: 'pointer',
+                    }}>
+                      accept
+                    </button>
+                    <button type="button" onClick={async () => {
+                      await emitRecommendationOverride({ recommendationId: rec.id, action: 'rejected', actorId: operator.userId, actorRole: operator.role });
+                      refresh();
+                    }} style={{
+                      flex: 1, padding: '3px', fontSize: 8, fontFamily: 'inherit',
+                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer',
+                    }}>
+                      dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+          </>
           ) : triageIncidents.length > 0 ? (
             /* ── Active incidents triage list ── */
             <>

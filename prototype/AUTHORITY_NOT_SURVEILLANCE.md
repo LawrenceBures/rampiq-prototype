@@ -101,6 +101,47 @@ These are **architectural boundaries that must never be crossed**.
 
 ---
 
+## 6. Governance Audit Log Access
+
+Replay access itself is audited. The governance audit log records who
+accessed whose operational history and when.
+
+### Access rules:
+- **Coordinators** can see their own audit records (when their replay
+  history was accessed by others)
+- **Managers** can see audit records for their zone scope
+- **Ops Directors** can see all audit records
+- **No one** can delete or modify audit records (append-only)
+
+### Retention:
+- Audit logs follow the same retention policy as operational events
+- Audit records are never silently purged
+- Bulk deletion requires explicit administrative action with its own
+  audit trail
+
+### Purpose constraints:
+- Governance audit logs exist for **institutional accountability** —
+  ensuring that access to individual operational history is transparent
+- They do NOT exist for tracking "who uses the system most" or
+  measuring "manager engagement"
+
+---
+
+## 7. Recommendation Governance
+
+When recommendations exist:
+- Recommendations are **events, not hidden computations**
+- Every recommendation is traceable to specific operational history
+- Override is always available and never penalized
+- Coordinator-first surfacing is permanent
+- **No per-operator recommendation acceptance metrics**
+- Acceptance rates, override frequency are NEVER surfaced as individual
+  metrics
+- Learning means pattern accumulation over time, not opaque model
+  retraining
+
+---
+
 ## 6. Trust Test
 
 RampIQ succeeds if operators feel:

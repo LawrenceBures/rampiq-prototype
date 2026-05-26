@@ -38,9 +38,13 @@ export interface ReplayAuditInput {
  * Emit a governance audit event for replay access.
  * Fire-and-forget — does not block the replay operation.
  */
-export async function emitReplayAudit(input: ReplayAuditInput): Promise<void> {
+/**
+ * Emit a governance audit event. Returns true on success, false on failure.
+ * Callers MUST await this and fail-closed if it returns false.
+ */
+export async function emitReplayAudit(input: ReplayAuditInput): Promise<boolean> {
   const sb = getSupabase();
-  if (!sb) return;
+  if (!sb) { console.error('[governance] AUDIT FAILED — no Supabase client'); return false; }
 
   const eventTypeMap: Record<string, string> = {
     individual: EVENT_TYPES.REPLAY_INDIVIDUAL_ACCESSED,
@@ -81,8 +85,9 @@ export async function emitReplayAudit(input: ReplayAuditInput): Promise<void> {
   });
 
   if (error) {
-    console.error('[governance] audit emission error:', error.message);
-  } else {
-    console.log('[governance] replay access logged:', input.accessType, 'by', input.viewerId);
+    console.error('[governance] AUDIT FAILED — replay access NOT logged:', error.message);
+    return false;
   }
+  console.log('[governance] replay access logged:', input.accessType, 'by', input.viewerId);
+  return true;
 }
