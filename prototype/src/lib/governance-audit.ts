@@ -91,3 +91,55 @@ export async function emitReplayAudit(input: ReplayAuditInput): Promise<boolean>
   console.log('[governance] replay access logged:', input.accessType, 'by', input.viewerId);
   return true;
 }
+
+// ============================================================
+// WORKFORCE INTELLIGENCE AUDIT
+// ============================================================
+
+export interface WorkforceAuditInput {
+  viewerId: string;
+  viewerRole: string;
+  accessType: 'analytics_accessed' | 'individual_context_opened' | 'pattern_reviewed';
+  targetOperator?: string;
+  reason?: string;
+}
+
+/**
+ * Emit workforce intelligence access audit event.
+ * Fail-closed — returns false on failure.
+ */
+export async function emitWorkforceAudit(input: WorkforceAuditInput): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) { console.error('[governance] WORKFORCE AUDIT FAILED — no Supabase'); return false; }
+
+  const eventTypeMap: Record<string, string> = {
+    analytics_accessed: EVENT_TYPES.WORKFORCE_ANALYTICS_ACCESSED,
+    individual_context_opened: EVENT_TYPES.WORKFORCE_INDIVIDUAL_OPENED,
+    pattern_reviewed: EVENT_TYPES.WORKFORCE_PATTERN_REVIEWED,
+  };
+
+  const { error } = await sb.from('rampiq_events').insert({
+    event_type: eventTypeMap[input.accessType] ?? 'workforce.accessed',
+    severity: 'LOW', station: 'LAX',
+    qr_target_type: 'SYSTEM', qr_target_id: 'GOVERNANCE-WORKFORCE',
+    reported_by: input.viewerId, role_type: input.viewerRole,
+    shift_window: 'AM', device_id: `DESKTOP-${input.viewerId}`,
+    source_platform: 'DESKTOP', notes: input.reason ?? null,
+    operational_status: 'RESOLVED', sync_status: 'SYNCED',
+    entity_type: 'governance', entity_id: input.targetOperator ?? input.viewerId,
+    state_before: null, state_after: input.accessType,
+    event_version: 2,
+    details_json: {
+      access_type: input.accessType, viewer_id: input.viewerId,
+      viewer_role: input.viewerRole, target_operator: input.targetOperator,
+      reason: input.reason,
+    },
+  });
+
+  if (error) {
+    console.error('[governance] WORKFORCE AUDIT FAILED:', error.message);
+    return false;
+  }
+  console.log('[governance] workforce access logged:', input.accessType, 'by', input.viewerId);
+  return true;
+}

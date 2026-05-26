@@ -154,6 +154,33 @@ Every feature, every insight, every surface must pass this test.
 
 ---
 
+## 8. Workforce Intelligence Separation
+
+Workforce intelligence and frontline coordination are **separate surfaces**.
+
+### Frontline coordination layer:
+- Support-oriented, psychologically safe, coordination-first
+- Shows: own workload, owned incidents, coordination support signals
+- Never evaluative, never comparative
+
+### Workforce intelligence layer:
+- Management-only, restricted, governed, auditable
+- All access emits governance audit events
+- Every metric includes **mandatory operational context**
+- No naked metrics — every number accompanied by conditions
+
+### The No-Naked-Metrics Rule:
+
+**Forbidden:** "Escalation response time: 14m"
+
+**Required:** "Escalation response occurred during: 5 simultaneous
+active incidents, elevated baggage congestion, unavailable equipment,
+staffing saturation threshold."
+
+Context is mandatory. Metrics without context become weapons.
+
+---
+
 ## Enforcement
 
 This doctrine applies to:

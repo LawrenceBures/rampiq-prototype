@@ -359,6 +359,11 @@ export const EVENT_TYPES = {
   REPLAY_CROSS_ZONE_ACCESSED:   'replay.cross_zone_accessed',
   REPLAY_ACCOUNTABILITY_REVIEWED: 'replay.accountability_reviewed',
 
+  // Workforce intelligence audit
+  WORKFORCE_ANALYTICS_ACCESSED:   'workforce.analytics_accessed',
+  WORKFORCE_INDIVIDUAL_OPENED:    'workforce.individual_context_opened',
+  WORKFORCE_PATTERN_REVIEWED:     'workforce.pattern_reviewed',
+
   // Position / scanning
   GATE_SCANNED:    'gate.scanned',
   POSITION_CHECKIN:'position.checkin',
