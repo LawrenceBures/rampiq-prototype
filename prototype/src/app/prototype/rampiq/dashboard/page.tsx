@@ -32,6 +32,7 @@ import { deriveRecommendations, emitRecommendationOverride } from '@/lib/recomme
 import type { Recommendation } from '@/lib/recommendation-engine';
 import { deriveOperationalOutcomes } from '@/lib/outcome-measurement';
 import { deriveInstitutionalMemory } from '@/lib/institutional-memory';
+import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
 import { deriveShiftContext, FIXTURE_OPERATORS } from '@/lib/auth-identity';
 import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
@@ -371,6 +372,9 @@ export default function ManagerDashboard() {
   // ── Institutional Memory + Shift Context ──
   const institutionalMemory = deriveInstitutionalMemory(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
   const shiftContext = deriveShiftContext(operator.userId, operator.shiftWindow, temporalIncidents, temporalEvents, asOf);
+
+  // ── Anticipatory Cognition ──
+  const anticipatory = deriveAnticipatoryState(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
 
   // ── Operational Outcomes + Recommendations ──
   const outcomes = deriveOperationalOutcomes(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
@@ -842,13 +846,27 @@ export default function ManagerDashboard() {
         openEventCount={zoneSummary.openCount}
       />
 
-      {/* Shift context + institutional memory */}
-      {(shiftContext.inheritedIncidentCount > 0 || institutionalMemory.recurringConditions.length > 0) && (
+      {/* Stability + shift context + institutional memory */}
+      {(anticipatory.stability.direction !== 'stable' || shiftContext.inheritedIncidentCount > 0 || institutionalMemory.recurringConditions.length > 0) && (
         <div style={{
           padding: '2px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
           borderBottom: '1px solid var(--rq-line)',
           fontFamily: "'JetBrains Mono', monospace",
         }}>
+          {/* Stability direction — calm, not alarmist */}
+          {anticipatory.stability.direction !== 'stable' && (
+            <span style={{
+              fontSize: 8, padding: '1px 6px', borderRadius: 2, letterSpacing: '.06em', textTransform: 'uppercase',
+              color: anticipatory.stability.direction === 'acute' ? 'var(--rq-red)' :
+                anticipatory.stability.direction === 'destabilizing' ? 'var(--rq-amber)' : 'var(--rq-green)',
+              background: anticipatory.stability.direction === 'acute' ? 'rgba(255,92,92,.06)' :
+                anticipatory.stability.direction === 'destabilizing' ? 'rgba(232,161,58,.06)' : 'rgba(62,213,152,.06)',
+              border: `1px solid ${anticipatory.stability.direction === 'acute' ? 'rgba(255,92,92,.15)' :
+                anticipatory.stability.direction === 'destabilizing' ? 'rgba(232,161,58,.15)' : 'rgba(62,213,152,.15)'}`,
+            }}>
+              {anticipatory.stability.direction}
+            </span>
+          )}
           {shiftContext.inheritedIncidentCount > 0 && (
             <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
               {shiftContext.inheritedIncidentCount} inherited from prior shift

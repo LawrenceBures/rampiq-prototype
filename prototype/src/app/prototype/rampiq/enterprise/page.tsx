@@ -12,6 +12,7 @@ import { deriveWorkforceIntelligence } from '@/lib/workforce-intelligence';
 import { deriveShiftContext, FIXTURE_OPERATORS } from '@/lib/auth-identity';
 import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import { emitWorkforceAudit } from '@/lib/governance-audit';
+import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
 import { ElapsedTime } from '@/components/rampiq';
 
 // ============================================================
@@ -22,7 +23,7 @@ import { ElapsedTime } from '@/components/rampiq';
 // All data from the same operational truth pipeline.
 // All access governance-audited.
 
-type Section = 'health' | 'resilience' | 'replay' | 'workforce' | 'recommendations';
+type Section = 'health' | 'stability' | 'resilience' | 'replay' | 'workforce' | 'recommendations';
 
 export default function EnterpriseWorkspace() {
   const { events, lastUpdated } = useLiveEvents(5000);
@@ -55,6 +56,7 @@ export default function EnterpriseWorkspace() {
   const institutional = deriveInstitutionalMemory(incidents, recoveryActions, events);
   const workforceIntel = deriveWorkforceIntelligence(incidents, recoveryActions, events);
   const shiftCtx = deriveShiftContext(operator.userId, operator.shiftWindow, incidents, events);
+  const anticipatory = deriveAnticipatoryState(incidents, recoveryActions, events);
 
   const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
 
@@ -78,6 +80,7 @@ export default function EnterpriseWorkspace() {
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--rq-line)', margin: '0 0 12px' }}>
         {([
           { key: 'health' as const, label: 'Operational Health' },
+          { key: 'stability' as const, label: 'Stability' },
           { key: 'resilience' as const, label: 'Resilience' },
           { key: 'replay' as const, label: 'Investigation' },
           { key: 'workforce' as const, label: 'Workforce' },
@@ -142,6 +145,80 @@ export default function EnterpriseWorkspace() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── STABILITY ── */}
+      {section === 'stability' && (
+        <div>
+          {/* Stability index */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <MetricCard label="Operational Stability" value={anticipatory.stability.direction}
+              detail={anticipatory.stability.narrative}
+              color={anticipatory.stability.direction === 'acute' ? 'var(--rq-red)' : anticipatory.stability.direction === 'destabilizing' ? 'var(--rq-amber)' : 'var(--rq-green)'} />
+            <MetricCard label="Pressure Index" value={`${anticipatory.stability.overallPressure}/100`}
+              detail={`${anticipatory.stability.durationMin}m since oldest unresolved · ${anticipatory.stability.components.filter(c => c.trend === 'degrading').length} degrading components`}
+              color={anticipatory.stability.overallPressure >= 60 ? 'var(--rq-red)' : anticipatory.stability.overallPressure >= 30 ? 'var(--rq-amber)' : 'var(--rq-green)'} />
+          </div>
+
+          {/* Stability components */}
+          <SectionHeader>Stability Components</SectionHeader>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {anticipatory.stability.components.map((comp, i) => (
+              <div key={i} style={{
+                ...mono, fontSize: 10, padding: '8px 10px', background: 'var(--rq-bg-1)',
+                borderLeft: `2px solid ${comp.trend === 'degrading' ? 'var(--rq-red)' : comp.trend === 'improving' ? 'var(--rq-green)' : 'var(--rq-ink-3)'}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--rq-ink)' }}>{comp.name}</span>
+                  <span style={{ color: comp.trend === 'degrading' ? 'var(--rq-red)' : comp.trend === 'improving' ? 'var(--rq-green)' : 'var(--rq-ink-3)' }}>
+                    {comp.pressure}/100 {comp.trend === 'degrading' ? '▲' : comp.trend === 'improving' ? '▼' : '—'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 2 }}>{comp.factors.join(' · ')}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Destabilization signals */}
+          <SectionHeader>Destabilization Signals</SectionHeader>
+          {anticipatory.destabilizationSignals.length === 0 && <EmptyState>No destabilization signals detected</EmptyState>}
+          {anticipatory.destabilizationSignals.map((sig, i) => (
+            <div key={i} style={{
+              ...mono, fontSize: 10, padding: '6px 10px', marginBottom: 6,
+              borderLeft: `2px solid ${sig.urgency === 'acute' ? 'var(--rq-red)' : sig.urgency === 'developing' ? 'var(--rq-amber)' : 'var(--rq-ink-3)'}`,
+              background: 'var(--rq-bg-1)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 600, color: 'var(--rq-ink)' }}>{sig.condition}</span>
+                <span style={{
+                  fontSize: 8, padding: '1px 5px', borderRadius: 2, textTransform: 'uppercase', letterSpacing: '.06em',
+                  color: sig.urgency === 'acute' ? 'var(--rq-red)' : 'var(--rq-amber)',
+                  background: sig.urgency === 'acute' ? 'rgba(255,92,92,.08)' : 'rgba(232,161,58,.08)',
+                }}>
+                  {sig.urgency}
+                </span>
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginTop: 2 }}>{sig.evidence}</div>
+              {sig.historicalContext && <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 1, fontStyle: 'italic' }}>{sig.historicalContext}</div>}
+            </div>
+          ))}
+
+          {/* Early recommendations */}
+          <SectionHeader>Early Stabilization Recommendations</SectionHeader>
+          {anticipatory.earlyRecommendations.length === 0 && <EmptyState>No early recommendations</EmptyState>}
+          {anticipatory.earlyRecommendations.map((rec, i) => (
+            <div key={i} style={{
+              ...mono, fontSize: 10, padding: '8px 10px', marginBottom: 8,
+              background: 'rgba(90,169,255,.04)', border: '1px solid rgba(90,169,255,.12)',
+              borderLeft: '2px solid var(--rq-blue)',
+            }}>
+              <div style={{ fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 3 }}>{rec.suggestion}</div>
+              <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 2 }}>{rec.rationale}</div>
+              <div style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>Historical: {rec.historicalBasis}</div>
+              <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 2, fontStyle: 'italic' }}>Limitation: {rec.limitation}</div>
+            </div>
+          ))}
         </div>
       )}
 
