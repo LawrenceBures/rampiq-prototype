@@ -25,7 +25,7 @@ import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
-import type { PatternInsight, InsightCategory } from '@/lib/operational-patterns';
+import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
 
 // ============================================================
 // TYPES
@@ -753,22 +753,64 @@ export default function ManagerDashboard() {
 
             <KpiStrip summary={zoneSummary} />
 
-            {/* Operational pattern insights */}
-            {patternInsights.length > 0 && (
+            {/* Operational trend strip + pattern insights */}
+            {(patternInsights.length > 0 || trends.incidentVolume.some(t => t.count > 0)) && (
               <div style={{ margin: '0 16px 4px' }}>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {trends.pressureDirection !== 'stable' && (
+                {/* Trend sparkline + pressure state */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  {/* Sparkline: 15-min buckets, reversed so oldest is left */}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 16 }}>
+                    {[...trends.incidentVolume].reverse().map((t, i) => {
+                      const maxScore = trends.peakBucketScore || 1;
+                      const h = Math.max(2, (t.weightedScore / maxScore) * 16);
+                      const barColor = t.weightedScore >= 6 ? 'var(--rq-red)' : t.weightedScore >= 3 ? 'var(--rq-amber)' : 'var(--rq-green)';
+                      return <div key={i} style={{ width: 4, height: h, background: barColor, borderRadius: 1, opacity: t.weightedScore > 0 ? 0.8 : 0.15 }} />;
+                    })}
+                  </div>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 7,
+                    color: 'var(--rq-ink-4)', letterSpacing: '.06em',
+                  }}>
+                    2h
+                  </span>
+
+                  {/* Pressure state label */}
+                  {trends.pressureLabel && (() => {
+                    const stateColors: Record<PressureState, string> = {
+                      rising: 'var(--rq-red)', deteriorating: 'var(--rq-red)', sustained_high: 'var(--rq-red)',
+                      volatile: 'var(--rq-amber)', stabilizing: 'var(--rq-amber)',
+                      falling: 'var(--rq-green)', stable: 'var(--rq-ink-3)',
+                    };
+                    const stateIcons: Record<PressureState, string> = {
+                      rising: '▲', deteriorating: '▲▲', sustained_high: '━',
+                      volatile: '~', stabilizing: '▽', falling: '▼', stable: '',
+                    };
+                    const color = stateColors[trends.pressureState];
+                    return (
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                        padding: '2px 6px', borderRadius: 2, letterSpacing: '.06em', textTransform: 'uppercase',
+                        color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
+                      }}>
+                        {stateIcons[trends.pressureState]} {trends.pressureLabel}
+                      </span>
+                    );
+                  })()}
+
+                  {/* Recovery rate */}
+                  {trends.recoveryCompletionRate !== null && (
                     <span style={{
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-                      padding: '2px 6px', borderRadius: 2,
-                      color: trends.pressureDirection === 'rising' ? 'var(--rq-red)' : 'var(--rq-green)',
-                      background: trends.pressureDirection === 'rising' ? 'rgba(255,92,92,.08)' : 'rgba(62,213,152,.08)',
-                      border: `1px solid ${trends.pressureDirection === 'rising' ? 'rgba(255,92,92,.2)' : 'rgba(62,213,152,.2)'}`,
-                      letterSpacing: '.06em', textTransform: 'uppercase',
+                      color: trends.recoveryCompletionRate >= 0.7 ? 'var(--rq-green)' : trends.recoveryCompletionRate >= 0.4 ? 'var(--rq-amber)' : 'var(--rq-red)',
                     }}>
-                      {trends.pressureDirection === 'rising' ? '▲ pressure rising' : '▼ pressure falling'}
+                      recovery {Math.round(trends.recoveryCompletionRate * 100)}%
                     </span>
                   )}
+                </div>
+
+                {/* Pattern insight pills */}
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                   {patternInsights.slice(0, 5).map((ins, i) => {
                     const color = ins.severity === 'alert' ? 'var(--rq-red)' : ins.severity === 'watch' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
                     const isExpanded = expandedInsight === i;
@@ -976,6 +1018,10 @@ export default function ManagerDashboard() {
                   e.entity_type === 'recovery_action' && e.correlation_id === inc.correlation_id
                   && e.state_after && !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(e.state_after)
                 ).length;
+                // Aging classification
+                const ageMin = Math.round((Date.now() - new Date(inc.opened_at).getTime()) / 60_000);
+                const agingClass = ageMin >= 60 ? 'chronic' : ageMin >= 30 ? 'aging' : 'fresh';
+                const agingColor = agingClass === 'chronic' ? 'var(--rq-red)' : agingClass === 'aging' ? 'var(--rq-amber)' : 'var(--rq-green)';
                 return (
                   <div
                     key={inc.id}
@@ -985,18 +1031,23 @@ export default function ManagerDashboard() {
                       borderBottom: '1px solid var(--rq-line)',
                       borderLeft: `2px solid ${sevColor}`,
                       transition: 'background .1s',
+                      background: agingClass === 'chronic' ? 'rgba(255,92,92,.02)' : 'transparent',
                     }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--rq-bg-2)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    onMouseLeave={e => (e.currentTarget.style.background = agingClass === 'chronic' ? 'rgba(255,92,92,.02)' : 'transparent')}
                   >
                     <div style={{
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
                       color: 'var(--rq-ink)', display: 'flex', justifyContent: 'space-between',
                     }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
                         {inc.title}
                       </span>
-                      <ElapsedTime since={inc.opened_at} format="relative" />
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {/* Aging dot */}
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: agingColor, flexShrink: 0 }} />
+                        <ElapsedTime since={inc.opened_at} format="relative" />
+                      </span>
                     </div>
                     <div style={{
                       fontFamily: "'JetBrains Mono', monospace", fontSize: 9,

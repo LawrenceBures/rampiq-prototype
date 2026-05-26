@@ -81,15 +81,25 @@ export interface TrendPoint {
   weightedScore: number;
 }
 
+export type PressureState = 'rising' | 'stable' | 'falling' | 'sustained_high' | 'volatile' | 'stabilizing' | 'deteriorating';
+
 export interface OperationalTrends {
   /** Incident volume over time (15-min buckets, last 2 hours) */
   incidentVolume: TrendPoint[];
   /** Pressure direction: rising, stable, falling */
   pressureDirection: 'rising' | 'stable' | 'falling';
-  /** Recovery completion rate (completed / total non-terminal) */
+  /** Pressure state with momentum context */
+  pressureState: PressureState;
+  /** Pressure momentum label for display */
+  pressureLabel: string;
+  /** Recovery completion rate (completed / total finished) */
   recoveryCompletionRate: number | null;
   /** Escalation count in current window */
   escalationCount: number;
+  /** Max weighted score in any single bucket */
+  peakBucketScore: number;
+  /** Duration of sustained high pressure (minutes), 0 if not sustained */
+  sustainedHighMinutes: number;
 }
 
 // ============================================================
@@ -407,7 +417,6 @@ function computeTrends(
   }
 
   // ── Pressure direction ──
-  // Compare first half vs second half of the window
   const halfPoint = Math.floor(bucketCount / 2);
   const recentScore = incidentVolume.slice(0, halfPoint).reduce((s, t) => s + t.weightedScore, 0);
   const olderScore = incidentVolume.slice(halfPoint).reduce((s, t) => s + t.weightedScore, 0);
@@ -415,10 +424,56 @@ function computeTrends(
     recentScore > olderScore * 1.3 ? 'rising' :
     recentScore < olderScore * 0.7 ? 'falling' : 'stable';
 
+  // ── Pressure momentum (finer grain) ──
+  const peakBucketScore = Math.max(...incidentVolume.map(t => t.weightedScore), 0);
+  const totalScore = incidentVolume.reduce((s, t) => s + t.weightedScore, 0);
+  const q1Score = incidentVolume.slice(0, 2).reduce((s, t) => s + t.weightedScore, 0); // most recent 30min
+  const q2Score = incidentVolume.slice(2, 4).reduce((s, t) => s + t.weightedScore, 0); // 30-60min ago
+
+  // Sustained high: multiple consecutive high-score buckets
+  let sustainedHighMinutes = 0;
+  for (const t of incidentVolume) {
+    if (t.weightedScore >= 4) sustainedHighMinutes += 15;
+    else break;
+  }
+
+  // Determine pressure state
+  let pressureState: PressureState;
+  let pressureLabel: string;
+
+  if (sustainedHighMinutes >= 60 && pressureDirection !== 'falling') {
+    pressureState = 'sustained_high';
+    pressureLabel = `sustained high pressure ${sustainedHighMinutes}m`;
+  } else if (pressureDirection === 'rising' && q1Score > q2Score * 1.5) {
+    pressureState = 'deteriorating';
+    pressureLabel = 'pressure deteriorating';
+  } else if (pressureDirection === 'falling' && q1Score > 0) {
+    pressureState = 'stabilizing';
+    pressureLabel = 'pressure stabilizing';
+  } else if (pressureDirection === 'falling' && q1Score === 0) {
+    pressureState = 'falling';
+    pressureLabel = 'pressure falling';
+  } else if (pressureDirection === 'rising') {
+    pressureState = 'rising';
+    pressureLabel = 'pressure rising';
+  } else if (totalScore > 0 && peakBucketScore >= 6) {
+    // High variance across buckets
+    const variance = incidentVolume.reduce((s, t) => s + Math.pow(t.weightedScore - totalScore / bucketCount, 2), 0) / bucketCount;
+    if (variance > 4) {
+      pressureState = 'volatile';
+      pressureLabel = 'pressure volatile';
+    } else {
+      pressureState = 'stable';
+      pressureLabel = '';
+    }
+  } else {
+    pressureState = 'stable';
+    pressureLabel = '';
+  }
+
   // ── Recovery completion rate ──
   const terminalStatuses = ['COMPLETE', 'WITHDRAWN', 'ESCALATED'];
   const completedActions = recoveryActions.filter(a => a.status === 'COMPLETE').length;
-  const totalNonTerminal = recoveryActions.filter(a => !terminalStatuses.includes(a.status)).length;
   const totalFinished = recoveryActions.filter(a => terminalStatuses.includes(a.status)).length;
   const recoveryCompletionRate = totalFinished > 0 ? completedActions / totalFinished : null;
 
@@ -426,5 +481,8 @@ function computeTrends(
   const escalationCount = recoveryActions.filter(a => a.status === 'ESCALATED').length
     + incidents.filter(i => i.severity === 'CRITICAL').length;
 
-  return { incidentVolume, pressureDirection, recoveryCompletionRate, escalationCount };
+  return {
+    incidentVolume, pressureDirection, pressureState, pressureLabel,
+    recoveryCompletionRate, escalationCount, peakBucketScore, sustainedHighMinutes,
+  };
 }

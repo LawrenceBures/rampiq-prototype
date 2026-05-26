@@ -198,7 +198,8 @@ export async function seedDemoScenario(): Promise<void> {
     await DELAY(150);
     await transitionIncident({ incident_id: inc3.id, new_status: 'CONFIRMED', actor_id: 'CC01', actor_role: 'CREW_CHIEF' });
 
-    const ra3 = await createRecoveryAction({
+    // First attempt: pull from 52F — WITHDRAWN (agent unavailable)
+    const ra3a = await createRecoveryAction({
       incident_id: inc3.id,
       title: 'Pull agent from 52F (low-activity)',
       action_type: 'PERSONNEL',
@@ -206,9 +207,52 @@ export async function seedDemoScenario(): Promise<void> {
       assigned_to: 'OPS',
       description: 'Request ops re-assign one agent from 52F apron. 52F next inbound not until 14:40.',
     });
-    if (ra3) {
-      await backdateAction(ra3.id, 30);
-      await backdateEvent(ra3.id, 'recovery_action.proposed', 30);
+    if (ra3a) {
+      await DELAY(100);
+      await transitionRecoveryAction({ action_id: ra3a.id, new_status: 'ACKNOWLEDGED', actor_id: 'OPS01', actor_role: 'CREW_CHIEF' });
+      await DELAY(100);
+      await transitionRecoveryAction({ action_id: ra3a.id, new_status: 'WITHDRAWN', actor_id: 'OPS01', actor_role: 'CREW_CHIEF', notes: '52F agent already reassigned to 52D ground stop' });
+      await backdateAction(ra3a.id, 32);
+      await backdateEvent(ra3a.id, 'recovery_action.proposed', 32);
+      await backdateEvent(ra3a.id, 'recovery_action.acknowledged', 30);
+      await backdateEvent(ra3a.id, 'recovery_action.withdrawn', 28);
+    }
+
+    // Second attempt: request overtime extension — BLOCKED
+    const ra3b = await createRecoveryAction({
+      incident_id: inc3.id,
+      title: 'Request overtime extension for PM agent',
+      action_type: 'PERSONNEL',
+      proposed_by: 'CC01',
+      assigned_to: 'OPS',
+      description: 'Ask Okafor D. (PM shift) to start 30 min early. Needs supervisor approval.',
+    });
+    if (ra3b) {
+      await DELAY(100);
+      await transitionRecoveryAction({ action_id: ra3b.id, new_status: 'ACKNOWLEDGED', actor_id: 'OPS01', actor_role: 'CREW_CHIEF' });
+      await DELAY(100);
+      await transitionRecoveryAction({ action_id: ra3b.id, new_status: 'ACTIVE', actor_id: 'OPS01', actor_role: 'CREW_CHIEF' });
+      await DELAY(100);
+      await transitionRecoveryAction({ action_id: ra3b.id, new_status: 'BLOCKED', actor_id: 'OPS01', actor_role: 'CREW_CHIEF', notes: 'Supervisor unavailable — on radio with tower re: ground stop' });
+      await backdateAction(ra3b.id, 26);
+      await backdateEvent(ra3b.id, 'recovery_action.proposed', 26);
+      await backdateEvent(ra3b.id, 'recovery_action.acknowledged', 24);
+      await backdateEvent(ra3b.id, 'recovery_action.active', 22);
+      await backdateEvent(ra3b.id, 'recovery_action.blocked', 20);
+    }
+
+    // Third attempt: current — awaiting ops
+    const ra3c = await createRecoveryAction({
+      incident_id: inc3.id,
+      title: 'Cross-train regional cabin agent for bag handling',
+      action_type: 'PERSONNEL',
+      proposed_by: 'CC01',
+      assigned_to: 'CREW_CHIEF',
+      description: 'Park S. (regional cabin) can cover basic bag handling. Needs 5-min briefing.',
+    });
+    if (ra3c) {
+      await backdateAction(ra3c.id, 15);
+      await backdateEvent(ra3c.id, 'recovery_action.proposed', 15);
     }
 
     await backdateIncident(inc3.id, 35);
