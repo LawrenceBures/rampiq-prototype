@@ -482,6 +482,69 @@ export async function reassignEntity(input: ReassignInput): Promise<boolean> {
 }
 
 // ============================================================
+// ESCALATION ACTIONS — Phase 8.5
+// ============================================================
+
+export interface EscalationActionInput {
+  incident_id: string;
+  action: 'handoff_request' | 'escalate_to_manager' | 'acknowledge_continue' | 'dismiss';
+  actor_id: string;
+  actor_role: string;
+  target_operator?: string;
+  reason?: string;
+}
+
+/**
+ * Emit an escalation action event. Does NOT change incident status —
+ * escalation actions are coordination signals, not lifecycle transitions.
+ * All actions are append-only and replay-safe.
+ */
+export async function emitEscalationAction(input: EscalationActionInput): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) { console.error('[lifecycle] escalation: no Supabase client'); return false; }
+
+  const { data: inc, error: fetchErr } = await sb
+    .from('rampiq_incidents').select('*').eq('id', input.incident_id).single();
+  if (fetchErr || !inc) {
+    console.error('[lifecycle] escalation fetch error:', fetchErr?.message);
+    return false;
+  }
+
+  const eventTypeMap: Record<string, string> = {
+    handoff_request: EVENT_TYPES.INCIDENT_HANDOFF_REQUESTED,
+    escalate_to_manager: EVENT_TYPES.ESCALATION_REQUESTED,
+    acknowledge_continue: EVENT_TYPES.ESCALATION_ACKNOWLEDGED,
+    dismiss: EVENT_TYPES.ESCALATION_DISMISSED,
+  };
+
+  // For handoff: update assigned_to if target specified
+  if (input.action === 'handoff_request' && input.target_operator) {
+    await sb.from('rampiq_incidents').update({ assigned_to: input.target_operator }).eq('id', input.incident_id);
+  }
+
+  await appendLifecycleEvent(sb, {
+    event_type: eventTypeMap[input.action] ?? 'escalation.unknown',
+    entity_type: 'incident',
+    entity_id: input.incident_id,
+    state_before: inc.assigned_to ?? 'unassigned',
+    state_after: input.target_operator ?? inc.assigned_to ?? 'unassigned',
+    severity: inc.severity,
+    station: inc.station,
+    zone_id: inc.zone_id,
+    gate_id: inc.gate_id,
+    flight_id: inc.flight_id ?? null,
+    correlation_id: inc.correlation_id,
+    causation_event_id: null,
+    actor_id: input.actor_id,
+    actor_role: input.actor_role,
+    notes: input.reason ?? null,
+    details_json: { action: input.action, target: input.target_operator, reason: input.reason },
+  });
+
+  return true;
+}
+
+// ============================================================
 // READ HELPERS
 // ============================================================
 

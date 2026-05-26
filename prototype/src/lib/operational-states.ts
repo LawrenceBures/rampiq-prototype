@@ -340,11 +340,19 @@ export const EVENT_TYPES = {
   EQUIPMENT_REPAIRED:  'equipment.repaired',
 
   // Ownership / coordination
-  INCIDENT_REASSIGNED:       'incident.reassigned',
-  INCIDENT_ESCALATED_UP:     'incident.escalated_up',
-  RECOVERY_REASSIGNED:       'recovery_action.reassigned',
-  OWNERSHIP_TRANSFERRED:     'ownership.transferred',
-  ACKNOWLEDGMENT_TRANSFER:   'acknowledgment.transfer',
+  INCIDENT_REASSIGNED:         'incident.reassigned',
+  INCIDENT_ESCALATED_UP:       'incident.escalated_up',
+  INCIDENT_OWNERSHIP_ASSIGNED: 'incident.ownership_assigned',
+  INCIDENT_HANDOFF_REQUESTED:  'incident.handoff_requested',
+  INCIDENT_HANDOFF_ACCEPTED:   'incident.handoff_accepted',
+  RECOVERY_REASSIGNED:         'recovery_action.reassigned',
+  OWNERSHIP_TRANSFERRED:       'ownership.transferred',
+  ACKNOWLEDGMENT_TRANSFER:     'acknowledgment.transfer',
+
+  // Escalation actions
+  ESCALATION_REQUESTED:        'escalation.requested',
+  ESCALATION_ACKNOWLEDGED:     'escalation.acknowledged',
+  ESCALATION_DISMISSED:        'escalation.dismissed',
 
   // Position / scanning
   GATE_SCANNED:    'gate.scanned',

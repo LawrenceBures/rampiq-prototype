@@ -20,6 +20,7 @@ import {
   transitionIncident,
   createRecoveryAction,
   transitionRecoveryAction,
+  emitEscalationAction,
 } from '@/lib/lifecycle-commands';
 import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
@@ -51,16 +52,21 @@ const EMPTY_FILTERS: EventFilters = {
 // ============================================================
 
 // Operator identity for the current session
+type ViewerRole = 'coordinator' | 'manager' | 'ops_director';
+
 interface OperatorSession {
   userId: string;
   displayName: string;
   role: string;
+  viewerRole: ViewerRole;
+  zoneId?: string;
 }
 
 const OPERATORS: OperatorSession[] = [
-  { userId: 'CC01', displayName: 'Martinez J.', role: 'CREW_CHIEF' },
-  { userId: 'OPS01', displayName: 'Kim D.', role: 'OPS' },
-  { userId: 'CC02', displayName: 'Reyes M.', role: 'CREW_CHIEF' },
+  { userId: 'CC01', displayName: 'Martinez J.', role: 'CREW_CHIEF', viewerRole: 'coordinator', zoneId: 'GATES-52ABC' },
+  { userId: 'CC02', displayName: 'Reyes M.', role: 'CREW_CHIEF', viewerRole: 'coordinator', zoneId: 'GATES-52DEF' },
+  { userId: 'OPS01', displayName: 'Kim D.', role: 'OPS', viewerRole: 'manager' },
+  { userId: 'DIR01', displayName: 'Chen L.', role: 'OPS_DIRECTOR', viewerRole: 'ops_director' },
 ];
 
 export default function ManagerDashboard() {
@@ -817,22 +823,38 @@ export default function ManagerDashboard() {
         openEventCount={zoneSummary.openCount}
       />
 
-      {/* Workforce coordination strip */}
+      {/* Workforce coordination strip (role-aware) */}
       {(workforce.escalations.length > 0 || workforce.summary.overloadedCount > 0 || workforce.ownershipGaps.length > 0) && (
         <div style={{
           padding: '3px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
           borderBottom: '1px solid var(--rq-line)',
           fontFamily: "'JetBrains Mono', monospace",
         }}>
-          {/* Escalation signals */}
+          {/* Escalation signals with action buttons */}
           {workforce.escalations.filter(e => e.severity === 'critical').slice(0, 2).map((esc, i) => (
             <span key={i} style={{
               fontSize: 8, padding: '2px 6px', borderRadius: 2,
               color: 'var(--rq-red)', background: 'rgba(255,92,92,.08)',
               border: '1px solid rgba(255,92,92,.2)',
-              letterSpacing: '.06em', textTransform: 'uppercase',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
             }}>
               ⚠ {esc.title}
+              {!replayMode && esc.incidentIds[0] && (
+                <>
+                  <button type="button" onClick={async () => {
+                    await emitEscalationAction({ incident_id: esc.incidentIds[0], action: 'escalate_to_manager', actor_id: operator.userId, actor_role: operator.role, reason: esc.title });
+                    refresh();
+                  }} style={{ background: 'none', border: '1px solid rgba(255,92,92,.3)', color: 'var(--rq-red)', cursor: 'pointer', padding: '0 4px', fontSize: 7, fontFamily: 'inherit' }}>
+                    escalate
+                  </button>
+                  <button type="button" onClick={async () => {
+                    await emitEscalationAction({ incident_id: esc.incidentIds[0], action: 'acknowledge_continue', actor_id: operator.userId, actor_role: operator.role });
+                    refresh();
+                  }} style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '0 4px', fontSize: 7, fontFamily: 'inherit' }}>
+                    ack
+                  </button>
+                </>
+              )}
             </span>
           ))}
           {workforce.escalations.filter(e => e.severity === 'alert').slice(0, 2).map((esc, i) => (
@@ -844,15 +866,20 @@ export default function ManagerDashboard() {
               {esc.title}
             </span>
           ))}
-          {/* Operator load summary */}
-          {workforce.summary.overloadedCount > 0 && (
+          {/* Role-aware operator load summary */}
+          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.overloadedCount > 0 && (
             <span style={{ fontSize: 8, color: 'var(--rq-red)' }}>
-              {workforce.summary.overloadedCount} overloaded
+              {workforce.summary.overloadedCount} coord. need support
             </span>
           )}
-          {workforce.summary.saturatedCount > 0 && (
+          {operator.viewerRole === 'coordinator' && workforce.operatorLoads.find(o => o.operatorId === operator.userId)?.saturation === 'overloaded' && (
             <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
-              {workforce.summary.saturatedCount} saturated
+              workload elevated — request support
+            </span>
+          )}
+          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.saturatedCount > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
+              {workforce.summary.saturatedCount} elevated
             </span>
           )}
           {workforce.ownershipGaps.length > 0 && (
@@ -1243,28 +1270,62 @@ export default function ManagerDashboard() {
           ) : triageIncidents.length > 0 ? (
             /* ── Active incidents triage list ── */
             <>
-              {/* Operator load indicators */}
-              {workforce.operatorLoads.filter(o => o.saturation !== 'nominal').length > 0 && (
-                <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
-                  <div className="rq-rail-header" style={{ padding: '2px 0' }}>Operator Load</div>
-                  {workforce.operatorLoads.filter(o => o.saturation !== 'nominal').slice(0, 4).map(op => {
-                    const color = op.saturation === 'overloaded' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
-                    return (
-                      <div key={op.operatorId} style={{
+              {/* Operator load indicators (role-aware per AUTHORITY_NOT_SURVEILLANCE) */}
+              {(() => {
+                // Coordinator: see own load only
+                // Manager: see aggregate coordination health
+                // Ops Director: see all operators
+                const myLoad = workforce.operatorLoads.find(o => o.operatorId === operator.userId);
+                const showIndividuals = operator.viewerRole === 'ops_director';
+                const showAggregates = operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director';
+                const elevated = workforce.operatorLoads.filter(o => o.saturation !== 'nominal');
+
+                return (elevated.length > 0 || (myLoad && myLoad.saturation !== 'nominal')) ? (
+                  <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
+                    <div className="rq-rail-header" style={{ padding: '2px 0' }}>
+                      {showAggregates ? 'Coordination Health' : 'My Workload'}
+                    </div>
+                    {/* Coordinator sees own load first */}
+                    {myLoad && myLoad.saturation !== 'nominal' && (
+                      <div style={{
                         fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
                         display: 'flex', justifyContent: 'space-between', padding: '2px 0',
                         color: 'var(--rq-ink-3)',
                       }}>
-                        <span>{op.operatorId}</span>
+                        <span style={{ color: 'var(--rq-ink-2)' }}>{operator.displayName}</span>
                         <span style={{ display: 'flex', gap: 6 }}>
-                          <span>{op.ownedIncidents}inc {op.activeRecoveryActions}ra</span>
-                          <span style={{ color, fontWeight: 600 }}>{op.saturation}</span>
+                          <span>{myLoad.ownedIncidents}inc {myLoad.activeRecoveryActions}ra</span>
+                          <span style={{ color: myLoad.saturation === 'overloaded' ? 'var(--rq-red)' : 'var(--rq-amber)', fontWeight: 600 }}>
+                            {myLoad.saturation === 'overloaded' ? 'need support' : myLoad.saturation}
+                          </span>
                         </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    )}
+                    {/* Manager/Director see aggregates or individuals */}
+                    {showIndividuals && elevated.filter(o => o.operatorId !== operator.userId).slice(0, 4).map(op => {
+                      const color = op.saturation === 'overloaded' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                      return (
+                        <div key={op.operatorId} style={{
+                          fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                          display: 'flex', justifyContent: 'space-between', padding: '2px 0',
+                          color: 'var(--rq-ink-3)',
+                        }}>
+                          <span>{op.operatorId}</span>
+                          <span style={{ display: 'flex', gap: 6 }}>
+                            <span>{op.ownedIncidents}inc {op.activeRecoveryActions}ra</span>
+                            <span style={{ color, fontWeight: 600 }}>{op.saturation}</span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {showAggregates && !showIndividuals && elevated.length > 1 && (
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)', padding: '2px 0' }}>
+                        {elevated.length} coordinators with elevated load
+                      </div>
+                    )}
+                  </div>
+                ) : null;
+              })()}
 
               <div className="rq-rail-header">
                 <span>Active Incidents</span>
