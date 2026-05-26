@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import type { AgentIdentity, QrTarget, RampiqEvent } from '@/lib/rampiq-types';
 import { detectPlatform, eventAge } from '@/lib/rampiq-types';
+import type { Incident, RecoveryAction } from '@/lib/lifecycle-types';
+import { INCIDENT_STATUS_LABELS, RECOVERY_ACTION_STATUS_LABELS } from '@/lib/operational-states';
+import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
 
 const CHECKLIST = {
   equipment: [
@@ -47,6 +50,11 @@ export default function GateReadinessPage() {
   const [activeDispatch, setActiveDispatch] = useState<RampiqEvent | null>(null);
   const [arrivalSubmitted, setArrivalSubmitted] = useState(false);
 
+  // ── Incident awareness ──
+  const [gateIncidents, setGateIncidents] = useState<Incident[]>([]);
+  const [gateRecoveryActions, setGateRecoveryActions] = useState<RecoveryAction[]>([]);
+  const [raTransitioning, setRaTransitioning] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       const { getIdentity } = await import('@/lib/identity');
@@ -65,8 +73,24 @@ export default function GateReadinessPage() {
         const dispatch = await fetchActiveDispatch(id.user_id);
         if (dispatch) setActiveDispatch(dispatch);
       }
+
+      // Load incidents affecting this gate
+      const { fetchActiveIncidents, fetchRecoveryActions: fetchRA } = await import('@/lib/lifecycle-commands');
+      const allIncidents = await fetchActiveIncidents('LAX');
+      const gateIncs = allIncidents.filter(i => i.gate_id === gateId);
+      setGateIncidents(gateIncs);
+
+      // Load recovery actions for gate incidents
+      const allActions: RecoveryAction[] = [];
+      for (const inc of gateIncs) {
+        const actions = await fetchRA(inc.id);
+        allActions.push(...actions.filter(a =>
+          !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(a.status)
+        ));
+      }
+      setGateRecoveryActions(allActions);
     })();
-  }, [targetQr]);
+  }, [targetQr, gateId]);
 
   function toggleItem(key: string) {
     setChecked(prev => ({ ...prev, [key]: !prev[key] }));
@@ -160,6 +184,28 @@ export default function GateReadinessPage() {
     setSubmitting(false);
   }
 
+  async function handleRecoveryTransition(actionId: string, newStatus: RecoveryActionStatus) {
+    setRaTransitioning(actionId);
+    const { transitionRecoveryAction } = await import('@/lib/lifecycle-commands');
+    await transitionRecoveryAction({
+      action_id: actionId,
+      new_status: newStatus,
+      actor_id: identity?.user_id ?? 'MOBILE',
+      actor_role: identity?.role_type ?? 'RAMP_AGENT',
+    });
+    // Refresh recovery actions
+    const { fetchRecoveryActions: fetchRA } = await import('@/lib/lifecycle-commands');
+    const allActions: RecoveryAction[] = [];
+    for (const inc of gateIncidents) {
+      const actions = await fetchRA(inc.id);
+      allActions.push(...actions.filter(a =>
+        !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(a.status)
+      ));
+    }
+    setGateRecoveryActions(allActions);
+    setRaTransitioning(null);
+  }
+
   if (submitted) {
     return (
       <div className="rq-success">
@@ -182,6 +228,10 @@ export default function GateReadinessPage() {
     );
   }
 
+  const sevColor = (sev: string) =>
+    sev === 'CRITICAL' ? 'var(--rq-red)' : sev === 'HIGH' ? 'var(--rq-red)' :
+    sev === 'MEDIUM' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+
   return (
     <>
       <Link href="/prototype/rampiq/mobile" className="rq-back">&larr; Back</Link>
@@ -192,6 +242,148 @@ export default function GateReadinessPage() {
           Operational Readiness &middot; {checkedCount}/{totalCount} checked
         </div>
       </div>
+
+      {/* ── Active incidents at this gate ── */}
+      {gateIncidents.length > 0 && (
+        <div style={{
+          margin: '0 16px 8px', padding: '8px 10px',
+          border: '1px solid var(--rq-red)', borderLeft: '3px solid var(--rq-red)',
+          background: 'rgba(255,92,92,.04)',
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
+            color: 'var(--rq-red)', letterSpacing: '.08em', textTransform: 'uppercase',
+            marginBottom: 4,
+          }}>
+            {gateIncidents.length} Active Incident{gateIncidents.length !== 1 ? 's' : ''}
+          </div>
+          {gateIncidents.map(inc => (
+            <div key={inc.id} style={{
+              padding: '4px 0', borderBottom: '1px solid var(--rq-line)',
+            }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 600,
+                color: 'var(--rq-ink)',
+              }}>
+                {inc.title}
+              </div>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                color: 'var(--rq-ink-3)', marginTop: 2, display: 'flex', gap: 6,
+              }}>
+                <span style={{
+                  padding: '1px 6px', borderRadius: 2, fontSize: 9, fontWeight: 600,
+                  color: sevColor(inc.severity),
+                  background: `color-mix(in srgb, ${sevColor(inc.severity)} 10%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${sevColor(inc.severity)} 25%, transparent)`,
+                }}>
+                  {inc.severity}
+                </span>
+                <span style={{
+                  padding: '1px 6px', borderRadius: 2, fontSize: 9,
+                  color: 'var(--rq-ink-2)',
+                  background: 'var(--rq-bg-2)',
+                }}>
+                  {INCIDENT_STATUS_LABELS[inc.status as IncidentStatus]}
+                </span>
+                <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>
+                  {eventAge(inc.opened_at)}
+                </span>
+              </div>
+              {inc.description && (
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                  color: 'var(--rq-ink-3)', marginTop: 3, lineHeight: 1.3,
+                }}>
+                  {inc.description}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Recovery actions assigned to field agents */}
+          {gateRecoveryActions.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                color: 'var(--rq-ink-4)', letterSpacing: '.08em', textTransform: 'uppercase',
+                marginBottom: 4,
+              }}>
+                Your Recovery Actions
+              </div>
+              {gateRecoveryActions.map(ra => {
+                const statusColor = ra.status === 'ACTIVE' ? 'var(--rq-green)'
+                  : ra.status === 'BLOCKED' ? 'var(--rq-red)'
+                  : ra.status === 'ACKNOWLEDGED' ? 'var(--rq-amber)'
+                  : 'var(--rq-ink-3)';
+                const transitioning = raTransitioning === ra.id;
+
+                return (
+                  <div key={ra.id} style={{
+                    padding: '5px 0', borderBottom: '1px solid var(--rq-line)',
+                  }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
+                      color: 'var(--rq-ink)',
+                    }}>
+                      {ra.title}
+                    </div>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                      color: 'var(--rq-ink-4)', marginTop: 1, display: 'flex', gap: 6,
+                    }}>
+                      <span style={{ color: statusColor, fontWeight: 600 }}>
+                        {RECOVERY_ACTION_STATUS_LABELS[ra.status]}
+                      </span>
+                      {ra.action_type && <span>{ra.action_type}</span>}
+                      {ra.assigned_to && <span>&rarr; {ra.assigned_to}</span>}
+                    </div>
+                    {ra.description && (
+                      <div style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                        color: 'var(--rq-ink-3)', marginTop: 2,
+                      }}>
+                        {ra.description}
+                      </div>
+                    )}
+                    {/* Mobile-friendly transition buttons */}
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      {ra.status === 'PROPOSED' && (
+                        <button className="rq-qbtn qb-ack" disabled={transitioning}
+                          style={{ flex: 1, padding: '8px', fontSize: 10 }}
+                          onClick={() => handleRecoveryTransition(ra.id, 'ACKNOWLEDGED')}>
+                          {transitioning ? '...' : 'Acknowledge'}
+                        </button>
+                      )}
+                      {ra.status === 'ACKNOWLEDGED' && (
+                        <button className="rq-qbtn qb-prog" disabled={transitioning}
+                          style={{ flex: 1, padding: '8px', fontSize: 10 }}
+                          onClick={() => handleRecoveryTransition(ra.id, 'ACTIVE')}>
+                          {transitioning ? '...' : 'Start'}
+                        </button>
+                      )}
+                      {ra.status === 'ACTIVE' && (
+                        <>
+                          <button className="rq-qbtn qb-resolve" disabled={transitioning}
+                            style={{ flex: 1, padding: '8px', fontSize: 10 }}
+                            onClick={() => handleRecoveryTransition(ra.id, 'COMPLETE')}>
+                            {transitioning ? '...' : 'Complete'}
+                          </button>
+                          <button className="rq-qbtn qb-ack" disabled={transitioning}
+                            style={{ flex: 1, padding: '8px', fontSize: 10 }}
+                            onClick={() => handleRecoveryTransition(ra.id, 'BLOCKED')}>
+                            {transitioning ? '...' : 'Blocked'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* LT Arrival banner — if runner has active dispatch */}
       {activeDispatch && !arrivalSubmitted && (

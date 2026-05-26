@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { AgentIdentity, ShiftWindow, RoleType, CrewAssignment } from '@/lib/rampiq-types';
 import { ASSIGNMENT_STATUS_LABELS, eventAge } from '@/lib/rampiq-types';
+import type { Incident } from '@/lib/lifecycle-types';
+import { INCIDENT_STATUS_LABELS } from '@/lib/operational-states';
+import type { IncidentStatus } from '@/lib/operational-states';
 
 export default function AgentMobile() {
   const [identity, setId] = useState<AgentIdentity | null>(null);
@@ -13,6 +16,7 @@ export default function AgentMobile() {
   const [online, setOnline] = useState(true);
   const [queueDepth, setQueueDepth] = useState(0);
   const [acknowledging, setAcknowledging] = useState<string | null>(null);
+  const [stationIncidents, setStationIncidents] = useState<Incident[]>([]);
 
   // Load identity + users
   useEffect(() => {
@@ -34,6 +38,11 @@ export default function AgentMobile() {
         const t = await fetchAgentTasks(id.user_id);
         setTasks(t);
       }
+
+      // Load active incidents for awareness
+      const { fetchActiveIncidents } = await import('@/lib/lifecycle-commands');
+      const incs = await fetchActiveIncidents('LAX');
+      setStationIncidents(incs);
 
       setLoading(false);
     })();
@@ -136,6 +145,48 @@ export default function AgentMobile() {
           {queueDepth > 0 && <> &middot; <span style={{ color: 'var(--rq-amber)' }}>{queueDepth} pending</span></>}
         </div>
       </div>
+
+      {/* Incident awareness banner */}
+      {stationIncidents.length > 0 && (
+        <div style={{
+          margin: '0 16px 8px', padding: '6px 10px',
+          border: '1px solid var(--rq-red)', borderLeft: '3px solid var(--rq-red)',
+          background: 'rgba(255,92,92,.04)',
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
+            color: 'var(--rq-red)', letterSpacing: '.08em', textTransform: 'uppercase',
+            marginBottom: 3,
+          }}>
+            {stationIncidents.length} Active Incident{stationIncidents.length !== 1 ? 's' : ''}
+          </div>
+          {stationIncidents.slice(0, 3).map(inc => (
+            <div key={inc.id} style={{
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+              color: 'var(--rq-ink-2)', padding: '2px 0',
+              display: 'flex', gap: 6, alignItems: 'center',
+            }}>
+              <span style={{
+                color: inc.severity === 'CRITICAL' || inc.severity === 'HIGH' ? 'var(--rq-red)' : 'var(--rq-amber)',
+                fontWeight: 600, fontSize: 8,
+              }}>
+                {inc.severity}
+              </span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {inc.title}
+              </span>
+              <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>
+                {inc.gate_id || ''}
+              </span>
+            </div>
+          ))}
+          {stationIncidents.length > 3 && (
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)', marginTop: 2 }}>
+              +{stationIncidents.length - 3} more
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Active Tasks — primary section */}
       {tasks.length > 0 && (
