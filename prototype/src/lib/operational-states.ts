@@ -339,6 +339,13 @@ export const EVENT_TYPES = {
   EQUIPMENT_FAILED:    'equipment.failed',
   EQUIPMENT_REPAIRED:  'equipment.repaired',
 
+  // Ownership / coordination
+  INCIDENT_REASSIGNED:       'incident.reassigned',
+  INCIDENT_ESCALATED_UP:     'incident.escalated_up',
+  RECOVERY_REASSIGNED:       'recovery_action.reassigned',
+  OWNERSHIP_TRANSFERRED:     'ownership.transferred',
+  ACKNOWLEDGMENT_TRANSFER:   'acknowledgment.transfer',
+
   // Position / scanning
   GATE_SCANNED:    'gate.scanned',
   POSITION_CHECKIN:'position.checkin',

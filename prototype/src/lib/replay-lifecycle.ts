@@ -92,10 +92,16 @@ export function reconstructIncidents(
       CLOSED: 'closed_at',
     };
 
+    // Track ownership changes from reassignment events
+    let historicalAssignedTo = inc.assigned_to;
     for (const ev of sorted) {
       const field = statusToField[ev.state_after ?? ''];
       if (field) {
         transitionTimes[field] = ev.created_at;
+      }
+      // Reassignment events use state_after for new owner
+      if (ev.event_type === 'incident.reassigned') {
+        historicalAssignedTo = ev.state_after ?? inc.assigned_to;
       }
     }
 
@@ -110,6 +116,7 @@ export function reconstructIncidents(
     result.push({
       ...inc,
       status: historicalStatus,
+      assigned_to: historicalAssignedTo,
       acknowledged_at: transitionTimes.acknowledged_at,
       recovering_at: transitionTimes.recovering_at,
       stabilized_at: transitionTimes.stabilized_at,
@@ -181,9 +188,13 @@ export function reconstructRecoveryActions(
       WITHDRAWN: 'completed_at',
     };
 
+    let historicalAssignedTo = action.assigned_to;
     for (const ev of sorted) {
       const field = statusToField[ev.state_after ?? ''];
       if (field) timings[field] = ev.created_at;
+      if (ev.event_type === 'recovery_action.reassigned') {
+        historicalAssignedTo = ev.state_after ?? action.assigned_to;
+      }
     }
 
     // Null out timing fields for states not yet reached
@@ -204,6 +215,7 @@ export function reconstructRecoveryActions(
     result.push({
       ...action,
       status: historicalStatus,
+      assigned_to: historicalAssignedTo,
       acknowledged_at: timings.acknowledged_at,
       started_at: timings.started_at,
       blocked_at: timings.blocked_at,

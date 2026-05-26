@@ -414,6 +414,74 @@ const RECOVERY_EVENT_MAP: Record<RecoveryActionStatus, string> = {
 };
 
 // ============================================================
+// OWNERSHIP COMMANDS — Phase 8
+// ============================================================
+
+export interface ReassignInput {
+  entity_type: 'incident' | 'recovery_action';
+  entity_id: string;
+  new_assigned_to: string;
+  actor_id: string;
+  actor_role: string;
+  reason?: string;
+}
+
+/**
+ * Reassign an incident or recovery action to a different operator.
+ * Updates the lifecycle table and emits an ownership event.
+ */
+export async function reassignEntity(input: ReassignInput): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) { console.error('[lifecycle] reassign: no Supabase client'); return false; }
+
+  const table = input.entity_type === 'incident' ? 'rampiq_incidents' : 'rampiq_recovery_actions';
+
+  // Fetch current state
+  const { data: current, error: fetchErr } = await sb
+    .from(table).select('*').eq('id', input.entity_id).single();
+  if (fetchErr || !current) {
+    console.error('[lifecycle] reassign fetch error:', fetchErr?.message);
+    return false;
+  }
+
+  const previousOwner = current.assigned_to;
+
+  // Update assignment
+  const { error: updateErr } = await sb
+    .from(table).update({ assigned_to: input.new_assigned_to }).eq('id', input.entity_id);
+  if (updateErr) {
+    console.error('[lifecycle] reassign update error:', updateErr.message);
+    return false;
+  }
+
+  // Emit ownership event
+  const eventType = input.entity_type === 'incident'
+    ? EVENT_TYPES.INCIDENT_REASSIGNED
+    : EVENT_TYPES.RECOVERY_REASSIGNED;
+
+  await appendLifecycleEvent(sb, {
+    event_type: eventType,
+    entity_type: input.entity_type,
+    entity_id: input.entity_id,
+    state_before: previousOwner ?? 'unassigned',
+    state_after: input.new_assigned_to,
+    severity: current.severity,
+    station: current.station,
+    zone_id: current.zone_id,
+    gate_id: current.gate_id,
+    flight_id: current.flight_id ?? null,
+    correlation_id: current.correlation_id,
+    causation_event_id: null,
+    actor_id: input.actor_id,
+    actor_role: input.actor_role,
+    notes: input.reason ?? `Reassigned from ${previousOwner ?? 'unassigned'} to ${input.new_assigned_to}`,
+    details_json: { previous_owner: previousOwner, new_owner: input.new_assigned_to, reason: input.reason },
+  });
+
+  return true;
+}
+
+// ============================================================
 // READ HELPERS
 // ============================================================
 

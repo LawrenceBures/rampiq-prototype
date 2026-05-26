@@ -25,6 +25,8 @@ import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
 import { reconstructIncidents, reconstructRecoveryActions } from '@/lib/replay-lifecycle';
+import { deriveWorkforceCoordination } from '@/lib/workforce-coordination';
+import type { EscalationSignal } from '@/lib/workforce-coordination';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
 
@@ -48,9 +50,23 @@ const EMPTY_FILTERS: EventFilters = {
 // MAIN COMPONENT
 // ============================================================
 
+// Operator identity for the current session
+interface OperatorSession {
+  userId: string;
+  displayName: string;
+  role: string;
+}
+
+const OPERATORS: OperatorSession[] = [
+  { userId: 'CC01', displayName: 'Martinez J.', role: 'CREW_CHIEF' },
+  { userId: 'OPS01', displayName: 'Kim D.', role: 'OPS' },
+  { userId: 'CC02', displayName: 'Reyes M.', role: 'CREW_CHIEF' },
+];
+
 export default function ManagerDashboard() {
   const { events, loading, lastUpdated, refresh } = useLiveEvents(3000);
   const [view, setView] = useState<View>('feed');
+  const [operator, setOperator] = useState<OperatorSession>(OPERATORS[0]);
   const [filters, setFilters] = useState<EventFilters>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -67,15 +83,18 @@ export default function ManagerDashboard() {
   const [replayPlaying, setReplayPlaying] = useState(false);
   const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Compute replay time bounds from actual event data
-  const eventTimes = events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0);
-  const replayEarliest = eventTimes.length > 0 ? new Date(Math.min(...eventTimes)) : null;
-  const replayLatest = new Date();
-
   function startReplay() {
-    if (!replayEarliest) return;
+    // Compute bounds at start time — use events (available now) to find window
+    const eventTs = events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0);
+    const twoHoursAgo = Date.now() - 2 * 60 * 60_000;
+    // Find lifecycle events (they indicate when operational activity started)
+    const lifecycleTs = events.filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action')
+      .map(e => new Date(e.created_at).getTime());
+    const startTime = lifecycleTs.length > 0
+      ? Math.max(Math.min(...lifecycleTs) - 10 * 60_000, twoHoursAgo)
+      : eventTs.length > 0 ? Math.max(Math.min(...eventTs), twoHoursAgo) : twoHoursAgo;
     setReplayMode(true);
-    setReplayTimestamp(replayEarliest);
+    setReplayTimestamp(new Date(startTime));
     setReplayPlaying(false);
   }
 
@@ -163,7 +182,7 @@ export default function ManagerDashboard() {
       zone_id: incZone || undefined,
       gate_id: incGate || undefined,
       description: incDesc.trim() || undefined,
-      created_by: 'CC01',
+      created_by: operator.userId,
     });
     // Reset form
     setIncTitle('');
@@ -183,8 +202,8 @@ export default function ManagerDashboard() {
     await transitionIncident({
       incident_id: incidentId,
       new_status: newStatus,
-      actor_id: 'CC01',
-      actor_role: 'CREW_CHIEF',
+      actor_id: operator.userId,
+      actor_role: operator.role,
     });
     // Eager refresh for the actor; other sessions get it via realtime
     refreshIncidents();
@@ -208,7 +227,7 @@ export default function ManagerDashboard() {
       incident_id: selectedIncidentId,
       title,
       action_type: actionType || undefined,
-      proposed_by: 'CC01',
+      proposed_by: operator.userId,
       assigned_to: assignedTo || undefined,
       description: description || undefined,
     });
@@ -223,8 +242,8 @@ export default function ManagerDashboard() {
     await transitionRecoveryAction({
       action_id: actionId,
       new_status: newStatus,
-      actor_id: 'CC01',
-      actor_role: 'CREW_CHIEF',
+      actor_id: operator.userId,
+      actor_role: operator.role,
     });
     refreshRecovery();
     refresh();
@@ -330,6 +349,9 @@ export default function ManagerDashboard() {
   const patternOutput = analyzeOperationalPatterns(zoneScopedEvents, zoneScopedIncidents, temporalRecoveryActions, asOf);
   const patternInsights = patternOutput.insights;
   const { trends } = patternOutput;
+
+  // ── Workforce Coordination ──
+  const workforce = deriveWorkforceCoordination(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
 
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
@@ -788,12 +810,58 @@ export default function ManagerDashboard() {
       {/* Command bar — full width */}
       <CommandBar
         station={selectedZone ? `LAX · ${selectedZone.label}` : 'LAX'}
-        role="Crew Chief"
+        role={`${operator.displayName} · ${operator.role.replace(/_/g, ' ')}`}
         lastEventSync={lastUpdated}
         lastIncidentSync={incidentLastSync}
         activeIncidentCount={zoneScopedIncidents.length}
         openEventCount={zoneSummary.openCount}
       />
+
+      {/* Workforce coordination strip */}
+      {(workforce.escalations.length > 0 || workforce.summary.overloadedCount > 0 || workforce.ownershipGaps.length > 0) && (
+        <div style={{
+          padding: '3px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+          borderBottom: '1px solid var(--rq-line)',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          {/* Escalation signals */}
+          {workforce.escalations.filter(e => e.severity === 'critical').slice(0, 2).map((esc, i) => (
+            <span key={i} style={{
+              fontSize: 8, padding: '2px 6px', borderRadius: 2,
+              color: 'var(--rq-red)', background: 'rgba(255,92,92,.08)',
+              border: '1px solid rgba(255,92,92,.2)',
+              letterSpacing: '.06em', textTransform: 'uppercase',
+            }}>
+              ⚠ {esc.title}
+            </span>
+          ))}
+          {workforce.escalations.filter(e => e.severity === 'alert').slice(0, 2).map((esc, i) => (
+            <span key={`a${i}`} style={{
+              fontSize: 8, padding: '2px 6px', borderRadius: 2,
+              color: 'var(--rq-amber)', background: 'rgba(232,161,58,.08)',
+              border: '1px solid rgba(232,161,58,.2)',
+            }}>
+              {esc.title}
+            </span>
+          ))}
+          {/* Operator load summary */}
+          {workforce.summary.overloadedCount > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-red)' }}>
+              {workforce.summary.overloadedCount} overloaded
+            </span>
+          )}
+          {workforce.summary.saturatedCount > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
+              {workforce.summary.saturatedCount} saturated
+            </span>
+          )}
+          {workforce.ownershipGaps.length > 0 && (
+            <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
+              {workforce.ownershipGaps.length} gap{workforce.ownershipGaps.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Replay controls */}
       {replayMode && replayTimestamp && (
@@ -829,10 +897,32 @@ export default function ManagerDashboard() {
             {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
           </span>
           <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>
-            {temporalEvents.length} events · {temporalIncidents.length} incidents
+            {temporalEvents.length} ev · {temporalIncidents.length} inc
           </span>
+          {/* Scrub bar */}
+          {(() => {
+            const twoH = Date.now() - 2 * 60 * 60_000;
+            const scrubStart = Math.max(twoH, replayTimestamp.getTime() - 2 * 60 * 60_000);
+            const scrubRange = Date.now() - scrubStart;
+            const pctDone = scrubRange > 0 ? ((replayTimestamp.getTime() - scrubStart) / scrubRange) * 100 : 0;
+            return (
+              <div style={{ flex: 1, maxWidth: 200, height: 6, background: 'var(--rq-bg-3)', borderRadius: 3, cursor: 'pointer', position: 'relative' }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickPct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  setReplayTimestamp(new Date(scrubStart + clickPct * scrubRange));
+                }}
+              >
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3,
+                  width: `${Math.max(0, Math.min(100, pctDone))}%`,
+                  background: 'var(--rq-blue)', transition: 'width .15s',
+                }} />
+              </div>
+            );
+          })()}
           <button type="button" onClick={exitReplay}
-            style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
+            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
             exit replay
           </button>
         </div>
@@ -1092,8 +1182,19 @@ export default function ManagerDashboard() {
             {view === 'incidents' && renderIncidents()}
             {view === 'patterns' && renderPatterns()}
 
-            {/* Dev / demo controls */}
-            <div style={{ padding: '10px 16px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {/* Operator selector + dev controls */}
+            <div style={{ padding: '10px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={operator.userId} onChange={e => {
+                const op = OPERATORS.find(o => o.userId === e.target.value);
+                if (op) setOperator(op);
+              }} style={{
+                padding: '4px 8px', background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
+                color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+              }}>
+                {OPERATORS.map(op => (
+                  <option key={op.userId} value={op.userId}>{op.displayName} ({op.role})</option>
+                ))}
+              </select>
               <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
                 Refresh
               </button>
@@ -1142,6 +1243,29 @@ export default function ManagerDashboard() {
           ) : triageIncidents.length > 0 ? (
             /* ── Active incidents triage list ── */
             <>
+              {/* Operator load indicators */}
+              {workforce.operatorLoads.filter(o => o.saturation !== 'nominal').length > 0 && (
+                <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
+                  <div className="rq-rail-header" style={{ padding: '2px 0' }}>Operator Load</div>
+                  {workforce.operatorLoads.filter(o => o.saturation !== 'nominal').slice(0, 4).map(op => {
+                    const color = op.saturation === 'overloaded' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                    return (
+                      <div key={op.operatorId} style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                        display: 'flex', justifyContent: 'space-between', padding: '2px 0',
+                        color: 'var(--rq-ink-3)',
+                      }}>
+                        <span>{op.operatorId}</span>
+                        <span style={{ display: 'flex', gap: 6 }}>
+                          <span>{op.ownedIncidents}inc {op.activeRecoveryActions}ra</span>
+                          <span style={{ color, fontWeight: 600 }}>{op.saturation}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="rq-rail-header">
                 <span>Active Incidents</span>
                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)' }}>
