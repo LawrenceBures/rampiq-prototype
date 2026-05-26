@@ -23,6 +23,7 @@ import {
   emitEscalationAction,
 } from '@/lib/lifecycle-commands';
 import { clearDemoData, seedDemoScenario } from '@/lib/demo-seed';
+import { clearStressData, runStressSimulation } from '@/lib/stress-simulation';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from '@/lib/operational-states';
 import { reconstructIncidents, reconstructRecoveryActions } from '@/lib/replay-lifecycle';
@@ -1330,6 +1331,14 @@ export default function ManagerDashboard() {
                 refresh();
               }} style={{ flex: 1, color: 'var(--rq-accent)', borderColor: 'rgba(201,255,58,.3)' }}>
                 Seed Demo
+              </button>
+              <button className="rq-btn-secondary" onClick={async () => {
+                await clearStressData();
+                await runStressSimulation();
+                refreshIncidents();
+                refresh();
+              }} style={{ flex: 1, color: 'var(--rq-blue)', borderColor: 'rgba(90,169,255,.3)' }}>
+                Stress Test
               </button>
               <button className="rq-btn-secondary" onClick={async () => {
                 await clearDemoData();
