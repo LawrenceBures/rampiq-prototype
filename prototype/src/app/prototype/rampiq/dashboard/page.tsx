@@ -33,6 +33,7 @@ import type { Recommendation } from '@/lib/recommendation-engine';
 import { deriveOperationalOutcomes } from '@/lib/outcome-measurement';
 import { deriveInstitutionalMemory } from '@/lib/institutional-memory';
 import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
+import { generateOperationalNarratives } from '@/lib/operational-narrative';
 import { deriveShiftContext, FIXTURE_OPERATORS } from '@/lib/auth-identity';
 import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
@@ -375,6 +376,9 @@ export default function ManagerDashboard() {
 
   // ── Anticipatory Cognition ──
   const anticipatory = deriveAnticipatoryState(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
+
+  // ── Operational Narratives ──
+  const narratives = generateOperationalNarratives(temporalIncidents, temporalRecoveryActions, temporalEvents, anticipatory.stability, shiftContext, asOf);
 
   // ── Operational Outcomes + Recommendations ──
   const outcomes = deriveOperationalOutcomes(temporalIncidents, temporalRecoveryActions, temporalEvents, asOf);
@@ -1555,8 +1559,23 @@ export default function ManagerDashboard() {
             </>
 
           ) : (
-            /* ── No incidents — show event memory ── */
+            /* ── No incidents — show narratives + event memory ── */
             <>
+              {/* Operational narrative summary */}
+              {narratives.length > 0 && (
+                <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
+                  <div className="rq-rail-header" style={{ padding: '2px 0' }}>Operational Summary</div>
+                  {narratives.slice(0, 3).map((nar, i) => (
+                    <div key={i} style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
+                      color: 'var(--rq-ink-3)', padding: '3px 0', lineHeight: 1.3,
+                      borderBottom: '1px solid var(--rq-line)',
+                    }}>
+                      {nar.text}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="rq-rail-header">Event Memory</div>
               {eventMemory.length === 0 && (
                 <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No events yet</div>

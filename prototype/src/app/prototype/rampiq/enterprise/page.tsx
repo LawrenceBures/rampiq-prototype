@@ -13,6 +13,7 @@ import { deriveShiftContext, FIXTURE_OPERATORS } from '@/lib/auth-identity';
 import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import { emitWorkforceAudit } from '@/lib/governance-audit';
 import { deriveAnticipatoryState } from '@/lib/anticipatory-cognition';
+import { generateOperationalNarratives } from '@/lib/operational-narrative';
 import { ElapsedTime } from '@/components/rampiq';
 
 // ============================================================
@@ -57,6 +58,7 @@ export default function EnterpriseWorkspace() {
   const workforceIntel = deriveWorkforceIntelligence(incidents, recoveryActions, events);
   const shiftCtx = deriveShiftContext(operator.userId, operator.shiftWindow, incidents, events);
   const anticipatory = deriveAnticipatoryState(incidents, recoveryActions, events);
+  const narratives = generateOperationalNarratives(incidents, recoveryActions, events, anticipatory.stability, shiftCtx);
 
   const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
 
@@ -129,6 +131,22 @@ export default function EnterpriseWorkspace() {
 
           {/* Escalation signals */}
           <div style={{ gridColumn: '1 / -1' }}>
+            {/* Operational narratives */}
+            <SectionHeader>Operational Summary</SectionHeader>
+            {narratives.length === 0 && <EmptyState>No operational narratives</EmptyState>}
+            {narratives.map((nar, i) => (
+              <div key={i} style={{
+                ...mono, fontSize: 10, padding: '5px 10px', marginBottom: 4,
+                borderLeft: `2px solid ${nar.type === 'pressure_evolution' ? 'var(--rq-amber)' : nar.type === 'escalation_chain' ? 'var(--rq-red)' : 'var(--rq-blue)'}`,
+                color: 'var(--rq-ink-2)', lineHeight: 1.4,
+              }}>
+                {nar.text}
+                <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 2 }}>
+                  {nar.type.replace(/_/g, ' ')} · {nar.qualifier} · {nar.evidenceCount} data points
+                </div>
+              </div>
+            ))}
+
             <SectionHeader>Active Escalation Signals</SectionHeader>
             {workforce.escalations.length === 0 && <EmptyState>No active escalation signals</EmptyState>}
             {workforce.escalations.slice(0, 6).map((esc, i) => (
