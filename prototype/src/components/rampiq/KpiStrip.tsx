@@ -1,6 +1,6 @@
-// RampIQ — KPI strip + severity breakdown.
+// RampIQ — Compact operational metrics strip.
 // Presentation-only. No data fetching. No side effects.
-// Extracted from dashboard page for console layout reuse.
+// Single dense row: KPIs + severity breakdown inline.
 
 import { ElapsedTime } from './index';
 import { ageMinutes } from '@/lib/derived-operational-state';
@@ -10,55 +10,64 @@ interface KpiStripProps {
   summary: EventSummary;
 }
 
+const mono: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', monospace",
+  fontVariantNumeric: 'tabular-nums',
+};
+
+function Metric({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+      <span style={{ ...mono, fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--rq-ink-4)' }}>
+        {label}
+      </span>
+      <span style={{ ...mono, fontSize: 14, fontWeight: 700, color: color ?? 'var(--rq-ink)' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SevDot({ count, color }: { count: number; color: string }) {
+  return (
+    <span style={{
+      ...mono, fontSize: 11, fontWeight: 600,
+      color: count > 0 ? color : 'var(--rq-ink-4)',
+    }}>
+      {count}
+    </span>
+  );
+}
+
 export function KpiStrip({ summary }: KpiStripProps) {
-  const sevCounts = summary.severity;
+  const s = summary.severity;
+  const oldestAge = summary.oldestOpen ? ageMinutes(summary.oldestOpen.created_at) : 0;
 
   return (
-    <>
-      {/* KPIs */}
-      <div className="rq-kpis rq-kpis-4">
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Open</div>
-          <div className={`rq-kpi-val${summary.openCount > 0 ? ' rq-v-a' : ''}`}>{summary.openCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Crit+High</div>
-          <div className={`rq-kpi-val${summary.critHighCount > 0 ? ' rq-v-r' : ''}`}>{summary.critHighCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Resolved</div>
-          <div className={`rq-kpi-val${summary.resolvedCount > 0 ? ' rq-v-g' : ''}`}>{summary.resolvedCount}</div>
-        </div>
-        <div className="rq-kpi">
-          <div className="rq-kpi-lbl">Oldest Open</div>
-          <div className={`rq-kpi-val${summary.oldestOpen && ageMinutes(summary.oldestOpen.created_at) > 15 ? ' rq-v-r' : ''}`}>
-            {summary.oldestOpen
-              ? <ElapsedTime since={summary.oldestOpen.created_at} format="relative" />
-              : '--'
-            }
-          </div>
-        </div>
-      </div>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16, padding: '6px 16px',
+      borderBottom: '1px solid var(--rq-line)', flexWrap: 'wrap',
+    }}>
+      <Metric label="Open" value={summary.openCount} color={summary.openCount > 0 ? 'var(--rq-amber)' : undefined} />
+      <Metric label="Crit+Hi" value={summary.critHighCount} color={summary.critHighCount > 0 ? 'var(--rq-red)' : undefined} />
+      <Metric label="Resolved" value={summary.resolvedCount} color={summary.resolvedCount > 0 ? 'var(--rq-green)' : undefined} />
+      <Metric
+        label="Oldest"
+        value={summary.oldestOpen ? <ElapsedTime since={summary.oldestOpen.created_at} format="relative" /> : '--'}
+        color={oldestAge > 15 ? 'var(--rq-red)' : undefined}
+      />
 
-      {/* Severity breakdown */}
-      <div className="rq-sev-counters">
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.CRITICAL > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.CRITICAL}</div>
-          <div className="rq-sev-count-l">Critical</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.HIGH > 0 ? 'var(--rq-red)' : 'var(--rq-ink-4)' }}>{sevCounts.HIGH}</div>
-          <div className="rq-sev-count-l">High</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.MEDIUM > 0 ? 'var(--rq-amber)' : 'var(--rq-ink-4)' }}>{sevCounts.MEDIUM}</div>
-          <div className="rq-sev-count-l">Medium</div>
-        </div>
-        <div className="rq-sev-count">
-          <div className="rq-sev-count-n" style={{ color: sevCounts.LOW > 0 ? 'var(--rq-ink-3)' : 'var(--rq-ink-4)' }}>{sevCounts.LOW}</div>
-          <div className="rq-sev-count-l">Low</div>
-        </div>
+      {/* Severity mini-counters */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto',
+        borderLeft: '1px solid var(--rq-line)', paddingLeft: 12,
+      }}>
+        <span style={{ ...mono, fontSize: 7, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase' }}>sev</span>
+        <SevDot count={s.CRITICAL} color="var(--rq-red)" />
+        <SevDot count={s.HIGH} color="var(--rq-red)" />
+        <SevDot count={s.MEDIUM} color="var(--rq-amber)" />
+        <SevDot count={s.LOW} color="var(--rq-ink-3)" />
       </div>
-    </>
+    </div>
   );
 }

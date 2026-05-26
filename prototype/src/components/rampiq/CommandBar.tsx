@@ -34,46 +34,49 @@ export function CommandBar({
       {/* Station + role */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          ...mono, fontSize: 13, fontWeight: 700,
+          ...mono, fontSize: 12, fontWeight: 700,
           color: 'var(--rq-accent)', textTransform: 'uppercase',
-          letterSpacing: '.12em',
+          letterSpacing: '.14em',
         }}>
           {station}
         </span>
+        <span style={{ width: 1, height: 14, background: 'var(--rq-line-2)' }} />
         <span style={{ ...mono, color: 'var(--rq-ink-3)', textTransform: 'uppercase' }}>
           {role}
         </span>
         <div className="rq-pulse" />
       </div>
 
-      {/* Sync timestamps */}
-      <div style={{ display: 'flex', gap: 12, marginLeft: 'auto' }}>
-        <span style={{ ...mono, color: 'var(--rq-ink-4)' }}>
-          events {ts(lastEventSync)}
-        </span>
-        <span style={{ ...mono, color: 'var(--rq-ink-4)' }}>
-          incidents {ts(lastIncidentSync)}
-        </span>
-      </div>
-
       {/* Quick counts */}
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
         {openEventCount > 0 && (
           <span style={{
-            ...mono, padding: '2px 8px', borderRadius: 3,
-            background: 'rgba(255,92,92,.1)', color: 'var(--rq-red)',
+            ...mono, fontSize: 9, padding: '2px 7px', borderRadius: 2,
+            background: 'rgba(255,92,92,.08)', color: 'var(--rq-red)',
+            border: '1px solid rgba(255,92,92,.15)',
           }}>
             {openEventCount} open
           </span>
         )}
         {activeIncidentCount > 0 && (
           <span style={{
-            ...mono, padding: '2px 8px', borderRadius: 3,
-            background: 'rgba(232,161,58,.1)', color: 'var(--rq-amber)',
+            ...mono, fontSize: 9, padding: '2px 7px', borderRadius: 2,
+            background: 'rgba(232,161,58,.08)', color: 'var(--rq-amber)',
+            border: '1px solid rgba(232,161,58,.15)',
           }}>
             {activeIncidentCount} incident{activeIncidentCount !== 1 ? 's' : ''}
           </span>
         )}
+      </div>
+
+      {/* Sync timestamps — pushed right, dimmed */}
+      <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+        <span style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)' }}>
+          ev {ts(lastEventSync)}
+        </span>
+        <span style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)' }}>
+          inc {ts(lastIncidentSync)}
+        </span>
       </div>
     </div>
   );

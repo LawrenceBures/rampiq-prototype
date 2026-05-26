@@ -1087,8 +1087,8 @@
 
 /* Severity left-edge on event cards */
 .rq-evt {
-  margin: 0 16px 6px;
-  padding: 10px 12px;
+  margin: 0 16px 4px;
+  padding: 7px 10px;
   border: 1px solid var(--rq-line);
   border-left: 3px solid var(--rq-line);
   background: var(--rq-bg-1);
@@ -1120,7 +1120,7 @@
 .rq-quick-actions {
   display: flex;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 5px;
 }
 
 .rq-qbtn {
@@ -1593,11 +1593,12 @@
 
 /* ---- Command bar ---- */
 .rq-console-command {
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--rq-line);
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--rq-line-2);
+  background: var(--rq-bg-1);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 

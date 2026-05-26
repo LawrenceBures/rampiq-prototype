@@ -619,15 +619,24 @@ export default function ManagerDashboard() {
           {zones.length === 0 && (
             <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No zones loaded</div>
           )}
-          {zones.map(z => (
-            <ZoneTile
-              key={z.id}
-              name={z.label}
-              gateCount={z.gate_ids.length}
-              pressure={0}
-              incidentCount={incidents.filter(i => i.zone_id === z.id).length}
-            />
-          ))}
+          {zones.map(z => {
+            // Derive zone pressure from open events at zone gates
+            const zoneOpenEvents = events.filter(e =>
+              e.gate_id && z.gate_ids.includes(e.gate_id) && isOpen(e)
+            ).length;
+            const zoneIncidents = incidents.filter(i => i.zone_id === z.id).length;
+            // Pressure: open events * 12 + incidents * 25, capped at 100
+            const pressure = Math.min(100, zoneOpenEvents * 12 + zoneIncidents * 25);
+            return (
+              <ZoneTile
+                key={z.id}
+                name={z.label}
+                gateCount={z.gate_ids.length}
+                pressure={pressure}
+                incidentCount={zoneIncidents}
+              />
+            );
+          })}
         </div>
 
         {/* ── CENTER: Main operational surface ── */}
@@ -636,33 +645,45 @@ export default function ManagerDashboard() {
 
             <KpiStrip summary={summary} />
 
-            {/* Attention banners */}
-            {attentionEvents.map(e => (
-              <div className="rq-attn" key={e.id}>
-                <div className="rq-attn-row">
-                  <SeverityIndicator severity={e.severity as Severity} variant="text" />
-                  <span className="rq-attn-time">
+            {/* Compact attention strip — collapsed urgency alerts */}
+            {attentionEvents.length > 0 && (
+              <div style={{
+                margin: '0 16px', padding: '5px 10px',
+                border: '1px solid var(--rq-red)', borderLeft: '3px solid var(--rq-red)',
+                background: 'rgba(255,92,92,.04)',
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
+                  color: 'var(--rq-red)', letterSpacing: '.08em', textTransform: 'uppercase',
+                }}>
+                  {attentionEvents.length} attention
+                </span>
+                {attentionEvents.map(e => (
+                  <span key={e.id} style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                    color: 'var(--rq-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}>
+                    <SeverityIndicator severity={e.severity as Severity} variant="dot" />
+                    <span>{e.event_type.replace(/_/g, ' ')}</span>
+                    {e.gate_id && <span style={{ color: 'var(--rq-ink-4)' }}>{e.gate_id}</span>}
                     <ElapsedTime since={e.created_at} format="relative" />
+                    {e.operational_status === 'OPEN' && (
+                      <button className="rq-qbtn qb-ack" style={{ padding: '1px 6px', fontSize: 8, marginTop: 0 }}
+                        disabled={updatingId === e.id}
+                        onClick={(ev) => { ev.stopPropagation(); handleStatus(e.id, 'ACKNOWLEDGED', ev); }}>
+                        Ack
+                      </button>
+                    )}
+                    <button className="rq-qbtn qb-resolve" style={{ padding: '1px 6px', fontSize: 8, marginTop: 0 }}
+                      disabled={updatingId === e.id}
+                      onClick={(ev) => { ev.stopPropagation(); handleStatus(e.id, 'RESOLVED', ev); }}>
+                      {updatingId === e.id ? '...' : 'Res'}
+                    </button>
                   </span>
-                </div>
-                <div className="rq-attn-msg">
-                  <b>{e.event_type.replace(/_/g, ' ')}</b>
-                  {e.gate_id && <> — {e.gate_id}</>}
-                  {e.equipment_id && <> — {e.equipment_id}</>}
-                  {e.notes && <> — {e.notes}</>}
-                </div>
-                <div className="rq-quick-actions" style={{ marginTop: 6 }}>
-                  {e.operational_status === 'OPEN' && (
-                    <button className="rq-qbtn qb-ack" disabled={updatingId === e.id}
-                      onClick={(ev) => handleStatus(e.id, 'ACKNOWLEDGED', ev)}>Ack</button>
-                  )}
-                  <button className="rq-qbtn qb-resolve" disabled={updatingId === e.id}
-                    onClick={(ev) => handleStatus(e.id, 'RESOLVED', ev)}>
-                    {updatingId === e.id ? '...' : 'Resolve'}
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
 
             {/* Tabs */}
             <div style={{
