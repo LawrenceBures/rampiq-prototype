@@ -36,7 +36,7 @@ export interface OperatorLoad {
   /** Total operational weight (severity-adjusted) */
   loadScore: number;
   /** Saturation state */
-  saturation: 'nominal' | 'elevated' | 'saturated' | 'overloaded';
+  saturation: 'nominal' | 'elevated' | 'saturated' | 'needs_support';
   /** Oldest unresolved item age in minutes */
   oldestUnresolvedMin: number;
 }
@@ -59,7 +59,7 @@ export interface OwnershipGap {
 export type EscalationReason =
   | 'stalled_incident'
   | 'recovery_failure_cascade'
-  | 'operator_overload'
+  | 'coordination_support_needed'
   | 'sustained_unresolved'
   | 'unacknowledged_critical'
   | 'coordination_breakdown';
@@ -88,7 +88,7 @@ export interface WorkforceCoordinationState {
   summary: {
     totalOperators: number;
     saturatedCount: number;
-    overloadedCount: number;
+    needsSupportCount: number;
     unassignedIncidents: number;
     unacknowledgedActions: number;
     stalledCoordinations: number;
@@ -140,7 +140,7 @@ export function deriveWorkforceCoordination(
   const escalations = detectEscalations(incidents, recoveryActions, operatorLoads, now);
 
   const saturatedCount = operatorLoads.filter(o => o.saturation === 'saturated').length;
-  const overloadedCount = operatorLoads.filter(o => o.saturation === 'overloaded').length;
+  const needsSupportCount = operatorLoads.filter(o => o.saturation === 'needs_support').length;
 
   return {
     operatorLoads,
@@ -149,7 +149,7 @@ export function deriveWorkforceCoordination(
     summary: {
       totalOperators: operatorLoads.length,
       saturatedCount,
-      overloadedCount,
+      needsSupportCount,
       unassignedIncidents: ownershipGaps.filter(g => g.type === 'unassigned_incident').length,
       unacknowledgedActions: ownershipGaps.filter(g => g.type === 'unacknowledged').length,
       stalledCoordinations: ownershipGaps.filter(g => g.type === 'stalled_coordination').length,
@@ -216,7 +216,7 @@ function deriveOperatorLoads(
     }
 
     const saturation: OperatorLoad['saturation'] =
-      loadScore >= LOAD_THRESHOLDS.OVERLOADED_SCORE ? 'overloaded' :
+      loadScore >= LOAD_THRESHOLDS.OVERLOADED_SCORE ? 'needs_support' :
       data.incidents.length >= LOAD_THRESHOLDS.SATURATED_INCIDENTS ? 'saturated' :
       data.incidents.length >= LOAD_THRESHOLDS.ELEVATED_INCIDENTS ? 'elevated' :
       'nominal';
@@ -374,12 +374,12 @@ function detectEscalations(
 
   // ── Operator overload ──
   for (const op of operatorLoads) {
-    if (op.saturation === 'overloaded') {
+    if (op.saturation === 'needs_support') {
       signals.push({
-        reason: 'operator_overload',
+        reason: 'coordination_support_needed',
         severity: op.loadScore >= 30 ? 'critical' : 'alert',
-        title: `${op.operatorId}: overloaded (score ${op.loadScore})`,
-        explanation: `Operator has ${op.ownedIncidents} incidents and ${op.activeRecoveryActions} active recovery actions. ${op.blockedActions} blocked. Oldest unresolved: ${op.oldestUnresolvedMin}m. Consider redistributing workload.`,
+        title: `${op.operatorId}: coordination support needed`,
+        explanation: `Coordinator has ${op.ownedIncidents} active incidents and ${op.activeRecoveryActions} recovery actions. ${op.blockedActions} blocked. Oldest unresolved: ${op.oldestUnresolvedMin}m. Workload may benefit from redistribution or additional support.`,
         incidentIds: [],
         score: op.loadScore + op.oldestUnresolvedMin,
         onsetMin: op.oldestUnresolvedMin,

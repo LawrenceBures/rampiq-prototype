@@ -824,7 +824,7 @@ export default function ManagerDashboard() {
       />
 
       {/* Workforce coordination strip (role-aware) */}
-      {(workforce.escalations.length > 0 || workforce.summary.overloadedCount > 0 || workforce.ownershipGaps.length > 0) && (
+      {(workforce.escalations.length > 0 || workforce.summary.needsSupportCount > 0 || workforce.ownershipGaps.length > 0) && (
         <div style={{
           padding: '3px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
           borderBottom: '1px solid var(--rq-line)',
@@ -867,12 +867,12 @@ export default function ManagerDashboard() {
             </span>
           ))}
           {/* Role-aware operator load summary */}
-          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.overloadedCount > 0 && (
+          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.needsSupportCount > 0 && (
             <span style={{ fontSize: 8, color: 'var(--rq-red)' }}>
-              {workforce.summary.overloadedCount} coord. need support
+              {workforce.summary.needsSupportCount} coord. need support
             </span>
           )}
-          {operator.viewerRole === 'coordinator' && workforce.operatorLoads.find(o => o.operatorId === operator.userId)?.saturation === 'overloaded' && (
+          {operator.viewerRole === 'coordinator' && workforce.operatorLoads.find(o => o.operatorId === operator.userId)?.saturation === 'needs_support' && (
             <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
               workload elevated — request support
             </span>
@@ -1295,15 +1295,15 @@ export default function ManagerDashboard() {
                         <span style={{ color: 'var(--rq-ink-2)' }}>{operator.displayName}</span>
                         <span style={{ display: 'flex', gap: 6 }}>
                           <span>{myLoad.ownedIncidents}inc {myLoad.activeRecoveryActions}ra</span>
-                          <span style={{ color: myLoad.saturation === 'overloaded' ? 'var(--rq-red)' : 'var(--rq-amber)', fontWeight: 600 }}>
-                            {myLoad.saturation === 'overloaded' ? 'need support' : myLoad.saturation}
+                          <span style={{ color: myLoad.saturation === 'needs_support' ? 'var(--rq-red)' : 'var(--rq-amber)', fontWeight: 600 }}>
+                            {myLoad.saturation === 'needs_support' ? 'need support' : myLoad.saturation}
                           </span>
                         </span>
                       </div>
                     )}
                     {/* Manager/Director see aggregates or individuals */}
                     {showIndividuals && elevated.filter(o => o.operatorId !== operator.userId).slice(0, 4).map(op => {
-                      const color = op.saturation === 'overloaded' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
+                      const color = op.saturation === 'needs_support' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
                       return (
                         <div key={op.operatorId} style={{
                           fontFamily: "'JetBrains Mono', monospace", fontSize: 9,

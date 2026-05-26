@@ -66,19 +66,28 @@ export function IncidentDetailPanel({
       {incidentEvents.length > 0 && (
         <div style={{ padding: '6px 12px' }}>
           <div className="rq-rail-header" style={{ padding: '4px 0' }}>Event Timeline</div>
-          {incidentEvents.map(ev => (
-            <div key={ev.id} style={{
-              ...mono, fontSize: 10,
-              color: 'var(--rq-ink-3)', padding: '3px 0',
-              borderBottom: '1px solid var(--rq-line)',
-              display: 'flex', justifyContent: 'space-between', gap: 8,
-            }}>
-              <span style={{ color: ev.state_after ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
-                {ev.event_type.replace(/_/g, ' ')}
-              </span>
-              <ElapsedTime since={ev.created_at} format="relative" />
-            </div>
-          ))}
+          {incidentEvents.map(ev => {
+            // Visual markers for ownership/escalation events
+            const isOwnership = ev.event_type.includes('reassigned') || ev.event_type.includes('handoff') || ev.event_type.includes('ownership');
+            const isEscalation = ev.event_type.includes('escalation');
+            const isRecovery = ev.event_type.includes('recovery_action');
+            const markerColor = isEscalation ? 'var(--rq-red)' : isOwnership ? 'var(--rq-blue)' : isRecovery ? 'var(--rq-amber)' : undefined;
+            return (
+              <div key={ev.id} style={{
+                ...mono, fontSize: 10,
+                color: 'var(--rq-ink-3)', padding: '3px 0',
+                borderBottom: '1px solid var(--rq-line)',
+                borderLeft: markerColor ? `2px solid ${markerColor}` : undefined,
+                paddingLeft: markerColor ? 6 : 0,
+                display: 'flex', justifyContent: 'space-between', gap: 8,
+              }}>
+                <span style={{ color: markerColor ?? (ev.state_after ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)') }}>
+                  {ev.event_type.replace(/_/g, ' ')}
+                </span>
+                <ElapsedTime since={ev.created_at} format="relative" />
+              </div>
+            );
+          })}
         </div>
       )}
 
