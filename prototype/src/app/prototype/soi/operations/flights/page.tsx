@@ -322,7 +322,9 @@ export default function FlightsPage() {
                   onClick={() => toggleSelect(flight.id)}
                   style={{
                     margin: '0 16px 4px', padding: '10px 12px',
-                    border: `1px solid ${isSelected ? 'var(--rq-accent)' : critWarnings.length > 0 ? 'rgba(255,92,92,.3)' : 'var(--rq-line)'}`,
+                    borderTop: `1px solid ${isSelected ? 'var(--rq-accent)' : critWarnings.length > 0 ? 'rgba(255,92,92,.3)' : 'var(--rq-line)'}`,
+                    borderRight: `1px solid ${isSelected ? 'var(--rq-accent)' : critWarnings.length > 0 ? 'rgba(255,92,92,.3)' : 'var(--rq-line)'}`,
+                    borderBottom: `1px solid ${isSelected ? 'var(--rq-accent)' : critWarnings.length > 0 ? 'rgba(255,92,92,.3)' : 'var(--rq-line)'}`,
                     borderLeft: `3px solid ${statusColor(flight.status)}`,
                     background: isSelected ? 'rgba(201,255,58,.04)' : critWarnings.length > 0 ? 'rgba(255,92,92,.02)' : 'var(--rq-bg-1)',
                     cursor: 'pointer', transition: 'background .12s',
