@@ -48,9 +48,12 @@ import {
   explainInstability,
   assessOperation,
   answerOperationalQuestion,
+  createEmptyContext,
+  contextSummary,
   type SoiRecommendation,
   type CommandIntent,
   type CopilotAnswer,
+  type ConversationContext,
 } from '@/lib/soi-intelligence';
 
 // ============================================================
@@ -91,6 +94,8 @@ export default function ManagerDashboard() {
   const [commandInput, setCommandInput] = useState('');
   const [commandResponse, setCommandResponse] = useState<string[] | null>(null);
   const [copilotAnswer, setCopilotAnswer] = useState<CopilotAnswer | null>(null);
+  const [conversationMemory, setConversationMemory] = useState<ConversationContext>(createEmptyContext());
+  const [lastInferredFrom, setLastInferredFrom] = useState<string[]>([]);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
@@ -510,16 +515,18 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
-        // Copilot fallback: route through operational question answering
+        // Copilot fallback: route through context-aware operational reasoning
         setCommandResponse(null);
-        const answer = answerOperationalQuestion(raw, {
+        const result = answerOperationalQuestion(raw, {
           assessment: operationalAssessment,
           recommendations: soiRecommendations,
           dispatchPlan,
           activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
           activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
-        }, zones);
-        setCopilotAnswer(answer);
+        }, zones, conversationMemory, true);
+        setCopilotAnswer(result.answer);
+        setConversationMemory(result.updatedMemory);
+        setLastInferredFrom(result.inferredFrom);
       }
     }
     setCommandInput('');
@@ -1789,6 +1796,39 @@ export default function ManagerDashboard() {
                 </button>
               </div>
             )}
+
+            {/* Context indicator */}
+            {(() => {
+              const ctxLabel = contextSummary(conversationMemory);
+              return ctxLabel ? (
+                <div style={{
+                  margin: '4px 16px 0', padding: '3px 10px',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
+                  color: 'var(--rq-ink-4)', letterSpacing: '.06em',
+                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+                }}>
+                  <span style={{ textTransform: 'uppercase', letterSpacing: '.1em' }}>Following</span>
+                  <span style={{ color: 'var(--rq-ink-3)' }}>{ctxLabel}</span>
+                  {lastInferredFrom.length > 0 && (
+                    <span style={{ color: 'var(--rq-blue)', fontSize: 7 }}>
+                      (inferred: {lastInferredFrom.join(', ')})
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setConversationMemory(createEmptyContext()); setLastInferredFrom([]); }}
+                    style={{
+                      marginLeft: 'auto', padding: '1px 4px',
+                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                      fontFamily: 'inherit', fontSize: 7, cursor: 'pointer',
+                    }}
+                  >
+                    reset
+                  </button>
+                </div>
+              ) : null;
+            })()}
 
             {/* Copilot answer panel */}
             {copilotAnswer && (

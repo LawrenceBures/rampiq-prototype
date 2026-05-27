@@ -58,6 +58,7 @@ export {
 export {
   answerOperationalQuestion,
   type CopilotAnswer,
+  type CopilotResult,
   type OperationalContext,
 } from './operational-copilot';
 
@@ -66,3 +67,15 @@ export {
   type RoutedQuestion,
   type QuestionIntent,
 } from './operational-question-router';
+
+export {
+  createEmptyContext,
+  isContextActive,
+  contextSummary,
+  type ConversationContext,
+} from './operational-conversation-memory';
+
+export {
+  resolveOperationalContext,
+  updateMemoryFromAnswer,
+} from './operational-context-engine';
