@@ -160,7 +160,7 @@ function generateZoneRecommendations(
     const preview = simulateRecovery(za, actions, zoneIncidents, activeRAs);
 
     recs.push({
-      id: `rec-staff-${za.zoneId}-${now.getTime()}`,
+      id: `rec-staff-${za.zoneId}`,
       title: `Reinforce ${za.zoneLabel}`,
       summary: `${za.unresolvedCount} unresolved incidents creating ${za.stability} conditions. Deploy support to reduce pressure.`,
       affectedZone: za.zoneId,
@@ -207,7 +207,7 @@ function generateZoneRecommendations(
     const preview = simulateRecovery(za, actions, zoneIncidents, activeRAs);
 
     recs.push({
-      id: `rec-equip-${za.zoneId}-${now.getTime()}`,
+      id: `rec-equip-${za.zoneId}`,
       title: `Equipment issue in ${za.zoneLabel}`,
       summary: equipSource.description,
       affectedZone: za.zoneId,
@@ -270,7 +270,7 @@ function generateZoneRecommendations(
     const preview = simulateRecovery(za, actions, zoneIncidents, activeRAs);
 
     recs.push({
-      id: `rec-esc-${za.zoneId}-${now.getTime()}`,
+      id: `rec-esc-${za.zoneId}`,
       title: `Escalate in ${za.zoneLabel}`,
       summary: `Incident${agedSource.contributingIds.length > 1 ? 's' : ''} unresolved for ${za.oldestUnresolvedMinutes}+ minutes. Escalation needed.`,
       affectedZone: za.zoneId,
