@@ -405,11 +405,21 @@ export default function ManagerDashboard() {
   );
 
   // ── SOI Intelligence Core ──
-  const soiRecommendations = generateRecommendations(
-    temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf
-  );
-  const dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
-  const operationalAssessment = assessOperation(temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf);
+  let soiRecommendations: SoiRecommendation[] = [];
+  let dispatchPlan = { actions: [] as import('@/lib/soi-intelligence').RankedAction[], summary: '', totalEstimatedMinutes: 0 };
+  let operationalAssessment: import('@/lib/soi-intelligence').OperationalAssessment = {
+    timestamp: new Date().toISOString(), zoneAssessments: [], globalPressure: 0,
+    globalStability: 'stable', summary: '', topPressureSources: [],
+  };
+  try {
+    soiRecommendations = generateRecommendations(
+      temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf
+    );
+    dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
+    operationalAssessment = assessOperation(temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf);
+  } catch (err) {
+    console.error('[SOI Intelligence] derivation error:', err);
+  }
 
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
