@@ -553,7 +553,7 @@ export default function EnterpriseWorkspace() {
       )}
 
       <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', padding: '16px 0', textAlign: 'center' }}>
-        RampIQ · Enterprise Operational Intelligence
+        SOI · Enterprise Operational Intelligence
       </div>
     </div>
   );

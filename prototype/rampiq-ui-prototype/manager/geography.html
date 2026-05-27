@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Operational Geography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .geo-grid { display: grid; grid-template-columns: 1fr 360px; height: 100%; gap: 1px; background: var(--line); }
+  .geo-stage { background: var(--bg-1); position: relative; overflow: hidden; }
+  .gate { width: 70px; padding: 8px 4px; }
+  .gate-id { font-size: 13px; }
+  .gate-tail { font-size: 10px; margin-top: 3px; }
+  .gate-dep { font-size: 10px; }
+  .geo-side { background: var(--bg-1); overflow-y: auto; }
+  .geo-side .group { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .geo-side .group h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--text-3); text-transform: uppercase; margin-bottom: 10px; }
+  .legend-row {
+    display: flex; align-items: center; gap: 10px; padding: 5px 0;
+    font-family: var(--mono); font-size: 11px; color: var(--text-1);
+  }
+  .legend-row .sw { width: 16px; height: 16px; border-radius: 3px; border: 1px solid; }
+  .gate-info { font-family: var(--mono); font-size: 11px; color: var(--text-2); line-height: 1.8; }
+  .gate-info .v { color: var(--text-0); }
+  .gate-info .v.crit { color: var(--red); }
+  .gate-info .v.warn { color: var(--amber); }
+  @media (max-width: 1024px) { .geo-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html" class="active"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">STATION → OPERATIONAL GEOGRAPHY</span>
+      <h1>Gate Map · Node Graph</h1>
+      <div class="right">
+        <span class="pill">84 NODES</span>
+        <span class="pill">156 ADJACENCIES</span>
+        <span class="pill warn">2 CHOKEPOINTS</span>
+      </div>
+    </div>
+
+    <div class="body" style="padding: 0;">
+      <div class="geo-grid">
+        <div class="geo-stage">
+          <div class="stage" style="height: 100%; min-height: 600px;">
+            <div class="stage-grid"></div>
+            <div class="schematic" id="schematic"></div>
+          </div>
+        </div>
+        <div class="geo-side">
+          <div class="group">
+            <h4>Selection</h4>
+            <div id="gateDetail" class="gate-info">Click a gate to see operational detail.</div>
+          </div>
+          <div class="group">
+            <h4>Pressure Legend</h4>
+            <div class="legend-row"><span class="sw" style="background: var(--bg-3); border-color: var(--line-2);"></span>Empty / no turn</div>
+            <div class="legend-row"><span class="sw" style="background: var(--bg-4); border-color: var(--line-3);"></span>Occupied · nominal</div>
+            <div class="legend-row"><span class="sw" style="background: var(--amber-bg); border-color: var(--amber);"></span>Elevated · attention</div>
+            <div class="legend-row"><span class="sw" style="background: var(--red-bg); border-color: var(--red);"></span>Critical · incident</div>
+            <div class="legend-row"><span class="sw" style="background: var(--blue-bg); border-color: var(--blue);"></span>Recovery in progress</div>
+          </div>
+          <div class="group">
+            <h4>Node Types</h4>
+            <div class="legend-row"><span class="sw" style="background: var(--bg-4); border-color: var(--line-3);"></span>Gate</div>
+            <div class="legend-row"><span class="sw" style="background: rgba(232,161,58,0.22); border-color: var(--amber);"></span>Push Alley · Chokepoint</div>
+            <div class="legend-row"><span class="sw" style="background: rgba(74,154,239,0.18); border-color: var(--blue);"></span>Bag Room</div>
+            <div class="legend-row"><span class="sw" style="background: var(--bg-3); border-color: var(--line-3);"></span>Staging / Remote</div>
+          </div>
+          <div class="group">
+            <h4>Cascade Active · INC-0142</h4>
+            <div style="display:flex; gap: 6px; flex-wrap: wrap;">
+              <span style="background: var(--red-bg); color: var(--red); border: 1px solid var(--red-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px; cursor: pointer;">B7 ORIGIN</span>
+              <span style="color: var(--text-3); font-family: var(--mono); font-size: 10px; padding: 5px 4px;">→</span>
+              <span style="background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px; cursor: pointer;">B8</span>
+              <span style="color: var(--text-3); font-family: var(--mono); font-size: 10px; padding: 5px 4px;">→</span>
+              <span style="background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px; cursor: pointer;">B9</span>
+              <span style="color: var(--text-3); font-family: var(--mono); font-size: 10px; padding: 5px 4px;">→</span>
+              <span style="background: var(--bg-3); color: var(--text-1); border: 1px solid var(--line-3); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px; cursor: pointer;">B14</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+const data = RampIQ.data.state;
+
+function renderSchematic() {
+  const piers = {
+    n: { label: 'North · Zone A', gates: data.gates.filter(g => g.id.startsWith('A')) },
+    w: { label: 'West · Zone C', gates: data.gates.filter(g => g.id.startsWith('C')) },
+    e: { label: 'East · Zone B', gates: data.gates.filter(g => g.id.startsWith('B')) },
+    s: { label: 'South · Zone D · Remote', gates: data.gates.filter(g => g.id.startsWith('R')) }
+  };
+  const sc = (s) => s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'recovery' ? 'recovery' : s === 'occupied' ? 'occupied' : '';
+  document.getElementById('schematic').innerHTML = `
+    ${['n','w','e','s'].map(p => `
+      <div class="pier" style="grid-area: ${p};">
+        <div class="pier-label"><span>${piers[p].label}</span><span class="p">${piers[p].gates.filter(g => g.state !== 'empty').length} ACTIVE</span></div>
+        <div class="pier-row">
+          ${piers[p].gates.map(g => `
+            <div class="gate ${sc(g.state)}" onclick="selectGate('${g.id}')">
+              <div class="gate-id">${g.id}</div>
+              <div class="gate-tail">${g.tail}</div>
+              <div class="gate-dep">${g.dep}</div>
+              ${g.state === 'crit' ? '<div class="gate-pin"></div>' : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}
+    <div class="stage-center">
+      <div class="osi-gauge">
+        <div class="osi-label">Station Pressure</div>
+        <div class="osi-value">${data.osi}</div>
+        <div class="osi-trend">▲ +4 over 15m</div>
+        <div class="osi-context">
+          <div class="ctx"><span class="v">23</span><span>TURNS</span></div>
+          <div class="ctx"><span class="v">7</span><span>SUPPORT</span></div>
+          <div class="ctx"><span class="v">1</span><span>INCIDENT</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function selectGate(id) {
+  const g = data.gates.find(x => x.id === id);
+  const el = document.getElementById('gateDetail');
+  if (!g) return;
+  el.innerHTML = `
+    <div style="font-family: var(--sans); font-size: 18px; font-weight: 700; margin-bottom: 8px;">Gate ${g.id}</div>
+    <div>TAIL: <span class="v">${g.tail}</span></div>
+    <div>FLIGHT: <span class="v">${g.flight}</span></div>
+    <div>DEP: <span class="v ${g.state === 'crit' ? 'crit' : (g.state === 'warn' ? 'warn' : '')}">${g.dep}</span></div>
+    <div>STATE: <span class="v ${g.state === 'crit' ? 'crit' : (g.state === 'warn' ? 'warn' : '')}">${g.state.toUpperCase()}</span></div>
+    <div>STEP: <span class="v">${g.step}</span></div>
+    <div>CREW: <span class="v">${g.crew}</span></div>
+    <div>ZONE: <span class="v">${g.zone}</span></div>
+    ${g.incidentId ? `<div style="margin-top: 12px;"><button class="act-btn primary" onclick="location.href='recovery.html?inc=${g.incidentId}'">OPEN RECOVERY</button></div>` : ''}
+  `;
+}
+window.selectGate = selectGate;
+
+renderSchematic();
+const params = new URLSearchParams(location.search);
+if (params.get('gate')) selectGate(params.get('gate'));
+</script>
+</body>
+</html>

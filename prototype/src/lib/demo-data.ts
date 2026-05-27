@@ -1,4 +1,4 @@
-// RampIQ — Gate definitions, equipment roster, and type helpers.
+// SOI — Gate definitions, equipment roster, and type helpers.
 // NO hardcoded timelines. All operational state comes from events.
 
 export type GateStatus = 'on-track' | 'watch' | 'at-risk' | 'delayed' | 'complete';

@@ -1,6 +1,6 @@
 'use client';
 
-// RampIQ Phase 1 — Scan Input Handler (hardware abstraction layer).
+// SOI Phase 1 — Scan Input Handler (hardware abstraction layer).
 // Accepts decoded strings from jsQR camera OR Zebra DataWedge keystrokes.
 // Downstream code sees only: { decoded_value, source, timestamp }.
 

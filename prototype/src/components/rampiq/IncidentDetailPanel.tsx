@@ -1,4 +1,4 @@
-// RampIQ — Incident detail panel for right rail.
+// SOI — Incident detail panel for right rail.
 // Presentation + controlled state. No data fetching.
 // Renders incident card, event timeline, recovery actions.
 

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Workforce</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .crew-zones {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    gap: 16px;
+  }
+  .crew-zone-card {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    overflow: hidden;
+  }
+  .czc-head {
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center;
+    background: #04060a;
+  }
+  .czc-head .name { font-weight: 600; font-size: 14px; }
+  .czc-head .stats { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+  .czc-head .stats .v { color: var(--text-0); }
+  .czc-head .stats .v.warn { color: var(--amber); }
+  .czc-body { padding: 8px 12px; max-height: 320px; overflow-y: auto; }
+  .agent-row {
+    display: grid; grid-template-columns: 30px 1fr 80px 70px 70px;
+    align-items: center; gap: 10px;
+    padding: 8px 8px; border-radius: 3px; font-size: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-row:hover { background: var(--bg-2); }
+  .agent-row .av {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--bg-4); border: 1px solid var(--line-3);
+    font-family: var(--mono); font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .agent-row .av.chief { border-color: var(--amber); color: var(--amber); }
+  .agent-row .name { font-weight: 500; }
+  .agent-row .name .role { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 6px; }
+  .agent-row .pos { font-family: var(--mono); font-size: 10px; color: var(--text-1); }
+  .agent-row .last { font-family: var(--mono); font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .ind {
+    display: inline-block; padding: 2px 6px; border-radius: 2px;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    text-align: center; font-weight: 600;
+  }
+  .ind.active { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-d); }
+  .ind.break { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--line-3); }
+  .ind.idle { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); }
+  .summary {
+    padding: 14px 20px; background: #04060a; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;
+  }
+  .summary .s-item .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .summary .s-item .v { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+  .summary .s-item .v.warn { color: var(--amber); }
+  .summary .s-item .v.crit { color: var(--red); }
+  .summary .s-item .v.good { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html" class="active"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">WORKFORCE → SNAPSHOT</span>
+      <h1>Crew &amp; Workforce</h1>
+      <div class="right">
+        <span class="pill">42 ON SHIFT</span>
+        <span class="pill warn">3 ON BREAK</span>
+        <span class="pill good">38 ON-POSITION</span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="summary">
+        <div class="s-item"><div class="lbl">On Shift</div><div class="v">42</div></div>
+        <div class="s-item"><div class="lbl">On Position</div><div class="v good">38</div></div>
+        <div class="s-item"><div class="lbl">On Break</div><div class="v warn">3</div></div>
+        <div class="s-item"><div class="lbl">Idle / Reassign</div><div class="v warn">1</div></div>
+        <div class="s-item"><div class="lbl">Shortage Flagged</div><div class="v crit">2</div></div>
+      </div>
+      <div class="crew-zones" id="crewZones"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+const data = RampIQ.data.state;
+
+// extend crew dataset for richer display
+const extendedCrew = [
+  ...data.crew,
+  // Zone A
+  { id:'chen-j2', name:'J. Chen', role:'Lead', zone:'A', pos:'A4', status:'active', lastEvt:'14:20' },
+  { id:'mendez-r', name:'R. Mendez', role:'Loader', zone:'A', pos:'A4', status:'active', lastEvt:'14:19' },
+  { id:'patel-a', name:'A. Patel', role:'Loader', zone:'A', pos:'A2', status:'active', lastEvt:'14:21' },
+  { id:'okafor-i', name:'I. Okafor', role:'Cater', zone:'A', pos:'A5', status:'active', lastEvt:'14:18' },
+  { id:'liu-c', name:'C. Liu', role:'Loader', zone:'A', pos:'—', status:'idle', lastEvt:'14:10' },
+  // Zone C
+  { id:'donovan-c2', name:'C. Donovan', role:'Chief', zone:'C', pos:'C-ROAM', status:'active', lastEvt:'14:22' },
+  { id:'fox-k', name:'K. Fox', role:'Lead', zone:'C', pos:'C4', status:'active', lastEvt:'14:20' },
+  { id:'nguyen-b', name:'B. Nguyen', role:'Loader', zone:'C', pos:'C1', status:'active', lastEvt:'14:19' },
+  { id:'gomez-s', name:'S. Gomez', role:'Cabin', zone:'C', pos:'C3', status:'active', lastEvt:'14:21' },
+  { id:'singh-a', name:'A. Singh', role:'Loader', zone:'C', pos:'—', status:'break', lastEvt:'14:05' },
+  // Zone D
+  { id:'park-r2', name:'R. Park', role:'Chief', zone:'D', pos:'R2', status:'active', lastEvt:'14:18' },
+  { id:'webb-e', name:'E. Webb', role:'Lead', zone:'D', pos:'R2', status:'active', lastEvt:'14:18' },
+];
+
+function avatar(name) { return name.split(/\s+/).map(s => s[0]).join('').slice(0, 2); }
+
+function indClass(s) { return s === 'active' ? 'active' : s === 'break' ? 'break' : 'idle'; }
+
+function renderZones() {
+  const zones = data.zones;
+  const byZone = {};
+  extendedCrew.forEach(c => {
+    if (!byZone[c.zone]) byZone[c.zone] = [];
+    byZone[c.zone].push(c);
+  });
+  document.getElementById('crewZones').innerHTML = zones.map(z => {
+    const list = byZone[z.id] || [];
+    const active = list.filter(c => c.status === 'active').length;
+    const onBreak = list.filter(c => c.status === 'break').length;
+    const idle = list.filter(c => c.status === 'idle').length;
+    return `
+      <div class="crew-zone-card">
+        <div class="czc-head">
+          <div class="name">${z.name}</div>
+          <div class="stats">
+            CHIEF <span class="v">${z.chief}</span> ·
+            <span class="v">${active}</span> active ·
+            ${onBreak ? `<span class="v warn">${onBreak}</span> break · ` : ''}
+            ${idle ? `<span class="v warn">${idle}</span> idle` : ''}
+          </div>
+        </div>
+        <div class="czc-body">
+          ${list.length ? list.map(c => `
+            <div class="agent-row" onclick="agentClick('${c.id}')">
+              <div class="av ${c.role === 'Chief' ? 'chief' : ''}">${avatar(c.name)}</div>
+              <div class="name">${c.name} <span class="role">${c.role}</span></div>
+              <div class="pos">${c.pos}</div>
+              <div class="last">${c.lastEvt}</div>
+              <span class="ind ${indClass(c.status)}">${c.status.toUpperCase()}</span>
+            </div>
+          `).join('') : '<div style="padding: 14px; font-family: var(--mono); font-size: 11px; color: var(--text-3);">No crew assigned</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function agentClick(id) {
+  const c = extendedCrew.find(x => x.id === id);
+  if (c) RampIQ.ui.showToast(`${c.name} · ${c.role} · ${c.pos}`);
+}
+window.agentClick = agentClick;
+
+renderZones();
+</script>
+</body>
+</html>

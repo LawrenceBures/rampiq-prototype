@@ -1,4 +1,4 @@
-// RampIQ — Workforce Coordination Engine
+// SOI — Workforce Coordination Engine
 // Phase 8: Ownership, workload, and escalation semantics.
 //
 // RULES:

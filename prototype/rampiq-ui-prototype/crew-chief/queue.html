@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Crew Chief · Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .chief-head {
+    height: 56px; padding: 0 22px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 24px;
+    background: #04060a;
+    border-bottom: 1px solid var(--line);
+  }
+  .chief-zone { font-size: 16px; font-weight: 700; }
+  .chief-zone .sub { font-family: var(--mono); font-size: 11px; color: var(--text-2); font-weight: 400; margin-left: 8px; }
+
+  .queue-wrap { padding: 20px; }
+  .queue-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .queue-tab {
+    padding: 7px 14px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    border-radius: 3px;
+  }
+  .queue-tab.active { background: var(--bg-4); color: var(--text-0); border-color: var(--line-3); }
+
+  .turn-row {
+    display: grid; grid-template-columns: 70px 100px 1fr 110px 110px 100px 70px;
+    gap: 14px; align-items: center;
+    padding: 12px 16px; background: var(--bg-1);
+    border: 1px solid var(--line); border-radius: 4px;
+    margin-bottom: 6px; cursor: pointer; transition: all 0.1s;
+  }
+  .turn-row:hover { border-color: var(--line-3); }
+  .turn-row.warn { border-left: 3px solid var(--amber); }
+  .turn-row.crit { border-left: 3px solid var(--red); background: linear-gradient(90deg, var(--red-bg), var(--bg-1)); }
+  .turn-row.recovery { border-left: 3px solid var(--blue); }
+  .turn-gate { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .turn-tail { font-family: var(--mono); font-size: 12px; color: var(--text-1); }
+  .turn-tail .flight { color: var(--text-3); font-size: 10px; display: block; margin-top: 2px; }
+  .turn-step { font-size: 12px; color: var(--text-1); }
+  .turn-step .sub { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 2px; }
+  .turn-cnt { font-family: var(--mono); font-size: 11px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+  .turn-cnt.warn { color: var(--amber); }
+  .turn-cnt.crit { color: var(--red); }
+  .turn-flag {
+    padding: 4px 8px; background: var(--bg-3); border: 1px solid var(--line-3); border-radius: 3px;
+    font-family: var(--mono); font-size: 10px; color: var(--text-2);
+    text-align: center;
+  }
+  .turn-flag.crit { background: var(--red-bg); color: var(--red); border-color: var(--red-d); }
+  .turn-flag.warn { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-d); }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="zone.html"><span class="ic">▣</span>Zone</a>
+    <a href="queue.html" class="active"><span class="ic">↦</span>Queue</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="chief-head">
+      <div class="chief-zone">Aircraft Queue <span class="sub">ZONE B · NEXT 90 MINUTES · 9 ACTIVE</span></div>
+    </div>
+    <div class="body">
+      <div class="queue-wrap">
+        <div class="queue-tabs">
+          <div class="queue-tab active">ALL (9)</div>
+          <div class="queue-tab">CRITICAL (1)</div>
+          <div class="queue-tab">AT RISK (2)</div>
+          <div class="queue-tab">NOMINAL (6)</div>
+        </div>
+        <div class="table-head" style="grid-template-columns: 70px 100px 1fr 110px 110px 100px 70px;">
+          <div>GATE</div><div>TAIL</div><div>CURRENT STEP</div><div>DEP TIME</div><div>UNTIL PUSH</div><div>CREW</div><div>FLAG</div>
+        </div>
+        <div id="queueList" style="margin-top: 6px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('chief');
+const data = RampIQ.data.state;
+const zoneGates = data.gates.filter(g => g.zone === 'B' && g.state !== 'empty').sort((a, b) => a.dep.localeCompare(b.dep));
+
+function untilPush(dep) {
+  const [h, m] = dep.split(':').map(Number);
+  const nowMin = 14*60 + 23;
+  const depMin = h*60 + m;
+  return depMin - nowMin;
+}
+
+function renderQueue() {
+  document.getElementById('queueList').innerHTML = zoneGates.map(g => {
+    const min = untilPush(g.dep);
+    const cls = min < 0 ? 'crit' : min < 10 ? 'crit' : min < 20 ? 'warn' : '';
+    const stateCls = g.state === 'crit' ? 'crit' : g.state === 'warn' ? 'warn' : g.state === 'recovery' ? 'recovery' : '';
+    const flagText = g.state === 'crit' ? 'INCIDENT' : g.state === 'warn' ? 'AT RISK' : g.state === 'recovery' ? 'RECOVERY' : 'NOMINAL';
+    return `
+      <div class="turn-row ${stateCls}" onclick="rowClick('${g.id}')">
+        <div class="turn-gate">${g.id}</div>
+        <div class="turn-tail">${g.tail}<span class="flight">${g.flight}</span></div>
+        <div class="turn-step">
+          <span class="sub">${g.state === 'crit' ? 'Incident' : g.state === 'recovery' ? 'Recovery' : 'Current'}</span>
+          ${g.step}
+        </div>
+        <div class="turn-cnt">${g.dep}</div>
+        <div class="turn-cnt ${cls}">${min < 0 ? Math.abs(min) + 'm LATE' : min + 'm'}</div>
+        <div class="turn-cnt">${g.crew} agents</div>
+        <div class="turn-flag ${stateCls}">${flagText}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function rowClick(id) {
+  const g = data.gates.find(x => x.id === id);
+  if (g.incidentId) location.href = 'recovery.html?inc=' + g.incidentId;
+  else RampIQ.ui.showToast(`Gate ${id} · ${g.step}`);
+}
+window.rowClick = rowClick;
+
+renderQueue();
+</script>
+</body>
+</html>

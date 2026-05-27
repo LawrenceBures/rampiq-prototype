@@ -1,4 +1,4 @@
-// RampIQ — Canonical severity rendering.
+// SOI — Canonical severity rendering.
 // Presentation-only. No data fetching. No side effects.
 // All color derivation from operational-states.ts.
 

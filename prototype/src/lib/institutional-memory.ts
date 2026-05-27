@@ -1,4 +1,4 @@
-// RampIQ — Institutional Operational Memory
+// SOI — Institutional Operational Memory
 // Phase 12: Cross-shift pattern detection + recurring conditions.
 //
 // RULES:

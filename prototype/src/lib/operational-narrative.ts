@@ -1,4 +1,4 @@
-// RampIQ — Operational Narrative Intelligence
+// SOI — Operational Narrative Intelligence
 // Phase 15: Explainable operational summarization from memory.
 //
 // RULES:

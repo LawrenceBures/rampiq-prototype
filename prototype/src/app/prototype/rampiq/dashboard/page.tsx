@@ -1610,7 +1610,7 @@ export default function ManagerDashboard() {
 
       </div>
 
-      <div className="rq-quiet" style={{ padding: '6px 16px' }}>RampIQ · Operational Memory</div>
+      <div className="rq-quiet" style={{ padding: '6px 16px' }}>SOI · Operational Memory</div>
     </>
   );
 }

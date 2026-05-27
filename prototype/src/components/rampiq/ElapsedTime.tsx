@@ -1,4 +1,4 @@
-// RampIQ — Replay-safe elapsed time display.
+// SOI — Replay-safe elapsed time display.
 // Presentation-only. No data fetching. No side effects.
 // Accepts `asOf` for deterministic replay rendering.
 

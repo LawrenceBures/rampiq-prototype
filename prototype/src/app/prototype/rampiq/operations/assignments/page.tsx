@@ -367,7 +367,7 @@ export default function OperationalAssignmentsPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <div className="rq-quiet">RampIQ &middot; Operational Decision Trail</div>
+      <div className="rq-quiet">SOI &middot; Operational Decision Trail</div>
     </div>
   );
 }

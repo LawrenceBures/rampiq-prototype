@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Station Pulse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .pulse-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 360px;
+    grid-template-rows: 1fr 220px;
+    height: 100%;
+    gap: 1px;
+    background: var(--line);
+  }
+  @media (max-width: 1024px) {
+    .pulse-grid { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto 200px; }
+    .pulse-grid > .panel:nth-child(1) { max-height: 200px; }
+    .pulse-grid > .panel:nth-child(3) { max-height: 240px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="pulse.html" class="active"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">STATION → PULSE</span>
+      <h1>Station Pulse · DFW Live</h1>
+      <div class="right">
+        <span class="pill">23 ACTIVE TURNS</span>
+        <span class="pill warn">7 SUPPORT</span>
+        <span class="pill alert">1 INCIDENT</span>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="pulse-grid">
+        <div class="panel">
+          <div class="panel-head"><span>Zones</span><span class="meta">5 ACTIVE</span></div>
+          <div class="panel-body" id="zoneList"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span>Operational Geography · Live</span><span class="meta" id="liveMeta">23 turns · 7 sup · 1 inc</span></div>
+          <div class="panel-body" style="overflow: hidden; padding: 0;">
+            <div class="stage">
+              <div class="stage-grid"></div>
+              <div class="schematic" id="schematic"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span>Active Incidents</span><span class="meta">3 OPEN</span></div>
+          <div class="panel-body" id="incList"></div>
+        </div>
+
+        <div class="panel" style="grid-column: 1 / 4;">
+          <div class="panel-head"><span>Event Stream · Live</span><span class="meta" id="evCount">events live</span></div>
+          <div class="panel-body" id="eventStream"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+
+const data = RampIQ.data.state;
+const pressureColor = RampIQ.ui.pressureColor;
+
+// ===== render zones =====
+function renderZones() {
+  document.getElementById('zoneList').innerHTML = data.zones.map((z, i) => `
+    <div class="zone-tile ${z.role === 'crit' ? 'crit' : (z.pressure > 60 ? 'warn' : '')} ${i === 1 ? 'active' : ''}" onclick="location.href='geography.html?zone=${z.id}'">
+      <div class="zone-name">${z.name} <span class="count">${z.gates} gates</span></div>
+      <div class="zone-press">
+        <div class="zone-press-bar"><div class="zone-press-fill" style="width:${z.pressure}%; background:${pressureColor(z.pressure)}"></div></div>
+        <div class="zone-press-val" style="color:${pressureColor(z.pressure)}">${z.pressure}</div>
+      </div>
+      <div class="zone-stats">
+        <span class="stat"><span class="l">TURNS</span> <span class="v">${z.turns}</span></span>
+        <span class="stat ${z.support > 2 ? 'crit' : (z.support > 0 ? 'warn' : '')}"><span class="l">SUP</span> <span class="v">${z.support}</span></span>
+        <span class="stat ${z.incidents > 0 ? 'crit' : ''}"><span class="l">INC</span> <span class="v">${z.incidents}</span></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===== render schematic =====
+function renderSchematic() {
+  const piers = {
+    n: { label: 'North · Zone A', gates: data.gates.filter(g => g.id.startsWith('A')) },
+    w: { label: 'West · Zone C', gates: data.gates.filter(g => g.id.startsWith('C')) },
+    e: { label: 'East · Zone B', gates: data.gates.filter(g => g.id.startsWith('B')) },
+    s: { label: 'South · Zone D · Remote', gates: data.gates.filter(g => g.id.startsWith('R')) }
+  };
+  const stateClass = (s) => s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'recovery' ? 'recovery' : s === 'occupied' ? 'occupied' : '';
+  document.getElementById('schematic').innerHTML = `
+    ${['n','w','e','s'].map(p => `
+      <div class="pier" style="grid-area: ${p};">
+        <div class="pier-label"><span>${piers[p].label}</span><span class="p">${piers[p].gates.filter(g => g.state !== 'empty').length} ACTIVE</span></div>
+        <div class="pier-row">
+          ${piers[p].gates.map(g => `
+            <div class="gate ${stateClass(g.state)}" onclick="gateClick('${g.id}')">
+              <div class="gate-id">${g.id}</div>
+              <div class="gate-tail">${g.tail}</div>
+              <div class="gate-dep">${g.dep}</div>
+              ${g.state === 'crit' ? '<div class="gate-pin"></div>' : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}
+    <div class="stage-center">
+      <div class="osi-gauge">
+        <div class="osi-label">Station Pressure</div>
+        <div class="osi-value" id="osiValue">${data.osi}</div>
+        <div class="osi-trend">▲ +4 over 15m</div>
+        <div class="osi-context">
+          <div class="ctx"><span class="v">23</span><span>TURNS</span></div>
+          <div class="ctx"><span class="v">7</span><span>SUPPORT</span></div>
+          <div class="ctx"><span class="v">1</span><span>INCIDENT</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function gateClick(id) {
+  const g = data.gates.find(x => x.id === id);
+  if (!g) return;
+  if (g.incidentId) {
+    location.href = 'recovery.html?inc=' + g.incidentId;
+  } else {
+    RampIQ.ui.showToast(`Gate ${id} · ${g.tail} · ${g.step}`);
+  }
+}
+
+// ===== render incidents =====
+function renderIncidents() {
+  document.getElementById('incList').innerHTML = data.incidents.map(i => `
+    <div class="inc-card ${i.type}" onclick="location.href='recovery.html?inc=${i.id}'">
+      <div class="inc-head">
+        <span class="inc-cat ${i.type}">${i.cat}</span>
+        <span class="inc-age" data-inc-age="${i.id}">${i.age}</span>
+      </div>
+      <div class="inc-where">${i.where}</div>
+      <div class="inc-detail">${i.detail}</div>
+      <div class="inc-meta">
+        ${i.chief !== '—' ? `<span>CHIEF: ${i.chief}</span>` : '<span>UNASSIGNED</span>'}
+        <span>ACTIONS: ${i.actions}</span>
+        <span>PARTIC: ${i.partic}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===== event stream =====
+function renderStream() {
+  const stream = RampIQ.events.stream();
+  document.getElementById('evCount').textContent = `${stream.length} events recent`;
+  document.getElementById('eventStream').innerHTML = stream.slice(0, 40).map(e => `
+    <div class="event-row">
+      <div class="ev-time">${e[0]}</div>
+      <div class="ev-type ${e[2]}">${e[1]}</div>
+      <div class="ev-msg">${e[3]}</div>
+      <div class="ev-where">${e[4]}</div>
+      <div class="ev-who">${e[5]}</div>
+    </div>
+  `).join('');
+}
+
+// ===== tick incident ages =====
+function tickIncidents() {
+  data.incidents.forEach(i => {
+    i.startSec++;
+    const m = Math.floor(i.startSec / 60);
+    const s = i.startSec % 60;
+    const el = document.querySelector(`[data-inc-age="${i.id}"]`);
+    if (el) el.textContent = `${m}m ${String(s).padStart(2,'0')}s`;
+  });
+}
+
+// ===== simulated event drip =====
+function startEventDrip() {
+  const templates = [
+    ['SERVICE','good', ['Bag load complete', 'Fueling started', 'Cabin clean confirmed', 'Catering loaded', 'Lav serviced', 'Doors closed']],
+    ['POSITION','info', ['On-position confirmed', 'Crew checkin', 'Position handoff']],
+    ['SUPPORT','warn', ['Bag issue reported', 'Crew short flagged']],
+    ['RECOVERY','info', ['Action acknowledged', 'Recovery participant added']]
+  ];
+  const gates = ['A2','A5','B9','B10','B11','B12','C1','C3','C4'];
+  const agents = ['DONOVAN,C','HAYES,S','LOPEZ,Y','PARK,R','CHEN,J','TAN,R','YOUNG,L'];
+  setInterval(() => {
+    const t = templates[Math.floor(Math.random() * templates.length)];
+    const m = t[2][Math.floor(Math.random() * t[2].length)];
+    const g = gates[Math.floor(Math.random() * gates.length)];
+    const w = agents[Math.floor(Math.random() * agents.length)];
+    RampIQ.events.emit([RampIQ.events.nowStr(), t[0], t[1], m, g + ' · turn', w]);
+    renderStream();
+  }, 4200);
+}
+
+// react to events from other tabs
+RampIQ.events.onEvent(() => renderStream());
+
+renderZones();
+renderSchematic();
+renderIncidents();
+renderStream();
+setInterval(tickIncidents, 1000);
+startEventDrip();
+</script>
+</body>
+</html>

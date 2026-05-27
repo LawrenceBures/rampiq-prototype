@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Workflows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+
+  .list-2col { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+  .list-pane { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .list-pane-head { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); background: #04060a; }
+  .add-btn { background: var(--amber); color: #000; border: none; padding: 5px 10px; font-family: var(--mono); font-size: 10px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+  .list-item { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .list-item:hover { background: var(--bg-2); }
+  .list-item.active { background: var(--bg-2); border-left: 2px solid var(--amber); padding-left: 12px; }
+  .li-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .li-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 18px; }
+
+  .wf-step {
+    display: grid; grid-template-columns: 36px 1fr 130px 90px 90px 32px;
+    gap: 12px; align-items: center;
+    padding: 10px 14px; background: var(--bg-2);
+    border: 1px solid var(--line); border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: grab;
+  }
+  .wf-step:active { cursor: grabbing; }
+  .wf-step .num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--bg-3); border: 1px solid var(--line-3);
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wf-step .nm { font-size: 13px; font-weight: 500; }
+  .wf-step .sel, .wf-step .dur, .wf-step .req {
+    background: var(--bg-3); border: 1px solid var(--line-2);
+    padding: 6px 10px; font-family: var(--mono); font-size: 11px;
+    color: var(--text-1); border-radius: 3px;
+  }
+  .wf-step .drag-handle { color: var(--text-3); cursor: grab; text-align: center; font-size: 14px; }
+  .req-pill {
+    display: inline-block; padding: 3px 9px; border-radius: 3px;
+    font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .req-pill.req { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-d); }
+  .req-pill.opt { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--line-3); }
+  @media (max-width: 1024px) { .list-2col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html" class="active"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → WORKFLOWS</span>
+      <h1>Workflow Configuration</h1>
+      <div class="right">
+        <span class="pill">6 WORKFLOWS</span>
+        <span class="pill good">24 LIVE TURNS</span>
+      </div>
+    </div>
+    <div class="body" style="padding: 22px;">
+      <div class="list-2col">
+        <div class="list-pane">
+          <div class="list-pane-head"><span>Workflows · 6</span><button class="add-btn" onclick="newWf()">+ ADD</button></div>
+          <div id="wfList"></div>
+        </div>
+        <div class="admin-card">
+          <div class="admin-card-head">
+            <h3 id="wfTitle">Narrow-body Turn · v.4</h3>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-family:var(--mono); font-size:10px; color:var(--text-3);" id="wfMeta">PUBLISHED 11:15 · 12 LIVE TURNS</span>
+              <button class="act-btn" onclick="duplicateWf()">DUPLICATE</button>
+              <button class="act-btn primary" onclick="publishWf()">PUBLISH v.5</button>
+            </div>
+          </div>
+          <div class="admin-card-body">
+            <div style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px;">Steps · Drag to reorder</div>
+            <div id="wfSteps"></div>
+            <button class="act-btn" style="margin-top: 10px;" onclick="addStep()">+ ADD STEP</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+
+const workflows = [
+  { id:'nb', name:'Narrow-body Turn', version:4, steps:[
+    { n:'On-position confirmed', role:'Lead', dur:'2 min', required:true },
+    { n:'Bag offload', role:'Loader', dur:'8 min', required:true },
+    { n:'Cabin clean', role:'Cabin', dur:'10 min', required:true },
+    { n:'Catering load', role:'Cabin', dur:'6 min', required:true },
+    { n:'Lav service', role:'Lav', dur:'5 min', required:true },
+    { n:'Bag load', role:'Loader', dur:'12 min', required:true },
+    { n:'Fuel verify', role:'Lead', dur:'2 min', required:true },
+    { n:'Doors closed', role:'Lead', dur:'1 min', required:true },
+    { n:'Push approved', role:'Lead', dur:'2 min', required:true }
+  ], live: 12, published:'11:15' },
+  { id:'wb', name:'Wide-body Turn', version:2, steps:[
+    { n:'On-position confirmed', role:'Lead', dur:'2 min', required:true },
+    { n:'Bag offload', role:'Loader', dur:'14 min', required:true },
+    { n:'Cabin clean', role:'Cabin', dur:'18 min', required:true },
+    { n:'Catering load', role:'Cabin', dur:'12 min', required:true },
+    { n:'Lav service', role:'Lav', dur:'8 min', required:true },
+    { n:'Water service', role:'Lav', dur:'6 min', required:false },
+    { n:'Bag load', role:'Loader', dur:'22 min', required:true },
+    { n:'Fuel verify', role:'Lead', dur:'4 min', required:true },
+    { n:'Crew brief', role:'Lead', dur:'3 min', required:true },
+    { n:'Doors closed', role:'Lead', dur:'1 min', required:true },
+    { n:'Push approved', role:'Lead', dur:'2 min', required:true }
+  ], live: 4, published:'09:42' },
+  { id:'rj', name:'RJ Quick Turn', version:3, steps:[
+    { n:'On-position confirmed', role:'Lead', dur:'2 min', required:true },
+    { n:'Bag offload + load', role:'Loader', dur:'10 min', required:true },
+    { n:'Cabin quick-clean', role:'Cabin', dur:'5 min', required:true },
+    { n:'Lav service', role:'Lav', dur:'3 min', required:false },
+    { n:'Fuel verify', role:'Lead', dur:'2 min', required:true },
+    { n:'Doors closed', role:'Lead', dur:'1 min', required:true },
+    { n:'Push approved', role:'Lead', dur:'1 min', required:true }
+  ], live: 7, published:'10:08' },
+  { id:'overnight', name:'Overnight Stay', version:1, steps:[
+    { n:'On-position', role:'Lead', dur:'2 min', required:true },
+    { n:'Bag offload', role:'Loader', dur:'10 min', required:true },
+    { n:'Cabin deep clean', role:'Cabin', dur:'45 min', required:true },
+    { n:'Tow to remote', role:'Tug', dur:'8 min', required:true },
+    { n:'Secure aircraft', role:'Lead', dur:'5 min', required:true }
+  ], live: 0, published:'last week' },
+  { id:'diversion', name:'Diversion Recovery', version:2, steps:[
+    { n:'Inbound coord', role:'Lead', dur:'5 min', required:true },
+    { n:'Gate availability', role:'Lead', dur:'3 min', required:true },
+    { n:'Bag offload', role:'Loader', dur:'8 min', required:true },
+    { n:'Pax disembark coord', role:'Lead', dur:'10 min', required:true },
+    { n:'Crew reassign', role:'Lead', dur:'5 min', required:true },
+    { n:'Recovery debrief', role:'Lead', dur:'10 min', required:false }
+  ], live: 0, published:'yesterday' },
+  { id:'cargo', name:'Cargo Turn', version:1, steps:[
+    { n:'On-position', role:'Lead', dur:'2 min', required:true },
+    { n:'Cargo offload', role:'Loader', dur:'18 min', required:true },
+    { n:'Cargo load', role:'Loader', dur:'22 min', required:true },
+    { n:'Push approved', role:'Lead', dur:'1 min', required:true }
+  ], live: 1, published:'3 days ago' }
+];
+
+let selected = 'nb';
+
+function renderList() {
+  document.getElementById('wfList').innerHTML = workflows.map(w => `
+    <div class="list-item ${w.id === selected ? 'active' : ''}" onclick="selectWf('${w.id}')">
+      <div class="li-name">${w.name}</div>
+      <div class="li-meta">v.${w.version} · ${w.steps.length} steps · ${w.live} live</div>
+    </div>
+  `).join('');
+}
+
+function renderSteps() {
+  const w = workflows.find(x => x.id === selected);
+  document.getElementById('wfTitle').textContent = `${w.name} · v.${w.version}`;
+  document.getElementById('wfMeta').textContent = `PUBLISHED ${w.published.toUpperCase()} · ${w.live} LIVE TURNS`;
+  document.getElementById('wfSteps').innerHTML = w.steps.map((s, i) => `
+    <div class="wf-step" draggable="true" data-i="${i}">
+      <div class="num">${i+1}</div>
+      <div class="nm">${s.n}</div>
+      <select class="sel"><option ${s.role==='Lead'?'selected':''}>Lead</option><option ${s.role==='Loader'?'selected':''}>Loader</option><option ${s.role==='Cabin'?'selected':''}>Cabin</option><option ${s.role==='Lav'?'selected':''}>Lav</option><option ${s.role==='Tug'?'selected':''}>Tug</option></select>
+      <input type="text" class="dur" value="${s.dur}" />
+      <span class="req-pill ${s.required?'req':'opt'}">${s.required?'REQ':'OPT'}</span>
+      <div class="drag-handle">⋮</div>
+    </div>
+  `).join('');
+}
+
+function selectWf(id) {
+  selected = id;
+  renderList(); renderSteps();
+}
+function newWf() { RampIQ.ui.showToast('New workflow draft created'); }
+function duplicateWf() { RampIQ.ui.showToast('Workflow duplicated as draft'); }
+function publishWf() {
+  const w = workflows.find(x => x.id === selected);
+  w.version++;
+  RampIQ.events.configChange(`Workflow ${w.name} published v.${w.version}`, 'admin');
+  RampIQ.ui.showToast(`Published v.${w.version} · event recorded`, 'success');
+  renderSteps();
+}
+function addStep() { RampIQ.ui.showToast('Step added · save to publish'); }
+window.selectWf = selectWf;
+window.newWf = newWf;
+window.duplicateWf = duplicateWf;
+window.publishWf = publishWf;
+window.addStep = addStep;
+
+renderList(); renderSteps();
+</script>
+</body>
+</html>

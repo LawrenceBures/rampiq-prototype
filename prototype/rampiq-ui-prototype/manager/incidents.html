@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Active Incidents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .incidents-grid { display: grid; grid-template-columns: 1fr 380px; height: 100%; gap: 1px; background: var(--line); }
+  .inc-list-pane { background: var(--bg-1); overflow-y: auto; }
+  .inc-table-head, .inc-table-row {
+    display: grid; grid-template-columns: 110px 1fr 100px 100px 80px 70px 90px;
+    gap: 14px; padding: 12px 18px; align-items: center;
+  }
+  .inc-table-head {
+    border-bottom: 1px solid var(--line); background: #04060a;
+    font-family: var(--mono); font-size: 9px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .inc-table-row { border-bottom: 1px solid var(--line); cursor: pointer; font-size: 12px; }
+  .inc-table-row:hover { background: var(--bg-2); }
+  .inc-table-row.active { background: var(--bg-2); border-left: 2px solid var(--amber); padding-left: 16px; }
+  .inc-table-row .cat { font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; }
+  .inc-table-row .cat.crit { color: var(--red); }
+  .inc-table-row .cat.warn { color: var(--amber); }
+  .inc-table-row .cat.recovery { color: var(--blue); }
+  .inc-table-row .where { color: var(--text-0); font-weight: 500; }
+  .inc-table-row .mono { font-family: var(--mono); font-size: 10px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .inc-table-row .stat-tag {
+    padding: 3px 8px; border-radius: 3px; text-align: center;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+  }
+  .inc-table-row .stat-tag.crit { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-d); }
+  .inc-table-row .stat-tag.warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); }
+  .inc-table-row .stat-tag.recovery { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-d); }
+  .inc-detail-pane { background: var(--bg-1); overflow-y: auto; padding: 20px; }
+  .inc-detail-pane h2 { font-size: 17px; margin-bottom: 6px; }
+  .inc-detail-pane .sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 18px; }
+  .detail-section { margin-bottom: 22px; }
+  .detail-section h3 { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 10px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat-block { background: var(--bg-2); padding: 12px 14px; border-radius: 3px; border: 1px solid var(--line); }
+  .stat-block .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .stat-block .val { font-family: var(--mono); font-size: 16px; color: var(--text-0); font-weight: 700; }
+  .stat-block .val.crit { color: var(--red); }
+  .stat-block .val.warn { color: var(--amber); }
+  .affected { display: flex; gap: 6px; flex-wrap: wrap; }
+  .aff-gate {
+    background: var(--bg-3); border: 1px solid var(--line-3); padding: 5px 9px;
+    border-radius: 3px; font-family: var(--mono); font-size: 11px;
+    cursor: pointer;
+  }
+  .aff-gate.crit { color: var(--red); border-color: var(--red-d); background: var(--red-bg); }
+  .aff-gate.warn { color: var(--amber); border-color: var(--amber-d); background: var(--amber-bg); }
+  @media (max-width: 1024px) { .incidents-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html" class="active"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">OPERATIONS → ACTIVE INCIDENTS</span>
+      <h1>Active Incidents</h1>
+      <div class="right">
+        <span class="pill alert">3 OPEN</span>
+        <span class="pill">5 CLOSED TODAY</span>
+      </div>
+    </div>
+    <div class="body" style="padding: 0;">
+      <div class="incidents-grid">
+        <div class="inc-list-pane">
+          <div class="inc-table-head">
+            <div>CATEGORY</div><div>LOCATION</div><div>STATUS</div><div>AGE</div><div>ACTS</div><div>PART</div><div>CHIEF</div>
+          </div>
+          <div id="incTable"></div>
+        </div>
+        <div class="inc-detail-pane" id="incDetail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+const data = RampIQ.data.state;
+
+let selectedInc = data.incidents[0].id;
+
+function renderTable() {
+  document.getElementById('incTable').innerHTML = data.incidents.map(i => `
+    <div class="inc-table-row ${i.id === selectedInc ? 'active' : ''}" onclick="selectIncident('${i.id}')">
+      <span class="cat ${i.type}">${i.cat}</span>
+      <span class="where">${i.where}</span>
+      <span class="stat-tag ${i.type}">${i.type === 'crit' ? 'ACTIVE' : (i.type === 'warn' ? 'OPEN' : 'RECOVERY')}</span>
+      <span class="mono" data-inc-age="${i.id}">${i.age}</span>
+      <span class="mono">${i.actions}</span>
+      <span class="mono">${i.partic}</span>
+      <span class="mono">${i.chief}</span>
+    </div>
+  `).join('');
+}
+
+function selectIncident(id) {
+  selectedInc = id;
+  renderTable();
+  renderDetail();
+}
+window.selectIncident = selectIncident;
+
+function renderDetail() {
+  const i = data.incidents.find(x => x.id === selectedInc);
+  if (!i) return;
+  const m = Math.floor(i.startSec / 60), s = i.startSec % 60;
+  document.getElementById('incDetail').innerHTML = `
+    <h2>${i.cat}</h2>
+    <div class="sub">${i.id} · ${i.where}</div>
+    <div class="detail-section">
+      <div style="background: var(--bg-2); padding: 12px 14px; border-radius: 3px; font-size: 13px; line-height: 1.5;">${i.detail}</div>
+    </div>
+    <div class="detail-section">
+      <h3>Key Metrics</h3>
+      <div class="stat-grid">
+        <div class="stat-block"><div class="lbl">Recovery Clock</div><div class="val ${i.type === 'crit' ? 'crit' : 'warn'}">${m}m ${String(s).padStart(2,'0')}s</div></div>
+        <div class="stat-block"><div class="lbl">Open Actions</div><div class="val">${i.actions}</div></div>
+        <div class="stat-block"><div class="lbl">Participants</div><div class="val">${i.partic}</div></div>
+        <div class="stat-block"><div class="lbl">Chief Owner</div><div class="val" style="font-size: 13px;">${i.chief}</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Affected Gates / Cascade</h3>
+      <div class="affected">
+        ${i.affected.map((g, idx) => `<span class="aff-gate ${idx === 0 ? 'crit' : (idx < 3 ? 'warn' : '')}" onclick="location.href='geography.html?gate=${g}'">${g}${idx === 0 ? ' ORIGIN' : ''}</span>`).join('')}
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Quick Actions</h3>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="act-btn primary" onclick="location.href='recovery.html?inc=${i.id}'">OPEN RECOVERY CONSOLE</button>
+        <button class="act-btn" onclick="RampIQ.ui.showToast('Manager ownership taken', 'success')">TAKE OWNERSHIP</button>
+        <button class="act-btn danger" onclick="RampIQ.ui.showToast('Escalated to ops director', 'crit')">ESCALATE</button>
+      </div>
+    </div>
+  `;
+}
+
+function tickAges() {
+  data.incidents.forEach(i => {
+    i.startSec++;
+    const m = Math.floor(i.startSec / 60), s = i.startSec % 60;
+    const el = document.querySelector(`[data-inc-age="${i.id}"]`);
+    if (el) el.textContent = `${m}m ${String(s).padStart(2,'0')}s`;
+  });
+}
+
+renderTable();
+renderDetail();
+setInterval(tickAges, 1000);
+setInterval(renderDetail, 1000);
+
+// param: ?inc=ID
+const params = new URLSearchParams(location.search);
+if (params.get('inc')) { selectedInc = params.get('inc'); renderTable(); renderDetail(); }
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-// RampIQ — Lifecycle Entity Types
+// SOI — Lifecycle Entity Types
 // Phase 2: Incidents + Recovery Actions
 //
 // These interfaces represent the CURRENT STATE projection.

@@ -1,4 +1,4 @@
-// RampIQ — Authenticated Operator Identity
+// SOI — Authenticated Operator Identity
 // Phase 12: Real auth binding with shift context.
 //
 // RULES:

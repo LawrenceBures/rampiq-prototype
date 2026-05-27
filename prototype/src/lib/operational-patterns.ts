@@ -1,4 +1,4 @@
-// RampIQ — Operational Pattern Engine
+// SOI — Operational Pattern Engine
 // Phase 6: Deterministic intelligence from operational memory.
 //
 // RULES:

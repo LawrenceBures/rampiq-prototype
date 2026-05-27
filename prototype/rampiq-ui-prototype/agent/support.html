@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Agent · Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<div class="app agent-app">
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-status"><span>14:23</span><span class="right">● ● ●</span></div>
+
+    <div class="agent-head">
+      <div class="agent-head-lbl">Request Support</div>
+      <div class="agent-assignment" style="font-size: 16px;">What's wrong?</div>
+    </div>
+
+    <div class="sup-categories">
+      <button class="sup-cat-btn crit" onclick="sendSupport('Equipment Failure')"><span class="ico">⚠</span>Equipment Failure</button>
+      <button class="sup-cat-btn warn" onclick="sendSupport('Crew Short')"><span class="ico">◊</span>Crew Short</button>
+      <button class="sup-cat-btn warn" onclick="sendSupport('Bag Issue')"><span class="ico">▥</span>Bag Issue</button>
+      <button class="sup-cat-btn crit" onclick="sendSupport('Medical')"><span class="ico">+</span>Medical</button>
+      <button class="sup-cat-btn crit" onclick="sendSupport('Hazard')"><span class="ico">!</span>Hazard on Ramp</button>
+      <button class="sup-cat-btn warn" onclick="sendSupport('Aircraft Issue')"><span class="ico">✈</span>Aircraft Issue</button>
+      <button class="sup-cat-btn" onclick="sendSupport('Other')"><span class="ico">?</span>Other</button>
+      <a href="now.html" class="sup-cat-btn" style="border-color: var(--line-2); color: var(--text-2); text-decoration:none;"><span class="ico">←</span>Cancel</a>
+    </div>
+
+    <div class="agent-tabs">
+      <a href="now.html" class="agent-tab"><span class="ico">●</span>Now</a>
+      <a href="aircraft.html" class="agent-tab"><span class="ico">✈</span>Aircraft</a>
+      <a href="scan.html" class="agent-tab"><span class="ico">⊞</span>Scan</a>
+      <a href="../crew-chief/zone.html" class="agent-tab"><span class="ico">◊</span>Team</a>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('agent');
+
+function sendSupport(category) {
+  RampIQ.events.supportRequested(category, 'B14', 'N728UA', 'ALVAREZ,M');
+  // also append to shared support list
+  RampIQ.data.update(s => {
+    s.support.unshift({
+      id: 'SR-' + Math.floor(Math.random()*9000 + 1000),
+      cat: category, type: category === 'Medical' || category === 'Hazard' || category === 'Equipment Failure' ? 'crit' : 'warn',
+      where: 'Gate B14', detail: 'Reported from agent mobile · ' + category,
+      from: 'ALVAREZ,M', age: '0m 02s', status: 'open', zone: 'B'
+    });
+  });
+  RampIQ.ui.showToast('Support sent to chief · ' + category, 'success');
+  setTimeout(() => location.href = 'now.html', 1200);
+}
+window.sendSupport = sendSupport;
+</script>
+</body>
+</html>

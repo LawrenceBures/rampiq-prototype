@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Zones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+  .list-2col { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+  .list-pane { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .list-pane-head { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); background: #04060a; }
+  .add-btn { background: var(--amber); color: #000; border: none; padding: 5px 10px; font-family: var(--mono); font-size: 10px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+  .list-item { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background 0.1s; }
+  .list-item:hover { background: var(--bg-2); }
+  .list-item.active { background: var(--bg-2); border-left: 2px solid var(--amber); padding-left: 12px; }
+  .li-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .li-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 18px; }
+  .node-pill { padding: 5px 10px; background: var(--bg-3); border: 1px solid var(--line-3); border-radius: 3px; font-family: var(--mono); font-size: 11px; }
+  .node-pill.warn { background: rgba(232,161,58,0.18); border-color: var(--amber); color: var(--amber); }
+  .node-pill.info { background: rgba(74,154,239,0.18); border-color: var(--blue); color: var(--blue); }
+  @media (max-width: 900px) { .list-2col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html" class="active"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → ZONES</span>
+      <h1>Zone Setup</h1>
+      <div class="right"><span class="pill">5 ZONES</span></div>
+    </div>
+    <div class="body" style="padding: 22px;">
+      <div class="list-2col">
+        <div class="list-pane">
+          <div class="list-pane-head"><span>Zones · 5</span><button class="add-btn">+ ADD</button></div>
+          <div id="zoneList"></div>
+        </div>
+        <div class="admin-card">
+          <div class="admin-card-head"><h3 id="zHeader">Zone B · Central</h3><span style="font-family:var(--mono); font-size:10px; color:var(--text-3);" id="zVer">v.14</span></div>
+          <div class="admin-card-body" id="zBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+const data = RampIQ.data.state;
+let selected = 'B';
+
+function renderList() {
+  document.getElementById('zoneList').innerHTML = data.zones.map(z => `
+    <div class="list-item ${z.id === selected ? 'active' : ''}" onclick="selectZone('${z.id}')">
+      <div class="li-name">${z.name}</div>
+      <div class="li-meta">${z.gates} gates · CHIEF ${z.chief}</div>
+    </div>
+  `).join('');
+}
+
+function selectZone(id) {
+  selected = id;
+  renderList();
+  renderDetail();
+}
+window.selectZone = selectZone;
+
+function renderDetail() {
+  const z = data.zones.find(x => x.id === selected);
+  document.getElementById('zHeader').textContent = z.name;
+  const zoneNodes = {
+    A: ['A1','A2','A3','A4','A5','A6','A7','A8'],
+    B: ['B7','B8','B9','B10','B11','B12','B14','B15','B-PUSH','BAG-B','GSE-B-01','BAG-B-RAMP'],
+    C: ['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10'],
+    D: ['R1','R2','R3','R4','R5','R6'],
+    E: ['E1','E2','E3','E4']
+  }[z.id] || [];
+  document.getElementById('zBody').innerHTML = `
+    <div class="form-grid-2">
+      <div class="form-row"><label>Zone Name</label><input type="text" value="${z.name}" /></div>
+      <div class="form-row"><label>Zone Code</label><input type="text" value="${z.id}" /></div>
+      <div class="form-row"><label>Default Chief</label><select><option>${z.chief}</option><option>Other</option></select></div>
+      <div class="form-row"><label>Backup Chief</label><select><option>(unassigned)</option></select></div>
+      <div class="form-row"><label>Support SLA</label><input type="text" value="2 min ACK / 5 min escalate" /></div>
+      <div class="form-row"><label>Push Alley</label><input type="text" value="${z.id}-PUSH" /></div>
+    </div>
+    <div class="form-row" style="margin-top: 12px;">
+      <label>Nodes In This Zone · ${zoneNodes.length}</label>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0;">
+        ${zoneNodes.map(n => `<span class="node-pill ${n.includes('PUSH') ? 'warn' : n.includes('BAG') ? 'info' : ''}">${n}</span>`).join('')}
+      </div>
+    </div>
+    <button class="act-btn primary" style="margin-top: 8px;" onclick="saveZone()">SAVE ZONE</button>
+  `;
+}
+
+function saveZone() {
+  RampIQ.events.configChange(`Zone ${selected} updated`, 'admin');
+  RampIQ.ui.showToast('Zone updated · event recorded', 'success');
+}
+window.saveZone = saveZone;
+
+renderList();
+renderDetail();
+</script>
+</body>
+</html>

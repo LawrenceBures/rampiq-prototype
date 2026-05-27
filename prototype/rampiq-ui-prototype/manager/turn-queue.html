@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Turn Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .filter-bar {
+    padding: 12px 20px; display: flex; gap: 8px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--line); background: #04060a;
+  }
+  .filter-bar .f {
+    padding: 5px 12px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 3px;
+  }
+  .filter-bar .f.active { background: var(--bg-4); color: var(--text-0); border-color: var(--line-3); }
+  .filter-bar .f.crit.active { border-color: var(--red); color: var(--red); }
+  .filter-bar .f.warn.active { border-color: var(--amber); color: var(--amber); }
+  .turn-list { padding: 14px 20px; }
+  .turn-row {
+    display: grid; grid-template-columns: 70px 70px 110px 1fr 110px 100px 90px 80px;
+    gap: 14px; align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-1); border: 1px solid var(--line);
+    margin-bottom: 6px; border-radius: 4px;
+    cursor: pointer; transition: all 0.1s;
+  }
+  .turn-row:hover { border-color: var(--line-3); }
+  .turn-row.warn { border-left: 3px solid var(--amber); }
+  .turn-row.crit { border-left: 3px solid var(--red); background: linear-gradient(90deg, var(--red-bg), var(--bg-1)); }
+  .turn-row.recovery { border-left: 3px solid var(--blue); }
+  .turn-gate { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .turn-zone { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .turn-tail { font-family: var(--mono); font-size: 12px; color: var(--text-1); }
+  .turn-tail .flight { color: var(--text-3); font-size: 10px; display: block; margin-top: 2px; }
+  .turn-step { font-size: 12px; color: var(--text-1); }
+  .turn-step .sub { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 2px; }
+  .turn-cnt { font-family: var(--mono); font-size: 11px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+  .turn-cnt.warn { color: var(--amber); }
+  .turn-cnt.crit { color: var(--red); font-weight: 700; }
+  .turn-bar { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+  .turn-bar .fill { height: 100%; transition: width 0.4s; }
+  .turn-flag {
+    padding: 4px 8px; border-radius: 3px;
+    font-family: var(--mono); font-size: 9px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    text-align: center;
+  }
+  .turn-flag.crit { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-d); }
+  .turn-flag.warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); }
+  .turn-flag.recovery { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-d); }
+  .turn-flag.nominal { background: var(--bg-3); color: var(--text-2); border: 1px solid var(--line-3); }
+  .summary {
+    padding: 14px 20px; background: var(--bg-1); border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px;
+  }
+  .summary .s-item .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .summary .s-item .v { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+  .summary .s-item .v.warn { color: var(--amber); }
+  .summary .s-item .v.crit { color: var(--red); }
+  .summary .s-item .v.good { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html" class="active"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">OPERATIONS → TURN QUEUE</span>
+      <h1>Turn Queue · Next 90 Minutes</h1>
+      <div class="right">
+        <span class="pill">23 ACTIVE</span>
+        <span class="pill warn">4 AT-RISK</span>
+        <span class="pill alert">1 CRITICAL</span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="summary">
+        <div class="s-item"><div class="lbl">Active Turns</div><div class="v">23</div></div>
+        <div class="s-item"><div class="lbl">Nominal</div><div class="v good">16</div></div>
+        <div class="s-item"><div class="lbl">At Risk</div><div class="v warn">4</div></div>
+        <div class="s-item"><div class="lbl">Critical</div><div class="v crit">1</div></div>
+        <div class="s-item"><div class="lbl">In Recovery</div><div class="v warn">2</div></div>
+      </div>
+      <div class="filter-bar">
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; align-self: center; margin-right: 6px;">FILTER</span>
+        <div class="f active" data-f="all">All Turns</div>
+        <div class="f crit" data-f="crit">Critical</div>
+        <div class="f warn" data-f="warn">At Risk</div>
+        <div class="f" data-f="recovery">In Recovery</div>
+        <div class="f" data-f="nominal">Nominal</div>
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; align-self: center; margin: 0 6px 0 16px;">ZONE</span>
+        <div class="f" data-zone="all">All Zones</div>
+        <div class="f" data-zone="A">A</div>
+        <div class="f" data-zone="B">B</div>
+        <div class="f" data-zone="C">C</div>
+        <div class="f" data-zone="D">D</div>
+      </div>
+      <div class="turn-list" id="turnList"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+const data = RampIQ.data.state;
+
+let activeStatus = 'all';
+let activeZone = 'all';
+
+function untilPush(dep) {
+  if (dep === '—') return 999;
+  const [h, m] = dep.split(':').map(Number);
+  const nowMin = 14*60 + 23;
+  return h*60 + m - nowMin;
+}
+
+function progressPct(g) {
+  // synthesize a progress bar based on state
+  if (g.state === 'crit') return 60;
+  if (g.state === 'warn') return 75;
+  if (g.state === 'recovery') return 55;
+  return 50 + Math.floor(Math.random() * 40);
+}
+
+function renderQueue() {
+  let items = data.gates.filter(g => g.state !== 'empty').slice();
+  if (activeStatus !== 'all') {
+    if (activeStatus === 'nominal') items = items.filter(g => g.state === 'occupied');
+    else items = items.filter(g => g.state === activeStatus);
+  }
+  if (activeZone !== 'all') items = items.filter(g => g.zone === activeZone);
+  items.sort((a, b) => untilPush(a.dep) - untilPush(b.dep));
+
+  document.getElementById('turnList').innerHTML = items.map(g => {
+    const min = untilPush(g.dep);
+    const tCls = min < 0 ? 'crit' : min < 10 ? 'crit' : min < 20 ? 'warn' : '';
+    const stateCls = g.state === 'crit' ? 'crit' : g.state === 'warn' ? 'warn' : g.state === 'recovery' ? 'recovery' : '';
+    const flagText = g.state === 'crit' ? 'CRITICAL' : g.state === 'warn' ? 'AT RISK' : g.state === 'recovery' ? 'RECOVERY' : 'NOMINAL';
+    const flagCls = g.state === 'crit' ? 'crit' : g.state === 'warn' ? 'warn' : g.state === 'recovery' ? 'recovery' : 'nominal';
+    const pct = progressPct(g);
+    const barColor = g.state === 'crit' ? 'var(--red)' : g.state === 'warn' ? 'var(--amber)' : g.state === 'recovery' ? 'var(--blue)' : 'var(--green)';
+    return `
+      <div class="turn-row ${stateCls}" onclick="rowClick('${g.id}')">
+        <div class="turn-gate">${g.id}</div>
+        <div class="turn-zone">Zone ${g.zone}</div>
+        <div class="turn-tail">${g.tail}<span class="flight">${g.flight}</span></div>
+        <div class="turn-step">
+          <span class="sub">${g.state === 'crit' ? 'Incident' : g.state === 'recovery' ? 'Recovery' : 'Current step'}</span>
+          ${g.step}
+          <div class="turn-bar" style="margin-top: 6px;"><div class="fill" style="width: ${pct}%; background: ${barColor};"></div></div>
+        </div>
+        <div class="turn-cnt">${g.dep}</div>
+        <div class="turn-cnt ${tCls}">${min < 0 ? Math.abs(min) + 'm LATE' : min + 'm'}</div>
+        <div class="turn-cnt">${g.crew} agt</div>
+        <div class="turn-flag ${flagCls}">${flagText}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function rowClick(id) {
+  const g = data.gates.find(x => x.id === id);
+  if (g.incidentId) location.href = 'recovery.html?inc=' + g.incidentId;
+  else RampIQ.ui.showToast(`${g.id} · ${g.step}`);
+}
+window.rowClick = rowClick;
+
+document.querySelectorAll('.filter-bar .f').forEach(f => {
+  f.addEventListener('click', () => {
+    if (f.dataset.f) {
+      activeStatus = f.dataset.f;
+      document.querySelectorAll('.filter-bar .f[data-f]').forEach(x => x.classList.toggle('active', x === f));
+    } else if (f.dataset.zone) {
+      activeZone = f.dataset.zone;
+      document.querySelectorAll('.filter-bar .f[data-zone]').forEach(x => x.classList.toggle('active', x === f));
+    }
+    renderQueue();
+  });
+});
+
+renderQueue();
+</script>
+</body>
+</html>

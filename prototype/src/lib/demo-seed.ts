@@ -1,4 +1,4 @@
-// RampIQ — Canonical Operational Scenarios
+// SOI — Canonical Operational Scenarios
 // Phase 9: Realistic operational pressure for pilot validation.
 // Uses lifecycle commands exclusively — no direct table mutation.
 // All events flow through the standard append-only pipeline.

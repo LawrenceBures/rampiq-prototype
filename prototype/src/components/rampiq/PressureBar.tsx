@@ -1,4 +1,4 @@
-// RampIQ — Zone/gate pressure visualization.
+// SOI — Zone/gate pressure visualization.
 // Presentation-only. No data fetching. No side effects.
 // Pressure value and thresholds from operational-states.ts.
 

@@ -1,4 +1,4 @@
-// RampIQ — Derived Operational State
+// SOI — Derived Operational State
 // Phase 1 Step 4: Pure functions that interpret operational events.
 //
 // RULES:

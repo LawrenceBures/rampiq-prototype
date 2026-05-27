@@ -1,4 +1,4 @@
-# RampIQ — Operational Threshold Calibration
+# SOI — Operational Threshold Calibration
 
 ## Current thresholds are educated architectural estimates.
 ## Real operational data must tune them.

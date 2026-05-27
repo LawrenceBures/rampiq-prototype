@@ -6,7 +6,7 @@ export default function RampIQLanding() {
   return (
     <>
       <div className="rq-gate-header">
-        <div className="rq-gate-id">RampIQ</div>
+        <div className="rq-gate-id">SOI</div>
         <div className="rq-gate-meta">
           LAX Eagle &middot; <b>Operational State</b>
         </div>
@@ -78,7 +78,7 @@ export default function RampIQLanding() {
       </div>
 
       <div className="rq-quiet">
-        RampIQ &middot; Eagle Operations
+        SOI &middot; Eagle Operations
       </div>
     </>
   );

@@ -1,4 +1,4 @@
-# RampIQ — Design Partner Validation Guide
+# SOI — Design Partner Validation Guide
 
 ## For internal use during operational validation conversations
 
@@ -169,7 +169,7 @@ Document:
 
 **Observation-mode pilot:**
 - Radio remains primary coordination channel
-- RampIQ observes + reconstructs operational events
+- SOI observes + reconstructs operational events
 - Replay validates cognition against what actually happened
 - Recommendations remain advisory (accept/dismiss, never enforced)
 - Enterprise visibility demonstrates value to management

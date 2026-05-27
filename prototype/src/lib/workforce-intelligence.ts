@@ -1,4 +1,4 @@
-// RampIQ — Contextualized Workforce Intelligence
+// SOI — Contextualized Workforce Intelligence
 // Phase 11.5: Governance-aware personnel analysis.
 //
 // CORE PRINCIPLE:

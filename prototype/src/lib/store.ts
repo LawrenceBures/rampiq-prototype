@@ -1,6 +1,6 @@
 'use client';
 
-// RampIQ Phase 1 — Event store.
+// SOI Phase 1 — Event store.
 // Primary: Supabase. Fallback: localStorage (single-device, no realtime).
 
 import { useState, useEffect, useCallback, useRef } from 'react';

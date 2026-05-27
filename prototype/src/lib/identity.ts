@@ -1,6 +1,6 @@
 'use client';
 
-// RampIQ Phase 1 — Agent identity management.
+// SOI Phase 1 — Agent identity management.
 // Persists selected identity to localStorage so agents don't re-identify each page load.
 
 import type { AgentIdentity } from './rampiq-types';

@@ -142,7 +142,7 @@ export default function LtDispatchPage() {
         </button>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; LT Dispatch</div>
+      <div className="rq-quiet">SOI &middot; LT Dispatch</div>
     </>
   );
 }

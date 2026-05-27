@@ -173,7 +173,7 @@ export default function AgentMobile() {
           ))}
         </div>
 
-        <div className="rq-quiet">RampIQ &middot; Eagle Operations</div>
+        <div className="rq-quiet">SOI &middot; Eagle Operations</div>
       </>
     );
   }
@@ -421,7 +421,7 @@ export default function AgentMobile() {
         </button>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; Eagle Operations</div>
+      <div className="rq-quiet">SOI &middot; Eagle Operations</div>
     </>
   );
 }

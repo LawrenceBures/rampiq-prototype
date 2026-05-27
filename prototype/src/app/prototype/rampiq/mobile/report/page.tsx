@@ -281,7 +281,7 @@ function ReportForm() {
         </div>
       )}
 
-      <div className="rq-quiet">RampIQ &middot; Signal Report</div>
+      <div className="rq-quiet">SOI &middot; Signal Report</div>
     </>
   );
 }

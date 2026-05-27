@@ -1,4 +1,4 @@
-// RampIQ — Organizational Resilience Intelligence
+// SOI — Organizational Resilience Intelligence
 // Phase 17: How the organization absorbs operational pressure over time.
 //
 // RULES:

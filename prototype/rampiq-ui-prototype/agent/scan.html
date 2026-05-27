@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Agent · Scan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<div class="app agent-app">
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-status"><span>14:23</span><span class="right">● ● ●</span></div>
+
+    <div class="agent-head">
+      <div class="agent-head-lbl">Scan QR Code</div>
+      <div class="agent-assignment" style="font-size: 16px;">Point at gate or equipment</div>
+    </div>
+
+    <div class="scan-frame">
+      <div class="scan-camera"></div>
+      <div class="scan-target"><span></span><div class="scan-line"></div></div>
+      <div class="scan-hint">Looking for code...</div>
+      <div class="scan-fallback" onclick="RampIQ.ui.showToast('Manual entry · enter 6-digit code')">Can't scan? Enter 6-digit code</div>
+    </div>
+
+    <div style="padding: 14px 18px; border-top: 1px solid var(--line); background: #04060a;">
+      <button class="next-step" id="scanBtn" style="padding: 16px 18px; font-size: 14px; box-shadow: none;">
+        <span class="micro">DEMO</span>
+        Simulate scan of B14 code
+        <span class="ico">⊞</span>
+      </button>
+    </div>
+
+    <div class="agent-tabs">
+      <a href="now.html" class="agent-tab"><span class="ico">●</span>Now</a>
+      <a href="aircraft.html" class="agent-tab"><span class="ico">✈</span>Aircraft</a>
+      <a href="scan.html" class="agent-tab active"><span class="ico">⊞</span>Scan</a>
+      <a href="../crew-chief/zone.html" class="agent-tab"><span class="ico">◊</span>Team</a>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('agent');
+
+document.getElementById('scanBtn').addEventListener('click', () => {
+  const btn = document.getElementById('scanBtn');
+  btn.classList.add('done');
+  btn.innerHTML = '<span class="micro">Scanned · QR 482-124</span>✓ B14 · on-position confirmed<span class="ico">✓</span>';
+  RampIQ.events.qrScan('B14', 'ALVAREZ,M');
+  RampIQ.events.positionCheckin('B14', 'ALVAREZ,M');
+  RampIQ.ui.showToast('QR scan · position.checkin sent', 'success');
+  setTimeout(() => { location.href = 'now.html'; }, 1500);
+});
+</script>
+</body>
+</html>

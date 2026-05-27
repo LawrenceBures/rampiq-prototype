@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Equipment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .eq-grid {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .eq-tile {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    padding: 14px; cursor: pointer; transition: all 0.1s;
+  }
+  .eq-tile:hover { border-color: var(--line-3); }
+  .eq-tile.maint { border-color: rgba(232,161,58,0.3); background: linear-gradient(180deg, var(--amber-bg), var(--bg-1)); }
+  .eq-tile.failed { border-color: rgba(229,72,77,0.4); background: linear-gradient(180deg, var(--red-bg), var(--bg-1)); }
+  .eq-head { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: baseline; }
+  .eq-id { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .eq-type { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .eq-stat {
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; font-weight: 600;
+    padding: 3px 7px; border-radius: 3px;
+  }
+  .eq-stat.in-use { color: var(--blue); background: var(--blue-bg); border: 1px solid var(--blue-d); }
+  .eq-stat.avail { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-d); }
+  .eq-stat.maint { color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-d); }
+  .eq-stat.failed { color: var(--red); background: var(--red-bg); border: 1px solid var(--red-d); }
+  .eq-body { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+  .eq-body div { margin-bottom: 3px; }
+  .eq-body .v { color: var(--text-0); }
+  .eq-body .v.crit { color: var(--red); }
+  .eq-body .v.warn { color: var(--amber); }
+  .summary {
+    padding: 14px 20px; background: #04060a; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px;
+  }
+  .summary .s-item .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .summary .s-item .v { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+  .summary .s-item .v.warn { color: var(--amber); }
+  .summary .s-item .v.crit { color: var(--red); }
+  .summary .s-item .v.good { color: var(--green); }
+  .summary .s-item .v.info { color: var(--blue); }
+  .filter-bar {
+    padding: 12px 20px; display: flex; gap: 8px;
+    border-bottom: 1px solid var(--line); background: var(--bg-1);
+  }
+  .filter-bar .f {
+    padding: 5px 12px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 3px;
+  }
+  .filter-bar .f.active { background: var(--bg-4); color: var(--text-0); border-color: var(--line-3); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html" class="active"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">RESOURCES → EQUIPMENT</span>
+      <h1>Ground Support Equipment</h1>
+      <div class="right">
+        <span class="pill">38 ASSETS</span>
+        <span class="pill warn">2 MAINT</span>
+        <span class="pill alert">1 FAILED</span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="summary">
+        <div class="s-item"><div class="lbl">Total Assets</div><div class="v">38</div></div>
+        <div class="s-item"><div class="lbl">In Use</div><div class="v info">28</div></div>
+        <div class="s-item"><div class="lbl">Available</div><div class="v good">7</div></div>
+        <div class="s-item"><div class="lbl">Maintenance</div><div class="v warn">2</div></div>
+        <div class="s-item"><div class="lbl">Failed</div><div class="v crit">1</div></div>
+        <div class="s-item"><div class="lbl">Utilization</div><div class="v info">74%</div></div>
+      </div>
+      <div class="filter-bar">
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; align-self: center; margin-right: 6px;">FILTER</span>
+        <div class="f active" data-f="all">All</div>
+        <div class="f" data-f="in-use">In Use</div>
+        <div class="f" data-f="avail">Available</div>
+        <div class="f" data-f="maint">Maintenance</div>
+        <div class="f" data-f="failed">Failed</div>
+        <div class="f" data-f="Belt Loader">Belt Loaders</div>
+        <div class="f" data-f="Tug">Tugs</div>
+        <div class="f" data-f="GPU">GPU</div>
+      </div>
+      <div class="eq-grid" id="eqGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+const data = RampIQ.data.state;
+
+let activeFilter = 'all';
+
+function renderEq() {
+  let items = data.equipment.slice();
+  if (activeFilter !== 'all') {
+    if (['in-use','avail','maint','failed'].includes(activeFilter)) {
+      items = items.filter(e => e.status === activeFilter);
+    } else {
+      items = items.filter(e => e.type === activeFilter);
+    }
+  }
+  document.getElementById('eqGrid').innerHTML = items.map(e => `
+    <div class="eq-tile ${e.status === 'failed' ? 'failed' : e.status === 'maint' ? 'maint' : ''}" onclick="eqClick('${e.id}')">
+      <div class="eq-head">
+        <div>
+          <div class="eq-id">${e.id}</div>
+          <div class="eq-type">${e.type}</div>
+        </div>
+        <span class="eq-stat ${e.status}">${e.status === 'in-use' ? 'IN USE' : e.status.toUpperCase()}</span>
+      </div>
+      <div class="eq-body">
+        <div>LOC: <span class="v">${e.loc}</span></div>
+        <div>OP: <span class="v">${e.op}</span></div>
+        <div>NOTE: <span class="v ${e.status === 'failed' ? 'crit' : e.status === 'maint' ? 'warn' : ''}">${e.note}</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function eqClick(id) {
+  const e = data.equipment.find(x => x.id === id);
+  if (!e) return;
+  if (e.status === 'failed') {
+    location.href = 'recovery.html?inc=INC-0142';
+  } else {
+    RampIQ.ui.showToast(`${e.id} · ${e.type} · ${e.note}`);
+  }
+}
+window.eqClick = eqClick;
+
+document.querySelectorAll('.filter-bar .f').forEach(f => {
+  f.addEventListener('click', () => {
+    activeFilter = f.dataset.f;
+    document.querySelectorAll('.filter-bar .f').forEach(x => x.classList.toggle('active', x === f));
+    renderEq();
+  });
+});
+
+renderEq();
+</script>
+</body>
+</html>

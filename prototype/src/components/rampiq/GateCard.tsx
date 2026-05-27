@@ -1,4 +1,4 @@
-// RampIQ — Canonical gate card.
+// SOI — Canonical gate card.
 // Presentation-only. No data fetching. No side effects.
 // Consolidates .gate (52px compact), .chief-gate (240px expanded),
 // and turn-queue row patterns into one component with variants.

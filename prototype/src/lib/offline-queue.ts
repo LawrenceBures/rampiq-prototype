@@ -1,6 +1,6 @@
 'use client';
 
-// RampIQ Phase 1 — Offline event queue.
+// SOI Phase 1 — Offline event queue.
 // Stores events in IndexedDB when offline, syncs when connection returns.
 
 import type { EventSubmission } from './rampiq-types';

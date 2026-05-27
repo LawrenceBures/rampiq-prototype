@@ -1,4 +1,4 @@
-// RampIQ — Canonical operational action button.
+// SOI — Canonical operational action button.
 // Presentation-only. No side effects beyond emitting onClick callback.
 // Consolidates .act-btn, .csr-btn, .next-step, .sec-btn patterns.
 

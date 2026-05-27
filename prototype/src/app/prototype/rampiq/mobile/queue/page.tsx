@@ -123,7 +123,7 @@ export default function QueuePage() {
         </>
       )}
 
-      <div className="rq-quiet">RampIQ &middot; Offline Queue</div>
+      <div className="rq-quiet">SOI &middot; Offline Queue</div>
     </>
   );
 }

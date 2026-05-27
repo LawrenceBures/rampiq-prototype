@@ -1,4 +1,4 @@
-// RampIQ — Operational Outcome Measurement
+// SOI — Operational Outcome Measurement
 // Phase 10.1: Deterministic outcome derivation from operational memory.
 //
 // RULES:

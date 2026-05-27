@@ -186,7 +186,7 @@ export default function EquipmentSignalPage() {
         </Link>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; Equipment Signal</div>
+      <div className="rq-quiet">SOI &middot; Equipment Signal</div>
     </>
   );
 }

@@ -1,4 +1,4 @@
-// RampIQ — Replay Lifecycle Reconstruction
+// SOI — Replay Lifecycle Reconstruction
 // Phase 7 Step 2: Reconstruct historical operational state from append-only events.
 //
 // RULES:

@@ -1,4 +1,4 @@
-// RampIQ — Compact operational metrics strip.
+// SOI — Compact operational metrics strip.
 // Presentation-only. No data fetching. No side effects.
 // Single dense row: KPIs + severity breakdown inline.
 

@@ -1,4 +1,4 @@
-// RampIQ — Sustained Operational Stress Simulation
+// SOI — Sustained Operational Stress Simulation
 // Phase 16: Multi-hour operational timeline with cascading pressure.
 //
 // RULES:

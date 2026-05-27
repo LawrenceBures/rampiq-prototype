@@ -1,4 +1,4 @@
-// RampIQ — Canonical status lifecycle pill.
+// SOI — Canonical status lifecycle pill.
 // Presentation-only. No data fetching. No side effects.
 // Works across all lifecycle types (events, assignments, support, incidents, etc.).
 

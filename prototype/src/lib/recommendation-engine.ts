@@ -1,4 +1,4 @@
-// RampIQ — Recommendation Intelligence Engine
+// SOI — Recommendation Intelligence Engine
 // Phase 10.1: First intelligence layer — operational memory surfacing itself.
 //
 // RULES:

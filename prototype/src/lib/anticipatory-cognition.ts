@@ -1,4 +1,4 @@
-// RampIQ — Anticipatory Operational Cognition
+// SOI — Anticipatory Operational Cognition
 // Phase 14: Deterministic destabilization detection + stability modeling.
 //
 // CORE PRINCIPLE:

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Agent · Now</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<div class="app agent-app">
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-status">
+      <span>14:23</span>
+      <span class="right">● ● ●</span>
+    </div>
+
+    <div class="agent-head">
+      <div class="agent-head-lbl">Your Assignment</div>
+      <div class="agent-assignment"><span class="gate">B14</span> · N728UA</div>
+      <div class="agent-sub">
+        <span>UA 1408 → SEA</span>
+        <span class="countdown crit">Pushes in 9m</span>
+      </div>
+    </div>
+
+    <div class="agent-body">
+      <div class="next-step-label">Next Step</div>
+      <button class="next-step" id="nextStepBtn">
+        <span class="micro">Service Confirm</span>
+        Bag load complete
+        <span class="ico">→</span>
+      </button>
+      <div class="secondary-row">
+        <a href="scan.html" class="sec-btn" style="text-decoration:none;">
+          <span class="ico">⊞</span>Scan
+        </a>
+        <a href="support.html" class="sec-btn warn" style="text-decoration:none;">
+          <span class="ico">!</span>Something's wrong
+        </a>
+      </div>
+      <div class="recent-events">
+        <div class="recent-label">Your Recent Actions</div>
+        <div id="agentRecent">
+          <div class="recent-item"><span class="t">14:18</span><span class="m">Lav service complete</span><span class="check">✓</span></div>
+          <div class="recent-item"><span class="t">14:14</span><span class="m">Catering loaded</span><span class="check">✓</span></div>
+          <div class="recent-item"><span class="t">14:09</span><span class="m">On position at B14</span><span class="check">✓</span></div>
+          <div class="recent-item"><span class="t">14:01</span><span class="m">Shift check-in</span><span class="check">✓</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="agent-tabs">
+      <a href="now.html" class="agent-tab active"><span class="ico">●</span>Now</a>
+      <a href="aircraft.html" class="agent-tab"><span class="ico">✈</span>Aircraft</a>
+      <a href="scan.html" class="agent-tab"><span class="ico">⊞</span>Scan</a>
+      <a href="../crew-chief/zone.html" class="agent-tab"><span class="ico">◊</span>Team</a>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('agent');
+
+document.getElementById('nextStepBtn').addEventListener('click', () => {
+  const btn = document.getElementById('nextStepBtn');
+  if (btn.classList.contains('done')) return;
+  btn.classList.add('done');
+  btn.innerHTML = '<span class="micro">Confirmed · sent to chief</span>✓ Bag load complete<span class="ico">✓</span>';
+  RampIQ.events.serviceConfirmed('Bag load complete', 'B14', 'N728UA', 'ALVAREZ,M');
+  RampIQ.ui.showToast('Event sent · service.confirmed', 'success');
+
+  const recent = document.getElementById('agentRecent');
+  const item = document.createElement('div');
+  item.className = 'recent-item';
+  item.innerHTML = `<span class="t">${RampIQ.events.nowStr().slice(0,5)}</span><span class="m">Bag load complete</span><span class="check">✓</span>`;
+  recent.prepend(item);
+
+  setTimeout(() => {
+    btn.classList.remove('done');
+    btn.innerHTML = '<span class="micro">Service Confirm</span>Fuel verify<span class="ico">→</span>';
+  }, 1800);
+});
+</script>
+</body>
+</html>

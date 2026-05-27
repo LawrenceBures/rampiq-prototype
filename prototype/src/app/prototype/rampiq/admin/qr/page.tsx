@@ -104,7 +104,7 @@ export default function QrAdminPage() {
         </div>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; QR Admin</div>
+      <div className="rq-quiet">SOI &middot; QR Admin</div>
     </>
   );
 }

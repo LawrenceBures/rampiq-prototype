@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Thresholds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 16px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 18px; }
+
+  .scope-tabs { display: flex; gap: 8px; margin-bottom: 16px; padding: 14px 22px 0; }
+  .scope-tab {
+    padding: 7px 14px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; border-radius: 3px;
+  }
+  .scope-tab.active { background: var(--bg-4); color: var(--text-0); border-color: var(--amber); }
+
+  .thresh-row {
+    display: grid; grid-template-columns: 240px 1fr 90px 90px 70px;
+    gap: 16px; align-items: center;
+    padding: 14px 0; border-bottom: 1px solid var(--line);
+  }
+  .thresh-row:last-child { border-bottom: none; }
+  .thresh-row .lbl { font-size: 12px; }
+  .thresh-row .lbl .sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); display: block; margin-top: 3px; }
+  .thresh-bar {
+    height: 8px; background: var(--bg-3); border-radius: 4px; position: relative;
+    background: linear-gradient(90deg, var(--green-d) 0%, var(--green-d) 30%, var(--amber-d) 30%, var(--amber-d) 65%, var(--red-d) 65%, var(--red-d) 100%);
+  }
+  .thresh-bar .warn-mark, .thresh-bar .crit-mark {
+    position: absolute; top: -3px; width: 14px; height: 14px;
+    border-radius: 50%; border: 2px solid var(--bg-1); cursor: ew-resize;
+    transform: translateX(-50%);
+  }
+  .thresh-bar .warn-mark { background: var(--amber); }
+  .thresh-bar .crit-mark { background: var(--red); }
+  .thresh-bar .current {
+    position: absolute; top: -10px; width: 2px; height: 28px;
+    background: var(--text-0); transform: translateX(-50%);
+  }
+  .thresh-row input {
+    background: var(--bg-3); border: 1px solid var(--line-3); padding: 6px 10px;
+    color: var(--text-0); font-family: var(--mono); font-size: 11px;
+    border-radius: 3px; text-align: center;
+  }
+  .thresh-row .unit { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html" class="active"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → THRESHOLDS</span>
+      <h1>Operational Thresholds</h1>
+      <div class="right">
+        <span class="pill">SCOPE: ZONE B</span>
+        <span class="pill warn">CURRENT PRESSURE 82</span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="scope-tabs">
+        <span style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; align-self: center; margin-right: 4px;">SCOPE</span>
+        <div class="scope-tab" data-s="station">Station Default</div>
+        <div class="scope-tab" data-s="A">Zone A</div>
+        <div class="scope-tab active" data-s="B">Zone B</div>
+        <div class="scope-tab" data-s="C">Zone C</div>
+        <div class="scope-tab" data-s="D">Zone D</div>
+      </div>
+      <div style="padding: 0 22px 22px;">
+        <div class="admin-card">
+          <div class="admin-card-head">
+            <h3>Pressure &amp; Acknowledgment Thresholds · <span id="scopeName">Zone B</span></h3>
+            <span style="font-family:var(--mono); font-size:10px; color:var(--text-3);">VERSIONED · LIVE EFFECT</span>
+          </div>
+          <div class="admin-card-body">
+            <div id="threshRows"></div>
+            <button class="act-btn primary" style="margin-top: 18px;" onclick="saveThresh()">SAVE · CREATE VERSION</button>
+            <button class="act-btn" style="margin-top: 18px; margin-left: 8px;" onclick="resetThresh()">RESET TO DEFAULT</button>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-card-head"><h3>Auto-Page Rules</h3></div>
+          <div class="admin-card-body">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" checked /> Auto-page manager on EQ FAILURE incident</label>
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" checked /> Auto-page manager on MEDICAL incident</label>
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" checked /> Auto-page manager on HAZARD on ramp</label>
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" /> Auto-page manager on CREW SHORT > 2 agents</label>
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" checked /> Escalate to ops director on cascade > 3 gates</label>
+              <label style="display: flex; gap: 12px; align-items: center; font-size: 12px;"><input type="checkbox" /> Auto-page station manager on push compression > 80%</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+
+const thresholds = [
+  { id:'sup_ack', label:'Support ACK SLA', sub:'Time chief must ack before escalation', warn:30, crit:60, warnVal:'2 min', critVal:'5 min', unit:'time' },
+  { id:'push_comp', label:'Push compression', sub:'Minutes before scheduled push when warn fires', warn:50, crit:80, warnVal:'15 min', critVal:'5 min', unit:'time' },
+  { id:'zone_open_sup', label:'Zone open support', sub:'Concurrent unresolved support requests', warn:40, crit:75, warnVal:'3', critVal:'6', unit:'count' },
+  { id:'push_alley', label:'Push alley saturation', sub:'Concurrent push operations', warn:60, crit:85, warnVal:'3', critVal:'5', unit:'count' },
+  { id:'crew_short', label:'Crew shortage trigger', sub:'Agents short of workflow requirement', warn:35, crit:70, warnVal:'−1', critVal:'−2', unit:'count' },
+  { id:'bag_offset', label:'Bag count offset', sub:'Manifest count discrepancy', warn:30, crit:60, warnVal:'5', critVal:'10', unit:'count' },
+  { id:'gate_delay', label:'Gate departure delay', sub:'Minutes late before flag', warn:40, crit:70, warnVal:'5 min', critVal:'15 min', unit:'time' },
+  { id:'recovery_age', label:'Recovery age before escalation', sub:'Auto-escalate uncoordinated recoveries', warn:50, crit:80, warnVal:'10 min', critVal:'20 min', unit:'time' },
+  { id:'osi_pressure', label:'Station OSI pressure', sub:'Aggregate station pressure', warn:55, crit:75, warnVal:'55', critVal:'75', unit:'score' }
+];
+
+function renderRows() {
+  document.getElementById('threshRows').innerHTML = thresholds.map((t, i) => `
+    <div class="thresh-row">
+      <div class="lbl">${t.label}<span class="sub">${t.sub}</span></div>
+      <div class="thresh-bar">
+        <div class="warn-mark" style="left: ${t.warn}%;"></div>
+        <div class="crit-mark" style="left: ${t.crit}%;"></div>
+        ${i === 8 ? '<div class="current" style="left: 82%;"></div>' : ''}
+      </div>
+      <input type="text" value="${t.warnVal}" data-i="${i}" data-k="warn" onchange="updateVal(this)" />
+      <input type="text" value="${t.critVal}" data-i="${i}" data-k="crit" onchange="updateVal(this)" />
+      <div class="unit">${t.unit.toUpperCase()}</div>
+    </div>
+  `).join('');
+}
+
+function updateVal(input) {
+  const i = +input.dataset.i;
+  const k = input.dataset.k;
+  thresholds[i][k + 'Val'] = input.value;
+  RampIQ.ui.showToast(`${thresholds[i].label} · ${k} → ${input.value}`);
+}
+window.updateVal = updateVal;
+
+function saveThresh() {
+  const scope = document.querySelector('.scope-tab.active').dataset.s;
+  RampIQ.events.configChange(`Thresholds saved · scope ${scope}`, 'admin');
+  RampIQ.ui.showToast('Thresholds saved · version created · event recorded', 'success');
+}
+function resetThresh() {
+  RampIQ.ui.showToast('Reset to station defaults');
+  renderRows();
+}
+window.saveThresh = saveThresh;
+window.resetThresh = resetThresh;
+
+document.querySelectorAll('.scope-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.scope-tab').forEach(x => x.classList.toggle('active', x === t));
+    const s = t.dataset.s;
+    document.getElementById('scopeName').textContent = s === 'station' ? 'Station Default' : 'Zone ' + s;
+  });
+});
+
+renderRows();
+</script>
+</body>
+</html>

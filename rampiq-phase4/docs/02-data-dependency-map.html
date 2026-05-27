@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Data Dependency Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>/* RampIQ document stylesheet — PDF print version */
+/* Adapts the dark operational console aesthetic to a print-optimized format */
+/* while preserving the JetBrains Mono / Inter Tight / Instrument Serif typographic identity */
+
+@page {
+  size: letter;
+  margin: 0.7in 0.8in 0.9in 0.8in;
+  @bottom-left {
+    content: "RampIQ · " counter(page) " / " counter(pages);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  @bottom-right {
+    content: string(doctitle);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.08em;
+  }
+  @top-right {
+    content: "v1.0 · pre-pilot";
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: #aab3c0;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+}
+
+@page :first {
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+  @top-right { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  font-family: 'Inter Tight', 'Helvetica Neue', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1a1f29;
+  background: #ffffff;
+}
+
+body {
+  string-set: doctitle attr(data-title);
+}
+
+/* COVER PAGE */
+.cover {
+  page-break-after: always;
+  height: 9.5in;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5in 0.2in 0.4in;
+  position: relative;
+  background:
+    linear-gradient(135deg, #0a0d12 0%, #141922 100%);
+  color: #e8ecf2;
+  margin: -0.7in -0.8in -0.9in -0.8in;
+}
+
+.cover-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #2a3442;
+  margin-bottom: 60px;
+}
+
+.cover-mark {
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid #c9ff3a;
+  position: relative;
+  flex-shrink: 0;
+}
+.cover-mark::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid #c9ff3a;
+  opacity: 0.55;
+}
+.cover-mark::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #c9ff3a;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cover-brand {
+  font-size: 22pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #e8ecf2;
+}
+.cover-brand .iq { color: #c9ff3a; }
+
+.cover-tag {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  border: 1px solid rgba(201, 255, 58, 0.4);
+  padding: 6px 10px;
+}
+
+.cover-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cover-eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: #c9ff3a;
+}
+
+.cover-title {
+  font-size: 38pt;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: #e8ecf2;
+  margin-bottom: 14px;
+  max-width: 6in;
+}
+.cover-title em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #c9ff3a;
+}
+
+.cover-sub {
+  font-size: 13pt;
+  color: #aab3c0;
+  font-weight: 300;
+  line-height: 1.5;
+  max-width: 5.4in;
+  margin-bottom: 50px;
+}
+
+.cover-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px 36px;
+  margin-top: auto;
+  padding: 24px 0 0;
+  border-top: 1px solid #2a3442;
+}
+.cover-meta-l {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 6px;
+}
+.cover-meta-v {
+  font-size: 11pt;
+  color: #e8ecf2;
+  font-weight: 500;
+}
+.cover-meta-v b { color: #c9ff3a; font-weight: 600; }
+
+.cover-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #454e5d;
+  text-align: center;
+  margin-top: 30px;
+}
+
+/* HEADINGS */
+h1 {
+  font-size: 24pt;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0d12;
+  margin-top: 0;
+  margin-bottom: 14px;
+  page-break-after: avoid;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: #0a0d12;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #1a1f29;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #0a0d12;
+  margin-top: 22px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+/* PROSE */
+p {
+  margin: 0 0 11pt 0;
+  text-align: left;
+  hyphens: none;
+}
+
+strong, b {
+  font-weight: 600;
+  color: #0a0d12;
+}
+
+em, i {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* LISTS */
+ul, ol {
+  margin: 0 0 14pt 0;
+  padding-left: 18pt;
+}
+
+ul li {
+  margin-bottom: 5pt;
+  list-style: none;
+  position: relative;
+  padding-left: 12pt;
+}
+
+ul li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: #c9ff3a;
+  font-weight: 700;
+  font-size: 14pt;
+  line-height: 1;
+  top: 1pt;
+}
+
+ol li {
+  margin-bottom: 5pt;
+}
+
+li > strong:first-child {
+  color: #0a0d12;
+}
+
+/* TABLES */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14pt 0 18pt;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+
+th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  text-align: left;
+  padding: 8pt 10pt;
+  border-bottom: 1.5pt solid #1a1f29;
+  vertical-align: bottom;
+}
+
+td {
+  padding: 8pt 10pt;
+  border-bottom: 0.5pt solid #cad0d9;
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: 1.5pt solid #1a1f29; }
+
+td.mono, th.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+}
+
+/* HORIZONTAL RULE */
+hr {
+  border: none;
+  border-top: 1px solid #1a1f29;
+  margin: 24pt 0;
+}
+
+/* SECTION DIVIDER */
+.section-divider {
+  margin: 30pt 0 24pt;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #6b7585;
+  padding: 8pt 0;
+  border-top: 1px solid #1a1f29;
+  border-bottom: 1px solid #1a1f29;
+}
+
+/* PULL QUOTES / CALLOUTS */
+.callout {
+  background: #f4f6fa;
+  border-left: 3px solid #c9ff3a;
+  padding: 14pt 18pt;
+  margin: 16pt 0;
+  font-size: 10pt;
+}
+
+.callout em {
+  color: #2a3442;
+}
+
+/* EYEBROW */
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  margin-bottom: 6pt;
+}
+
+/* CODE / mono inline */
+code, .mono-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 1pt 5pt;
+  border-radius: 2pt;
+  color: #2a3442;
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 12pt 14pt;
+  border-left: 2pt solid #1a1f29;
+  margin: 12pt 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* CLOSING SIGNATURE PARA */
+.signature {
+  margin-top: 30pt;
+  padding-top: 18pt;
+  border-top: 1px solid #1a1f29;
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 11pt;
+  color: #2a3442;
+  text-align: left;
+}
+
+/* PAGE BREAK HELPERS */
+.page-break { page-break-before: always; }
+table { page-break-inside: avoid; }
+h2, h3 { page-break-after: avoid; }
+
+/* TABLE OF CONTENTS */
+.toc {
+  margin: 24pt 0 32pt;
+}
+.toc-h {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 12pt;
+}
+.toc ol {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: toc-counter;
+}
+.toc li {
+  counter-increment: toc-counter;
+  display: flex;
+  align-items: baseline;
+  padding: 6pt 0;
+  border-bottom: 0.5pt dotted #cad0d9;
+  font-size: 11pt;
+}
+.toc li::before {
+  content: counter(toc-counter, decimal-leading-zero);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  color: #c9ff3a;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-right: 14pt;
+  min-width: 24pt;
+}
+
+/* TIER LABELS in dependency map */
+.tier-label {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3pt 7pt;
+  margin-right: 6pt;
+}
+.tier-label.t1 { background: #1a1f29; color: #c9ff3a; }
+.tier-label.t2 { background: #f4f6fa; color: #2a3442; border: 1px solid #1a1f29; }
+.tier-label.t3 { background: transparent; color: #6b7585; border: 1px dashed #6b7585; }
+
+/* REALITY pills */
+.reality {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2pt 6pt;
+  margin-left: 4pt;
+}
+.reality.mature { color: #1f6b4d; border: 1px solid #1f6b4d; }
+.reality.variable { color: #7a5512; border: 1px solid #7a5512; }
+.reality.gap { color: #7a1f1f; border: 1px solid #7a1f1f; }
+</style>
+</head>
+<body data-title="Data Dependency Map">
+
+<div class="cover">
+  <div class="cover-header">
+    <div class="cover-mark"></div>
+    <div class="cover-brand">Ramp<span class="iq">IQ</span></div>
+    <div class="cover-tag">DOC 02 · DATA MAP</div>
+  </div>
+
+  <div class="cover-eyebrow">Phase 4 · Pre-Pilot · Internal & Pilot-Audience</div>
+  <h1 class="cover-title">Data <em>Dependency</em><br/>Map</h1>
+  <p class="cover-sub">Every input RampIQ requires, mapped to its source system, integration approach, real-world maturity, and degraded-operation behavior.</p>
+
+  <div class="cover-meta-grid">
+    <div>
+      <div class="cover-meta-l">Audience</div>
+      <div class="cover-meta-v">IT integration · solution architects · ops technology</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Status</div>
+      <div class="cover-meta-v"><b>Pre-pilot</b> · scope-locking</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Version</div>
+      <div class="cover-meta-v">1.0 · May 2026</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Companion docs</div>
+      <div class="cover-meta-v">System Boundary · Data Map</div>
+    </div>
+  </div>
+
+  <div class="cover-foot">RampIQ · Operational intelligence for ramp · Confidential</div>
+</div>
+
+<h1>RampIQ · Data Dependency Map</h1>
+<p class="signature"><strong>Version 1.0 · Phase 4 · Pre-Pilot</strong></p>
+<p><strong>Audience:</strong> IT integration teams, solution architects, operations technology leadership</p>
+<hr/>
+<h2>Purpose of this document</h2>
+<p>This document maps every data input RampIQ requires to the source system that provides it, the realistic state of that source at major North American carriers, the update cadence required, and the degraded-operation behavior if the input is missing.</p>
+<p>It is the engineering-facing companion to the System Boundary Document. Where the boundary document defines what RampIQ is, this document defines what it must consume to operate.</p>
+<p>The honest answer to "can this be integrated?" is in this document. We are explicit about what is straightforward, what is a fight, and what is a deployment dependency that may not exist at every station.</p>
+<hr/>
+<h2>Reading the matrix</h2>
+<p>Each data input is described by:</p>
+<ul>
+<li><strong>Input</strong> — the operational data RampIQ needs.</li>
+<li><strong>Used by</strong> — which RampIQ algorithm or interface element depends on it.</li>
+<li><strong>Source system</strong> — where this data lives at most North American airlines.</li>
+<li><strong>Integration approach</strong> — how RampIQ retrieves it.</li>
+<li><strong>Cadence</strong> — how frequently RampIQ needs an update.</li>
+<li><strong>Reality at the typical airline</strong> — honest assessment of how mature the source is, ranging from <code>mature</code> (stable APIs, well-documented) to <code>variable</code> (some carriers have it, some don't) to <code>gap</code> (rarely available).</li>
+<li><strong>Degraded behavior</strong> — what RampIQ does when this input is missing or stale.</li>
+</ul>
+<hr/>
+<h2>Tier 1 — Minimum viable inputs</h2>
+<p>These are the inputs without which RampIQ cannot operate. A pilot deployment requires all five.</p>
+<h3>Flight schedule</h3>
+<ul>
+<li><strong>Used by.</strong> Every screen, every algorithm. This is the spine of the system.</li>
+<li><strong>Source system.</strong> Airline operational database (AODB). Standard products: SITA Airport, Amadeus Altea, ARINC AODB, or proprietary (Delta uses its own; American operates a proprietary system layered on Sabre).</li>
+<li><strong>Integration approach.</strong> Read-only feed. Standard formats: SITA Type-B messaging, ARINC AIM, REST/SOAP API, or scheduled flat-file extract. Airlines vary in which they expose. A modern airline expects a SOAP or REST endpoint; a legacy carrier may insist on SFTP file drops every 60 seconds.</li>
+<li><strong>Cadence.</strong> 60 seconds for change events, 5 minutes acceptable for full snapshots.</li>
+<li><strong>Reality.</strong> Mature. Every commercial airline has an AODB, and the data is well-structured. The integration is not technically difficult. The political challenge is access — the airline's IT team may take 6-10 weeks to provision a feed.</li>
+<li><strong>Degraded behavior.</strong> Without this feed, RampIQ does not operate. There is no fallback.</li>
+</ul>
+<h3>Crew assignment and roster</h3>
+<ul>
+<li><strong>Used by.</strong> Team suitability ranking, assignment recommendation, fatigue tracking, mobility intelligence.</li>
+<li><strong>Source system.</strong> Crew management system. Common products: CrewTrac, Sabre Crew Manager, Jeppesen FOS, AIMS, or proprietary. Ramp crew often lives in a separate workforce-management product (Workbrain, Kronos, Quinyx) rather than the same system as flight crew.</li>
+<li><strong>Integration approach.</strong> REST API where available. At carriers using older WFM products, this is frequently a database-level read replica or scheduled extract.</li>
+<li><strong>Cadence.</strong> 5 minutes for active-shift data, 60 minutes acceptable for forward roster.</li>
+<li><strong>Reality.</strong> Variable. Major carriers have well-structured systems. Some carriers operate ramp crew scheduling out of spreadsheet-based or paper-based systems at smaller stations, and the data quality there is poor. At a hub, this is solid; at a spoke, expect incomplete data.</li>
+<li><strong>Degraded behavior.</strong> RampIQ falls back to manual roster entry by the ramp lead at shift start. The team suitability algorithm operates with reduced fidelity (no fatigue history, only current-shift data).</li>
+</ul>
+<h3>Crew certifications</h3>
+<ul>
+<li><strong>Used by.</strong> Hard filter in team suitability (eligibility check), cert conflict detection, worker-experience cert roadmap.</li>
+<li><strong>Source system.</strong> Training and qualifications system. Common products: ATA Certification Manager, proprietary internal systems, Workday Learning, or dedicated aviation training platforms (FlightPath, AcftQuals).</li>
+<li><strong>Integration approach.</strong> Daily extract is sufficient. REST API where available; flat-file extract is more common.</li>
+<li><strong>Cadence.</strong> 24 hours. Certifications change slowly; same-day expiration is a corner case handled via a soft-fail in the eligibility check.</li>
+<li><strong>Reality.</strong> Mature at major carriers, variable at regionals. The data exists; the question is whether it's queryable. A surprising number of carriers maintain certifications in spreadsheets or document management systems rather than relational databases.</li>
+<li><strong>Degraded behavior.</strong> Without cert data, the eligibility filter cannot run and the system falls back to "all available crews" with a clear "cert not verified" flag on every recommendation. This is a survivable but degraded mode.</li>
+</ul>
+<h3>Bag count</h3>
+<ul>
+<li><strong>Used by.</strong> Flight risk score (heavy-load weighting), turn-time prediction, equipment forecasting, cascade modeling.</li>
+<li><strong>Source system.</strong> Two possible sources: the BHS (baggage handling system, e.g. BCS, BagLink) for actual scanned bags, or the departure control system (DCS, e.g. SabreSonic, Altea, Navitaire) for forecasted bags.</li>
+<li><strong>Integration approach.</strong> BHS feeds are typically real-time message-bus subscriptions (RabbitMQ, Kafka, IBM MQ). DCS feeds are typically REST or SITA Type-B.</li>
+<li><strong>Cadence.</strong> Forecast: 15 minutes acceptable. Actual scan rate: 60 seconds.</li>
+<li><strong>Reality.</strong> Mature at major airports. Bag scanning is universally deployed and the data is reliable. The integration is moderately complex because BHS systems vary by station and may be operated by the airport authority rather than the airline (DFW operates its own BHS; LAX has a hybrid).</li>
+<li><strong>Degraded behavior.</strong> Without bag count, the heavy-load weighting in the risk score is set to a default based on aircraft type and historical averages for the route. Accuracy of risk prediction drops by an estimated 8-12 points.</li>
+</ul>
+<h3>Gate map and assignments</h3>
+<ul>
+<li><strong>Used by.</strong> Mobility intelligence, cascade visualization, adjacency-conflict detection, equipment routing.</li>
+<li><strong>Source system.</strong> AODB, same source as flight schedule.</li>
+<li><strong>Integration approach.</strong> Static map (gate coordinates, walking distances) is loaded once and updated quarterly. Live gate assignments come through the flight schedule feed.</li>
+<li><strong>Cadence.</strong> Static: quarterly. Live: same as flight schedule.</li>
+<li><strong>Reality.</strong> Mature for live assignments. The static map data is sometimes the harder part to obtain — airports treat their facility schematics as proprietary, and the airline may not have a clean digital map of their own gates. RampIQ provides a self-service tool for the ramp leadership to mark up a gate map at deployment.</li>
+<li><strong>Degraded behavior.</strong> Without the static map, mobility distance calculations fall back to terminal-level approximations (within-terminal: same gate group; cross-terminal: penalty). This is a meaningful degradation but RampIQ remains operational.</li>
+</ul>
+<hr/>
+<h2>Tier 2 — Operational depth inputs</h2>
+<p>These add equipment intelligence and turn-event awareness. Without them, RampIQ runs but the equipment-forecasting and recovery-simulation features are limited.</p>
+<h3>Equipment location and state</h3>
+<ul>
+<li><strong>Used by.</strong> Equipment intelligence screen, shortage forecasting, recovery simulation, assignment cost-of-repositioning.</li>
+<li><strong>Source system.</strong> This is the biggest gap in the typical airline. Three possible sources, in decreasing order of fidelity:</li>
+<li><strong>RTLS (real-time location).</strong> BLE tags, UWB, or GPS on each piece of GSE. Mature solutions: Spinnaker, Saviance, Aeromechanical. Where deployed, this is reliable. Where not deployed, this is a multi-million-dollar capex project per station.</li>
+<li><strong>GSE management system.</strong> A digital check-in/check-out system at the depot. Less precise but operationally sufficient. Examples: TBI Aviation, ARINC Multi-User Flight Information Display.</li>
+<li><strong>Manual / inferred.</strong> A ramp lead marks equipment as available or in-use through the RampIQ interface itself. Less precise still, but works.</li>
+<li><strong>Integration approach.</strong> RTLS via vendor API (typically REST or MQTT). GSE management system via REST or database extract. Manual via in-app entry.</li>
+<li><strong>Cadence.</strong> RTLS: 60 seconds. GSE system: 5 minutes. Manual: at deployment time, treated as best-effort.</li>
+<li><strong>Reality.</strong> Gap at most stations. The major hubs of the largest carriers have piloted RTLS in pieces, but station-wide deployment is rare. Expect to operate on inferred state at most pilot stations.</li>
+<li><strong>Degraded behavior.</strong> RampIQ defaults to inferred state from depot check-out logs and assignment history. Equipment shortage forecasting becomes reactive rather than predictive — the system can detect a shortage but not forecast one 30 minutes ahead. Cross-depot rebalancing recommendations become approximate.</li>
+</ul>
+<h3>Equipment maintenance schedules</h3>
+<ul>
+<li><strong>Used by.</strong> Equipment availability forecasting, maintenance threshold alerts.</li>
+<li><strong>Source system.</strong> GSE maintenance management system or paper logs at smaller stations. Common products: Trax, Maintenance Connection, RAMCO Aviation.</li>
+<li><strong>Integration approach.</strong> Daily extract is sufficient. REST or flat file.</li>
+<li><strong>Cadence.</strong> 24 hours.</li>
+<li><strong>Reality.</strong> Variable. Larger carriers and stations have this digitized; smaller ones don't.</li>
+<li><strong>Degraded behavior.</strong> Without maintenance schedule data, maintenance threshold alerts are unavailable. RampIQ does not predict mechanical failures from usage hours when this data is absent.</li>
+</ul>
+<h3>Turnaround events (ACARS / OOOI)</h3>
+<ul>
+<li><strong>Used by.</strong> Cascade detection, delay attribution, turn-time prediction model retraining.</li>
+<li><strong>Source system.</strong> ACARS or proprietary OOOI feed (Out, Off, On, In). Provided by the airline's communications gateway: ARINC, SITA, or proprietary.</li>
+<li><strong>Integration approach.</strong> Subscription to message queue. ACARS data is well-standardized.</li>
+<li><strong>Cadence.</strong> Real-time as events occur.</li>
+<li><strong>Reality.</strong> Mature. Every carrier has this data. The question is whether they expose it to RampIQ.</li>
+<li><strong>Degraded behavior.</strong> Without OOOI events, RampIQ uses scheduled times from the flight schedule and makes assumptions about block-on, block-off based on standard turnaround patterns. Cascade detection latency increases by an estimated 3-6 minutes.</li>
+</ul>
+<h3>Cargo manifest</h3>
+<ul>
+<li><strong>Used by.</strong> Hazmat handling cert filter, cargo-loader equipment forecasting.</li>
+<li><strong>Source system.</strong> Cargo management system. Common products: SITA CargoSpot, IBS iCargo, proprietary.</li>
+<li><strong>Integration approach.</strong> Per-flight pull at flight publication, plus update events on manifest changes.</li>
+<li><strong>Cadence.</strong> 30 minutes.</li>
+<li><strong>Reality.</strong> Variable. Major cargo-handling carriers (FedEx, UPS, cargo divisions of passenger carriers) have this. Domestic-only passenger carriers may not run a sophisticated cargo system.</li>
+<li><strong>Degraded behavior.</strong> Without cargo manifest, hazmat indication falls back to the binary flag in the flight schedule (if the airline includes it). The cargo equipment forecast operates on aircraft-type defaults.</li>
+</ul>
+<hr/>
+<h2>Tier 3 — Predictive layer inputs</h2>
+<p>These enable IRROPS mode, weather-driven forecasting, and the highest-fidelity crew mobility intelligence.</p>
+<h3>Weather feed</h3>
+<ul>
+<li><strong>Used by.</strong> IRROPS auto-trigger, environmental delay risk, deicing demand forecast.</li>
+<li><strong>Source system.</strong> Third-party weather provider. Standard providers: NOAA (free, lower fidelity), Schneider Electric, Weather Decision Technologies, FlightAware Weather, IBM Weather Operations Center.</li>
+<li><strong>Integration approach.</strong> REST API.</li>
+<li><strong>Cadence.</strong> 5 minutes for METAR, 30 minutes for forecasts, real-time for convective alerts.</li>
+<li><strong>Reality.</strong> Mature. The integration itself is straightforward; the question is which provider the airline uses and whether RampIQ can ride that contract.</li>
+<li><strong>Degraded behavior.</strong> Without a paid feed, RampIQ falls back to NOAA public data. Convective forecasting is degraded; IRROPS auto-trigger may have higher false-positive rate or higher latency.</li>
+</ul>
+<h3>ATC ground-stop and EDCT data</h3>
+<ul>
+<li><strong>Used by.</strong> IRROPS auto-trigger, network-impact forecasting, recovery simulation.</li>
+<li><strong>Source system.</strong> FAA ASDI feed (commercial subscription) or commercial relays such as FlightAware Firehose, Cirium, or ARINC FlightView.</li>
+<li><strong>Integration approach.</strong> REST or message-bus subscription.</li>
+<li><strong>Cadence.</strong> 60 seconds for ground-stop status, real-time for EDCT issuance.</li>
+<li><strong>Reality.</strong> Mature. The data is straightforward; the question is licensing cost. Commercial relays charge per-station or per-volume.</li>
+<li><strong>Degraded behavior.</strong> Without this feed, IRROPS auto-trigger relies on internal cascade detection only. Ground-stops are observed when the airline's flight schedule starts showing systemic delays, which adds 5-15 minutes of latency.</li>
+</ul>
+<h3>Crew location signal (optional)</h3>
+<ul>
+<li><strong>Used by.</strong> Crew mobility intelligence (visualization), idle-pocket detection, repositioning ETAs.</li>
+<li><strong>Source system.</strong> Three possible sources:</li>
+<li><strong>BLE tags on safety vests.</strong> Reliable, accurate, requires capex on tags and reader infrastructure.</li>
+<li><strong>Phone-based assignment-confirmation pings.</strong> Crew member checks in at the assignment via the RampIQ mobile app. Light-touch, no infrastructure, lower fidelity.</li>
+<li><strong>Vehicle-mounted GPS on tugs and belt loaders.</strong> Indirect — tracks the equipment, infers the crew. Useful for some crew types only.</li>
+<li><strong>Integration approach.</strong> Vendor API for tags. Native to RampIQ for app-based pings. Vehicle GPS may already exist as part of equipment RTLS.</li>
+<li><strong>Cadence.</strong> 60 seconds for tags, on-event for app pings.</li>
+<li><strong>Reality.</strong> Politically sensitive. Real-time crew location tracking is a deal-killer at unionized stations unless the deployment is structured carefully. The phone-app approach is generally acceptable because the crew member affirmatively checks in. Tag-based tracking requires union agreement.</li>
+<li><strong>Degraded behavior.</strong> RampIQ operates without this signal by default. Crew location is inferred from current flight assignment and last-known gate. Mobility visualizations show inferred positions with a clear "inferred" indicator. Idle-pocket detection becomes coarser; reposition ETAs become approximations.</li>
+</ul>
+<hr/>
+<h2>Outputs — what RampIQ writes</h2>
+<p>For completeness, the data RampIQ produces and where it goes.</p>
+<ul>
+<li><strong>Operational state stream.</strong> JSON feed consumed by the RampIQ interfaces. Internal to the system.</li>
+<li><strong>Recommendation log.</strong> Every recommendation, override, and outcome. Stored in RampIQ's database, exported to the airline on request.</li>
+<li><strong>Audit trail.</strong> Every action staged or executed, with timestamp and operator. Exported on request.</li>
+<li><strong>Aggregate metrics.</strong> Daily and weekly rollups for the executive interface. Exportable in CSV or JSON.</li>
+</ul>
+<p>RampIQ does not write to any airline system of record. There is no integration that pushes recommendations into the AODB, the crew system, the BHS, or any other system of record.</p>
+<hr/>
+<h2>Integration work effort estimate</h2>
+<p>Honest estimates for a typical pilot deployment.</p>
+<ul>
+<li><strong>Tier 1 integrations.</strong> 6-10 weeks calendar time at the airline, 4-6 weeks of RampIQ engineering. The bottleneck is almost always airline IT provisioning of feed access, not the technical work.</li>
+<li><strong>Tier 2 integrations.</strong> Adds 4-6 weeks. Equipment data is the wildcard; if the station has no RTLS and no GSE management system, this tier is replaced by manual entry and the calendar shortens.</li>
+<li><strong>Tier 3 integrations.</strong> Adds 4-8 weeks for weather and ATC feeds. Crew location, if pursued, is a separate workstream with its own union timeline, often 8-12 additional weeks.</li>
+</ul>
+<p>Total realistic deployment timeline for a Tier 1 + Tier 2 pilot: <strong>14-20 weeks</strong> from contract signing to pilot start. Tier 3 pilot: <strong>18-28 weeks</strong>.</p>
+<hr/>
+<h2>What this document does not cover</h2>
+<ul>
+<li>Specific vendor API documentation. Each integration has its own technical spec written at integration time.</li>
+<li>Pricing for third-party data feeds. Negotiated separately.</li>
+<li>Cybersecurity review and penetration testing. Performed during integration phase.</li>
+<li>Cloud infrastructure choice (AWS / Azure / GCP). Determined by airline preference.</li>
+</ul>
+<hr/>
+<h2>Document version control</h2>
+<table>
+<thead><tr>
+<th>Version</th>
+<th>Date</th>
+<th>Status</th>
+<th>Notes</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>May 2026</td>
+<td>Pre-pilot</td>
+<td>Initial integration map for pilot conversations</td>
+</tr>
+</tbody></table>
+<hr/>
+<p class="signature"><em>The honest answer to "can this be integrated?" lives in this document. Every input has a source, a fallback, and a degraded mode. Nothing is taken on faith.</em></p>
+</body>
+</html>

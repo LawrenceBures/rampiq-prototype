@@ -1,4 +1,4 @@
-// RampIQ — Canonical incident lifecycle card.
+// SOI — Canonical incident lifecycle card.
 // Presentation-only. No data fetching. No side effects.
 // Extracted from dashboard page for console layout reuse.
 

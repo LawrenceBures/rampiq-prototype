@@ -1,4 +1,4 @@
-// RampIQ — Lifecycle Command Handlers
+// SOI — Lifecycle Command Handlers
 // Phase 2: Incidents + Recovery Actions
 //
 // COMMAND PATTERN:

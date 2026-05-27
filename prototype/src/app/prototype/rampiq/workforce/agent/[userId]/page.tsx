@@ -167,7 +167,7 @@ export default function AgentDetailPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <div className="rq-quiet">RampIQ &middot; Operational Readiness</div>
+      <div className="rq-quiet">SOI &middot; Operational Readiness</div>
     </div>
   );
 }

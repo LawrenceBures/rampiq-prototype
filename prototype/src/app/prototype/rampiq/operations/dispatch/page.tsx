@@ -369,7 +369,7 @@ export default function DispatchBoard() {
       })}
 
       <div style={{ height: 20 }} />
-      <div className="rq-quiet">RampIQ &middot; Crew Chief Dispatch</div>
+      <div className="rq-quiet">SOI &middot; Crew Chief Dispatch</div>
     </div>
   );
 }

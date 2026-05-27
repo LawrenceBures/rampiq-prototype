@@ -1,4 +1,4 @@
-// RampIQ — Governed Bounded Autonomy Framework
+// SOI — Governed Bounded Autonomy Framework
 // Phase 18: Limited-domain operational autonomy under governance.
 //
 // CORE PRINCIPLE:

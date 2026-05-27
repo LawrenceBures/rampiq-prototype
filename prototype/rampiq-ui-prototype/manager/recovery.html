@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Recovery Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .recovery-grid { display: grid; grid-template-columns: 1fr 380px; height: 100%; gap: 1px; background: var(--line); }
+  .recovery-main { background: var(--bg-1); display: flex; flex-direction: column; overflow: hidden; }
+  .recov-banner {
+    padding: 14px 20px; background: linear-gradient(90deg, rgba(229,72,77,0.18), transparent);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 20px;
+  }
+  .recov-banner .cat { font-family: var(--mono); font-size: 11px; color: var(--red); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .recov-banner .title { font-size: 17px; font-weight: 700; }
+  .recov-banner .clock {
+    margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--text-0);
+    font-variant-numeric: tabular-nums;
+    background: var(--bg-3); padding: 6px 12px; border-radius: 3px;
+    border: 1px solid var(--line-2);
+  }
+  .recov-banner .clock .lbl { color: var(--text-3); font-size: 9px; margin-right: 6px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .recov-body {
+    flex: 1; overflow: auto;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1px; background: var(--line);
+  }
+  .recov-pane { background: var(--bg-1); padding: 14px 18px; overflow-y: auto; }
+  .recov-pane h3 {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--text-3); text-transform: uppercase; margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  .recov-side { background: var(--bg-1); overflow-y: auto; }
+  .recov-side .group { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .recov-side .group h4 {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--text-3); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .partic-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    font-size: 12px;
+  }
+  .partic-row .av {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--bg-4); border: 1px solid var(--line-3);
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .partic-row .name { flex: 1; }
+  .partic-row .role { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .partic-row .stat-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .partic-row .stat-dot.pending { background: var(--amber); }
+  .affected { display: flex; gap: 6px; flex-wrap: wrap; }
+  .aff-gate { background: var(--bg-3); border: 1px solid var(--line-3); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px; cursor: pointer; }
+  .aff-gate.crit { color: var(--red); border-color: var(--red-d); background: var(--red-bg); }
+  .aff-gate.warn { color: var(--amber); border-color: var(--amber-d); background: var(--amber-bg); }
+  .ctx-data { font-family: var(--mono); font-size: 11px; color: var(--text-2); line-height: 1.7; }
+  .ctx-data .v { color: var(--text-0); }
+  .ctx-data .v.crit { color: var(--red); }
+  .ctx-data .v.warn { color: var(--amber); }
+  @media (max-width: 1024px) {
+    .recovery-grid { grid-template-columns: 1fr; }
+    .recov-body { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html" class="active"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">OPERATIONS → RECOVERY CONSOLE</span>
+      <h1 id="incTitle">Incident #INC-0142</h1>
+      <div class="right">
+        <span class="pill alert">ACTIVE</span>
+        <span class="pill" id="participCount">4 PARTIC</span>
+      </div>
+    </div>
+
+    <div class="body" style="padding: 0;">
+      <div class="recovery-grid">
+        <div class="recovery-main">
+          <div class="recov-banner">
+            <span class="cat" id="recovCat">EQ FAILURE · CASCADE</span>
+            <span class="title" id="recovTitle">Gate B7 · N401UA · Belt Loader 4</span>
+            <span class="clock"><span class="lbl">SINCE INITIATION</span><span id="recovClock">08:14</span></span>
+          </div>
+          <div class="recov-body">
+            <div class="recov-pane">
+              <h3>Incident Timeline</h3>
+              <div id="recovTimeline"></div>
+            </div>
+            <div class="recov-pane">
+              <h3>Action Board</h3>
+              <div id="recovActions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recov-side">
+          <div class="group">
+            <h4>Participants · <span id="partN">4</span></h4>
+            <div id="participList"></div>
+          </div>
+          <div class="group">
+            <h4>Affected Gates · Cascade</h4>
+            <div class="affected" id="affGates"></div>
+          </div>
+          <div class="group">
+            <h4>Operational Context</h4>
+            <div class="ctx-data">
+              <div>DEP: <span class="v">UA 1842 → DEN</span></div>
+              <div>SCHED PUSH: <span class="v">14:18</span></div>
+              <div>CURRENT DELAY: <span class="v crit">+13 min</span></div>
+              <div>PAX: <span class="v">187</span></div>
+              <div>BAGS: <span class="v">142 / 156</span></div>
+              <div>CONNECTING: <span class="v warn">28 PAX</span></div>
+            </div>
+          </div>
+          <div class="group">
+            <h4>Quick Propose Action</h4>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <button class="act-btn" onclick="proposeAction('Request additional ground crew')">+ Additional crew</button>
+              <button class="act-btn" onclick="proposeAction('Hold push to outbound')">+ Hold push</button>
+              <button class="act-btn" onclick="proposeAction('Reassign equipment from staging')">+ Reassign equipment</button>
+              <button class="act-btn danger" onclick="proposeAction('Escalate to operations director')">+ Escalate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+
+let state = RampIQ.data.state;
+const params = new URLSearchParams(location.search);
+const incId = params.get('inc') || 'INC-0142';
+
+function getInc() { return RampIQ.data.state.incidents.find(i => i.id === incId); }
+
+function renderTimeline() {
+  document.getElementById('recovTimeline').innerHTML = state.recoveryTimeline.map(e => `
+    <div class="tl-event ${e.tp}">
+      <div class="t">${e.t.slice(3)}</div>
+      <div class="m">${e.m}<span class="who">${e.who}</span></div>
+    </div>
+  `).join('');
+}
+
+function renderActions() {
+  const acts = state.recoveryActions.filter(a => a.incId === incId);
+  document.getElementById('recovActions').innerHTML = acts.map(a => `
+    <div class="act-card ${a.status}">
+      <div class="act-head">
+        <span class="act-title">${a.title}</span>
+        <span class="act-status ${a.status}">${a.status}</span>
+      </div>
+      <div class="act-meta">
+        <span>ASSIGNED <span class="v">${a.assigned}</span></span>
+        <span>ETA <span class="v">${a.eta}</span></span>
+        <span>${a.ts}</span>
+      </div>
+      <div class="act-btns">
+        ${a.status === 'proposed' ? `<button class="act-btn primary" onclick="acknowledgeAction(${a.id})">ACK</button><button class="act-btn" onclick="assignAction(${a.id})">ASSIGN</button>` : ''}
+        ${a.status === 'ackd' ? `<button class="act-btn primary" onclick="startAction(${a.id})">START</button>` : ''}
+        ${a.status === 'inprog' ? `<button class="act-btn primary" onclick="completeAction(${a.id})">COMPLETE</button>` : ''}
+        ${a.status === 'done' ? `<span style="color: var(--green); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;">✓ RESOLVED</span>` : ''}
+        ${a.status !== 'done' ? `<button class="act-btn danger" onclick="escalateAction(${a.id})">ESC</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderParticipants() {
+  const list = [
+    { n:'T. Kenworth', r:'Chief · Zone B', s:'active', av:'TK' },
+    { n:'L. Reese', r:'Manager · DFW PM', s:'active', av:'LR' },
+    { n:'R. Park', r:'Loader · acting', s:'active', av:'RP' },
+    { n:'Dispatch', r:'UA OPS', s:'pending', av:'D' }
+  ];
+  document.getElementById('participList').innerHTML = list.map(p => `
+    <div class="partic-row">
+      <div class="av">${p.av}</div>
+      <div class="name">${p.n}<div class="role">${p.r}</div></div>
+      <div class="stat-dot ${p.s}"></div>
+    </div>
+  `).join('');
+  document.getElementById('partN').textContent = list.length;
+  document.getElementById('participCount').textContent = list.length + ' PARTIC';
+}
+
+function renderAffected() {
+  const i = getInc();
+  if (!i) return;
+  document.getElementById('affGates').innerHTML = i.affected.map((g, idx) => `
+    <span class="aff-gate ${idx === 0 ? 'crit' : (idx < 3 ? 'warn' : '')}" onclick="location.href='geography.html?gate=${g}'">${g}${idx === 0 ? ' ORIGIN' : ''}</span>
+  `).join('');
+}
+
+function acknowledgeAction(id) {
+  RampIQ.data.update(s => {
+    const a = s.recoveryActions.find(x => x.id === id);
+    if (a) { a.status = 'ackd'; a.ts = RampIQ.events.nowStr(); }
+  });
+  state = RampIQ.data.state;
+  RampIQ.events.actionAcknowledged(state.recoveryActions.find(x=>x.id===id).title, incId, 'MANAGER');
+  RampIQ.ui.showToast('Action acknowledged · event sent', 'success');
+  renderActions();
+}
+window.acknowledgeAction = acknowledgeAction;
+
+function startAction(id) {
+  RampIQ.data.update(s => {
+    const a = s.recoveryActions.find(x => x.id === id);
+    if (a) { a.status = 'inprog'; a.ts = RampIQ.events.nowStr(); }
+  });
+  state = RampIQ.data.state;
+  RampIQ.ui.showToast('Action in progress', 'success');
+  renderActions();
+}
+window.startAction = startAction;
+
+function completeAction(id) {
+  RampIQ.data.update(s => {
+    const a = s.recoveryActions.find(x => x.id === id);
+    if (a) { a.status = 'done'; a.ts = RampIQ.events.nowStr(); }
+  });
+  state = RampIQ.data.state;
+  const a = state.recoveryActions.find(x => x.id === id);
+  RampIQ.events.actionCompleted(a.title, incId, a.assigned);
+  RampIQ.ui.showToast('Action completed · event sent', 'success');
+  renderActions();
+}
+window.completeAction = completeAction;
+
+function escalateAction(id) {
+  RampIQ.data.update(s => {
+    const a = s.recoveryActions.find(x => x.id === id);
+    if (a) a.status = 'escalated';
+  });
+  state = RampIQ.data.state;
+  RampIQ.ui.showToast('Action escalated', 'crit');
+  renderActions();
+}
+window.escalateAction = escalateAction;
+
+function assignAction(id) {
+  RampIQ.ui.showToast('Assignment picker · (mock)');
+}
+window.assignAction = assignAction;
+
+function proposeAction(title) {
+  const newId = Date.now();
+  RampIQ.data.update(s => {
+    s.recoveryActions.push({ id:newId, incId, title, status:'proposed', assigned:'unassigned', eta:'—', ts:RampIQ.events.nowStr() });
+  });
+  RampIQ.data.update(s => {
+    const i = s.incidents.find(x => x.id === incId);
+    if (i) i.actions++;
+  });
+  state = RampIQ.data.state;
+  RampIQ.events.actionProposed(title, incId, 'MANAGER');
+  RampIQ.ui.showToast('Action proposed · event sent', 'success');
+  renderActions();
+}
+window.proposeAction = proposeAction;
+
+function tickClock() {
+  const i = getInc();
+  if (!i) return;
+  i.startSec++;
+  RampIQ.data.update(s => { const x = s.incidents.find(y => y.id === incId); if (x) x.startSec = i.startSec; });
+  const m = Math.floor(i.startSec / 60), s = i.startSec % 60;
+  document.getElementById('recovClock').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+renderTimeline();
+renderActions();
+renderParticipants();
+renderAffected();
+setInterval(tickClock, 1000);
+</script>
+</body>
+</html>

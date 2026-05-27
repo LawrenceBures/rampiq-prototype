@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · QR Codes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+  .add-btn { background: var(--amber); color: #000; border: none; padding: 5px 10px; font-family: var(--mono); font-size: 10px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+  .qr-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .qr-tile {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    padding: 16px; text-align: center; cursor: pointer; transition: border 0.1s;
+  }
+  .qr-tile:hover { border-color: var(--line-3); }
+  .qr-img {
+    width: 100%; aspect-ratio: 1; background: white;
+    margin-bottom: 10px; border-radius: 3px;
+    background-image:
+      linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%),
+      linear-gradient(45deg, black 25%, transparent 25%, transparent 75%, black 75%);
+    background-size: 10px 10px; background-position: 0 0, 5px 5px;
+    position: relative;
+  }
+  .qr-img::after {
+    content: ''; position: absolute; inset: 18%;
+    background: white;
+    background-image:
+      linear-gradient(black 50%, transparent 50%),
+      linear-gradient(90deg, black 50%, transparent 50%);
+    background-size: 5px 5px;
+    opacity: 0.7;
+  }
+  .qr-name { font-family: var(--mono); font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .qr-code { font-family: var(--mono); font-size: 10px; color: var(--text-2); margin-bottom: 6px; }
+  .qr-last { font-family: var(--mono); font-size: 9px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html" class="active"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → QR ASSIGNMENT</span>
+      <h1>QR Code Management</h1>
+      <div class="right">
+        <span class="pill">84 ACTIVE</span>
+        <button class="add-btn" onclick="generateBatch()">+ GENERATE BATCH</button>
+        <button class="add-btn" style="background: var(--bg-3); color: var(--text-0); border: 1px solid var(--line-3);" onclick="printBatch()">PRINT BATCH</button>
+      </div>
+    </div>
+    <div class="body" style="padding: 22px;">
+      <div class="qr-grid" id="qrGrid"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+const data = RampIQ.data.state;
+
+function renderQR() {
+  document.getElementById('qrGrid').innerHTML = data.qrCodes.map(q => `
+    <div class="qr-tile" onclick="rotateQR('${q.node}')">
+      <div class="qr-img"></div>
+      <div class="qr-name">${q.node}</div>
+      <div class="qr-code">${q.code}</div>
+      <div class="qr-last">LAST: ${q.lastScan} · ${q.scans24h} TODAY</div>
+    </div>
+  `).join('');
+}
+
+function rotateQR(node) {
+  RampIQ.events.configChange('QR rotated for ' + node, 'admin');
+  RampIQ.ui.showToast('QR rotated for ' + node, 'success');
+}
+function generateBatch() {
+  RampIQ.events.configChange('QR batch generated', 'admin');
+  RampIQ.ui.showToast('New QR batch generated (12 codes)', 'success');
+}
+function printBatch() {
+  RampIQ.ui.showToast('Print queue · sent to station printer');
+}
+window.rotateQR = rotateQR;
+window.generateBatch = generateBatch;
+window.printBatch = printBatch;
+
+renderQR();
+</script>
+</body>
+</html>

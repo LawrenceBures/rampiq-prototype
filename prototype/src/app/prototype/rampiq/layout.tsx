@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './rampiq.css';
 
 export const metadata: Metadata = {
-  title: 'RampIQ · Operational Memory',
-  description: 'Operational memory system for airline ramp operations',
+  title: 'SOI · Systems Operational Intelligence',
+  description: 'Systems Operational Intelligence — operational cognition infrastructure for high-tempo coordination environments',
 };
 
 export default function RampIQLayout({
@@ -16,9 +16,10 @@ export default function RampIQLayout({
       <div className="rq-device">
         <header className="rq-topbar">
           <div className="rq-topbar-row">
-            <div className="rq-brand-mark" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/icon-192.png" alt="SOI" style={{ width: 28, height: 28, borderRadius: 6 }} />
             <span className="rq-brand-text">
-              Ramp<span className="rq-brand-iq">IQ</span>
+              SOI
             </span>
             <div className="rq-topbar-meta">
               <span>LAX</span>

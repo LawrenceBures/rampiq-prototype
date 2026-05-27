@@ -228,7 +228,7 @@ export default function WorkforcePoolPage() {
       })}
 
       <div style={{ height: 20 }} />
-      <div className="rq-quiet">RampIQ &middot; Workforce Pool</div>
+      <div className="rq-quiet">SOI &middot; Workforce Pool</div>
     </div>
   );
 }

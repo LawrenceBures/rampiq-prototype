@@ -365,7 +365,7 @@ export default function ScanPage() {
         </div>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; QR Scan</div>
+      <div className="rq-quiet">SOI &middot; QR Scan</div>
     </>
   );
 }

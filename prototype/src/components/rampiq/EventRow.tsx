@@ -1,4 +1,4 @@
-// RampIQ — Canonical event stream row.
+// SOI — Canonical event stream row.
 // Presentation-only. No data fetching. No side effects.
 // Replaces .event-row pattern from pulse.html and recovery feed.
 

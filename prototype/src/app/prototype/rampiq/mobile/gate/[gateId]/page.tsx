@@ -490,7 +490,7 @@ export default function GateReadinessPage() {
         </Link>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; Gate Readiness</div>
+      <div className="rq-quiet">SOI &middot; Gate Readiness</div>
     </>
   );
 }

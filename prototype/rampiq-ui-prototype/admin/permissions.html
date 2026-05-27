@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Permissions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 16px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 0; }
+  .legend-inline { display: flex; gap: 14px; font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+  .legend-inline .perm-cell { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; margin-right: 5px; }
+
+  .perm-cell {
+    display: inline-block; width: 22px; height: 22px;
+    border-radius: 3px; cursor: pointer; transition: transform 0.1s;
+  }
+  .perm-cell:hover { transform: scale(1.15); }
+  .perm-cell.r { background: var(--blue-d); border: 1px solid var(--blue); }
+  .perm-cell.w { background: var(--green-d); border: 1px solid var(--green); }
+  .perm-cell.n { background: var(--bg-3); border: 1px solid var(--line-3); }
+
+  .roles-table { width: 100%; border-collapse: collapse; }
+  .roles-table thead th {
+    font-family: var(--mono); font-size: 9px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.12em; text-align: left;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+    background: #04060a;
+  }
+  .roles-table thead th.c { text-align: center; }
+  .roles-table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 12px; vertical-align: middle; }
+  .roles-table tbody td.c { text-align: center; }
+  .roles-table tbody td.role-cell { font-weight: 600; }
+  .roles-table tbody td.role-cell .sub { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-top: 3px; font-weight: 400; }
+  .roles-table tbody tr:hover { background: var(--bg-2); }
+
+  .role-summary {
+    padding: 14px 20px; background: #04060a; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px;
+  }
+  .role-summary .s-item .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .role-summary .s-item .v { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html" class="active"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → ROLE PERMISSIONS</span>
+      <h1>Role &amp; Permission Configuration</h1>
+      <div class="right">
+        <span class="pill">6 ROLES</span>
+        <span class="pill">8 RESOURCES</span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="role-summary">
+        <div class="s-item"><div class="lbl">Active Roles</div><div class="v">6</div></div>
+        <div class="s-item"><div class="lbl">Users Assigned</div><div class="v">87</div></div>
+        <div class="s-item"><div class="lbl">Custom Overrides</div><div class="v">3</div></div>
+        <div class="s-item"><div class="lbl">Temp Grants Active</div><div class="v">1</div></div>
+        <div class="s-item"><div class="lbl">Last Change</div><div class="v" style="font-size: 12px;">09:02</div></div>
+        <div class="s-item"><div class="lbl">Audit Events 24h</div><div class="v">14</div></div>
+      </div>
+
+      <div style="padding: 22px;">
+        <div class="admin-card">
+          <div class="admin-card-head">
+            <h3>Permission Matrix</h3>
+            <div class="legend-inline">
+              <span><span class="perm-cell n"></span>NONE</span>
+              <span><span class="perm-cell r"></span>READ</span>
+              <span><span class="perm-cell w"></span>WRITE</span>
+              <span style="color: var(--text-2); margin-left: 8px;">CLICK CELL TO CYCLE</span>
+            </div>
+          </div>
+          <div class="admin-card-body" style="overflow-x: auto;">
+            <table class="roles-table" id="permTable"></table>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-card-head"><h3>Active Temporary Grants · 1</h3></div>
+          <div class="admin-card-body" style="padding: 14px 18px;">
+            <div style="background: var(--bg-2); padding: 12px 14px; border-radius: 3px; border-left: 3px solid var(--amber); display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center;">
+              <div>
+                <div style="font-size: 13px; font-weight: 600;">Crew Chief · read Zone A (cross-zone)</div>
+                <div style="font-family: var(--mono); font-size: 10px; color: var(--text-3); margin-top: 4px;">GRANTED TO KENWORTH,T · EXPIRES 18:00 · REASON: cross-zone coordination during cascade</div>
+              </div>
+              <button class="act-btn" onclick="extendGrant()">EXTEND</button>
+              <button class="act-btn danger" onclick="revokeGrant()">REVOKE</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+
+const resources = ['Events','Turns','Support','Recovery','Crew','Config','Replay','Export'];
+const roles = [
+  { name:'Ramp Agent', users: 38, perms: ['w','r','w','n','n','n','n','n'] },
+  { name:'Crew Chief', users: 5, perms: ['w','w','w','w','w','n','r','n'] },
+  { name:'Ramp Manager', users: 3, perms: ['w','w','w','w','w','r','r','w'] },
+  { name:'Ops Monitor', users: 12, perms: ['r','r','r','r','r','n','r','r'] },
+  { name:'Executive Viewer', users: 8, perms: ['r','r','n','r','n','n','n','n'] },
+  { name:'Admin', users: 2, perms: ['r','r','r','r','r','w','w','w'] }
+];
+
+function renderTable() {
+  const head = `<thead><tr><th>Role</th>${resources.map(r => `<th class="c">${r}</th>`).join('')}<th class="c">Users</th></tr></thead>`;
+  const body = `<tbody>${roles.map((r, ri) => `
+    <tr>
+      <td class="role-cell">${r.name}<span class="sub">${r.users} users</span></td>
+      ${r.perms.map((p, pi) => `<td class="c"><span class="perm-cell ${p}" onclick="cyclePerm(${ri}, ${pi})" title="${resources[pi]}"></span></td>`).join('')}
+      <td class="c" style="font-family: var(--mono); color: var(--text-1);">${r.users}</td>
+    </tr>
+  `).join('')}</tbody>`;
+  document.getElementById('permTable').innerHTML = head + body;
+}
+
+function cyclePerm(ri, pi) {
+  const seq = ['n','r','w'];
+  const idx = seq.indexOf(roles[ri].perms[pi]);
+  roles[ri].perms[pi] = seq[(idx + 1) % seq.length];
+  renderTable();
+  RampIQ.events.configChange(`Permission updated · ${roles[ri].name} → ${resources[pi]} → ${roles[ri].perms[pi].toUpperCase()}`, 'admin');
+  RampIQ.ui.showToast(`${roles[ri].name} · ${resources[pi]} → ${roles[ri].perms[pi].toUpperCase()}`, 'success');
+}
+function extendGrant() { RampIQ.ui.showToast('Grant extended +4 hours'); }
+function revokeGrant() {
+  RampIQ.events.configChange('Temp grant revoked · KENWORTH,T', 'admin');
+  RampIQ.ui.showToast('Grant revoked · event recorded', 'crit');
+}
+window.cyclePerm = cyclePerm;
+window.extendGrant = extendGrant;
+window.revokeGrant = revokeGrant;
+
+renderTable();
+</script>
+</body>
+</html>

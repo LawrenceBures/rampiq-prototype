@@ -1,4 +1,4 @@
-// RampIQ — Canonical zone pressure/status tile.
+// SOI — Canonical zone pressure/status tile.
 // Presentation-only. No data fetching. No side effects.
 // All pressure values and counts are computed by the parent.
 

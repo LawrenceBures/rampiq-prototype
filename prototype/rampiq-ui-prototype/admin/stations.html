@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Station Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a {
+    display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px;
+    border-left: 2px solid transparent;
+    transition: all 0.1s;
+  }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 16px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 18px; }
+  .hist-row { padding: 10px 18px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 80px 120px 1fr 100px; gap: 14px; font-family: var(--mono); font-size: 11px; align-items: center; }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-row .ver { color: var(--text-3); }
+  .hist-row .ts { color: var(--text-3); }
+  .hist-row .who { color: var(--text-3); text-align: right; }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html" class="active"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → STATION</span>
+      <h1>Station Configuration · DFW</h1>
+      <div class="right">
+        <span class="pill">v.143 LIVE</span>
+        <span class="pill">LAST CHANGE 14:02</span>
+      </div>
+    </div>
+    <div class="body" style="padding: 22px;">
+      <div class="admin-card">
+        <div class="admin-card-head"><h3>Station Identity</h3></div>
+        <div class="admin-card-body">
+          <div class="form-grid-3">
+            <div class="form-row"><label>Station Code</label><input type="text" value="DFW" /></div>
+            <div class="form-row"><label>ICAO</label><input type="text" value="KDFW" /></div>
+            <div class="form-row"><label>Station Name</label><input type="text" value="Dallas/Fort Worth" /></div>
+            <div class="form-row"><label>Time Zone</label><select><option>America/Chicago</option><option>UTC</option></select></div>
+            <div class="form-row"><label>Operator</label><select><option>United Airlines</option><option>Ground Handler Co</option></select></div>
+            <div class="form-row"><label>Status</label><select><option>ACTIVE · LIVE</option><option>STAGING</option><option>INACTIVE</option></select></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-head"><h3>Operational Windows</h3></div>
+        <div class="admin-card-body">
+          <div class="form-grid-3">
+            <div class="form-row"><label>AM Shift Start</label><input type="text" value="04:00" /></div>
+            <div class="form-row"><label>PM Shift Start</label><input type="text" value="12:00" /></div>
+            <div class="form-row"><label>Overnight Start</label><input type="text" value="20:00" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-head">
+          <h3>Configuration History</h3>
+          <span style="font-family:var(--mono); font-size:10px; color: var(--text-3);">143 VERSIONS · ALL REPLAYABLE</span>
+        </div>
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="hist-row"><div class="ver">v.143</div><div class="ts">14:02:11</div><div>Threshold tuned · Zone B push alley</div><div class="who">admin</div></div>
+          <div class="hist-row"><div class="ver">v.142</div><div class="ts">13:48:02</div><div>Adjacency added · B7 → BAG-B</div><div class="who">admin</div></div>
+          <div class="hist-row"><div class="ver">v.141</div><div class="ts">11:15:33</div><div>Workflow updated · narrow-body turn (v.4)</div><div class="who">admin</div></div>
+          <div class="hist-row"><div class="ver">v.140</div><div class="ts">09:02:18</div><div>Role permission · Chief read adj zone (temp)</div><div class="who">admin</div></div>
+          <div class="hist-row"><div class="ver">v.139</div><div class="ts">08:14:42</div><div>QR rotated · BAG-B node</div><div class="who">admin</div></div>
+        </div>
+      </div>
+
+      <button class="act-btn primary" style="padding: 10px 20px;" onclick="saveConfig()">SAVE · CREATE v.144</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+function saveConfig() {
+  RampIQ.events.configChange('Station identity updated · v.144', 'admin');
+  RampIQ.ui.showToast('Saved · v.144 created · event recorded', 'success');
+}
+window.saveConfig = saveConfig;
+</script>
+</body>
+</html>

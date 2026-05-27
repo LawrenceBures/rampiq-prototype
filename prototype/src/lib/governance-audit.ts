@@ -1,4 +1,4 @@
-// RampIQ — Governance Audit Layer
+// SOI — Governance Audit Layer
 // Phase 9: Replay access logging as enforceable infrastructure.
 //
 // Every invocation of individual accountability replay, cross-zone

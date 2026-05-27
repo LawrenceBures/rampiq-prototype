@@ -244,7 +244,7 @@ function TeamBuilderPage() {
         </Link>
       </div>
 
-      <div className="rq-quiet">RampIQ &middot; Team Builder</div>
+      <div className="rq-quiet">SOI &middot; Team Builder</div>
     </div>
   );
 }

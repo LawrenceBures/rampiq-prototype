@@ -1,4 +1,4 @@
-// RampIQ — Canonical Operational Language
+// SOI — Canonical Operational Language
 // Phase 1 Step 1: Single source of truth for all operational semantics.
 //
 // RULES:

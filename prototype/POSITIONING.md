@@ -1,10 +1,10 @@
-# RampIQ — Operational Coordination Intelligence
+# SOI — Operational Coordination Intelligence
 
 ## One-line
 Operational memory and coordination intelligence for airline ramp operations.
 
 ## What it does
-RampIQ records every operational action as immutable memory, reconstructs
+SOI records every operational action as immutable memory, reconstructs
 what happened during any shift, detects recurring operational patterns,
 and surfaces coordination support when pressure accumulates.
 
@@ -26,7 +26,7 @@ understand where coordination worked and where it didn't. No other ramp
 operations tool does this.
 
 ## First pilot shape
-Observation mode: radio stays primary, RampIQ reconstructs and learns.
+Observation mode: radio stays primary, SOI reconstructs and learns.
 No operational disruption. Value proven through replay accuracy.
 
 ## Current state

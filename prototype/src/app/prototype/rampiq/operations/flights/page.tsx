@@ -420,7 +420,7 @@ export default function FlightsPage() {
       )}
 
       <div style={{ height: 20 }} />
-      <div className="rq-quiet">RampIQ &middot; Flight Operations</div>
+      <div className="rq-quiet">SOI &middot; Flight Operations</div>
     </div>
   );
 }

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Live Demo · DFW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0d12;
+    --bg-1: #0f1319;
+    --bg-2: #141922;
+    --bg-3: #1a2029;
+    --hairline: #1f2632;
+    --hairline-strong: #2a3442;
+    --text-1: #e8ecf2;
+    --text-2: #aab3c0;
+    --text-3: #6b7585;
+    --text-4: #454e5d;
+    --lime: #c9ff3a;
+    --lime-dim: rgba(201, 255, 58, 0.15);
+    --lime-glow: rgba(201, 255, 58, 0.45);
+    --amber: #e89942;
+    --red: #d4524a;
+    --watch: #d4a937;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-deep);
+    color: var(--text-1);
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .serif { font-family: 'Instrument Serif', serif; font-style: italic; }
+
+  /* ───────── HEADER ───────── */
+  header {
+    border-bottom: 1px solid var(--hairline-strong);
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    background: var(--bg-1);
+  }
+  .brand-mark {
+    width: 32px; height: 32px;
+    border: 1.5px solid var(--lime);
+    position: relative;
+  }
+  .brand-mark::before {
+    content: ''; position: absolute; inset: 3px;
+    border: 1px solid var(--lime); opacity: 0.5;
+  }
+  .brand-mark::after {
+    content: ''; position: absolute; width: 7px; height: 7px;
+    background: var(--lime); border-radius: 50%;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px var(--lime-glow);
+  }
+  .brand-name {
+    font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .brand-name .iq { color: var(--lime); }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--text-3); padding-left: 14px; border-left: 1px solid var(--hairline);
+  }
+  .header-station {
+    margin-left: auto; display: flex; align-items: center; gap: 14px;
+  }
+  .header-station .station-l {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .header-station .station-v {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    color: var(--text-1); font-weight: 600;
+  }
+  .live-pulse {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--hairline-strong);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text-2);
+  }
+  .live-pulse .dot {
+    width: 7px; height: 7px; background: var(--lime);
+    border-radius: 50%;
+    animation: pulse 1.6s infinite ease-in-out;
+    box-shadow: 0 0 8px var(--lime-glow);
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+
+  /* ───────── KPI BAR ───────── */
+  .kpi-bar {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border-bottom: 1px solid var(--hairline-strong);
+    background: var(--bg-1);
+  }
+  .kpi {
+    padding: 18px 22px;
+    border-right: 1px solid var(--hairline);
+    position: relative;
+  }
+  .kpi:last-child { border-right: none; }
+  .kpi-l {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 8px;
+  }
+  .kpi-v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px; font-weight: 500; letter-spacing: -0.02em;
+    color: var(--text-1); line-height: 1;
+  }
+  .kpi-v.lime { color: var(--lime); }
+  .kpi-v.amber { color: var(--amber); }
+  .kpi-v.red { color: var(--red); }
+  .kpi-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-3); margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ───────── MAIN GRID ───────── */
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr 0.85fr;
+    gap: 1px;
+    background: var(--hairline);
+    min-height: calc(100vh - 175px);
+  }
+  .panel {
+    background: var(--bg-deep);
+    padding: 22px 24px 28px;
+    overflow-y: auto;
+    max-height: calc(100vh - 175px);
+  }
+  .panel-h {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 16px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--text-3); font-weight: 600;
+  }
+  .panel-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-3);
+  }
+
+  /* ───────── FLIGHT QUEUE ───────── */
+  .flight-row {
+    padding: 13px 0;
+    border-bottom: 1px solid var(--hairline);
+    display: grid;
+    grid-template-columns: 56px 38px 1fr 70px 72px;
+    gap: 12px;
+    align-items: center;
+  }
+  .flight-row:hover { background: var(--bg-1); cursor: pointer; }
+  .flight-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 600; color: var(--text-1);
+  }
+  .flight-tier-pill {
+    width: 26px; height: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    letter-spacing: 0.06em;
+  }
+  .tier-stable { background: rgba(170, 179, 192, 0.18); color: var(--text-2); }
+  .tier-watch { background: rgba(212, 169, 55, 0.22); color: var(--watch); }
+  .tier-critical { background: rgba(212, 82, 74, 0.22); color: var(--red); }
+  .flight-meta-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--text-2);
+  }
+  .flight-meta-line .ac { color: var(--text-3); }
+  .flight-pot {
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; font-weight: 500;
+  }
+  .flight-pot.good { color: var(--text-1); }
+  .flight-pot.warn { color: var(--watch); }
+  .flight-pot.crit { color: var(--red); }
+  .flight-cause {
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .flight-meta-second {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; color: var(--text-3); margin-top: 3px;
+  }
+  .flight-cell {
+    grid-column: 3 / 4;
+  }
+
+  /* ───────── INTEL FEED ───────── */
+  .intel-section { margin-bottom: 26px; }
+  .intel-section-title {
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 22px; color: var(--lime); margin-bottom: 14px;
+    line-height: 1.1;
+  }
+  .intel-section-title-amber { color: var(--amber); }
+  .intel-section-title-red { color: var(--red); }
+
+  .reco-card {
+    border: 1px solid var(--hairline);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    background: var(--bg-1);
+  }
+  .reco-target {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 6px;
+  }
+  .reco-target .flight {
+    color: var(--text-1); letter-spacing: 0.04em;
+  }
+  .reco-team {
+    font-size: 22px; font-weight: 500; color: var(--text-1);
+    margin-bottom: 4px;
+  }
+  .reco-team .arrow { color: var(--lime); margin: 0 8px; }
+  .reco-meta {
+    display: flex; gap: 18px; margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--hairline);
+  }
+  .reco-meta-item {
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  }
+  .reco-meta-l {
+    color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase;
+    font-size: 9px; margin-bottom: 2px;
+  }
+  .reco-meta-v { color: var(--text-1); font-weight: 500; }
+  .reco-reasons {
+    margin-top: 10px;
+  }
+  .reco-reason {
+    font-size: 11px; color: var(--text-2); padding: 3px 0;
+    padding-left: 10px; position: relative;
+  }
+  .reco-reason::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 1px; background: var(--lime);
+  }
+
+  /* cascades */
+  .cascade-card {
+    border: 1px solid var(--hairline);
+    border-left: 2px solid var(--amber);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    background: var(--bg-1);
+  }
+  .cascade-origin {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--text-1);
+    font-weight: 600; margin-bottom: 4px;
+  }
+  .cascade-origin .delay {
+    color: var(--amber); margin-left: 8px;
+  }
+  .cascade-pax {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-3); margin-bottom: 8px;
+    letter-spacing: 0.06em;
+  }
+  .cascade-step {
+    font-size: 11px; color: var(--text-2);
+    padding: 3px 0 3px 14px;
+    border-left: 1px solid var(--hairline-strong);
+    margin-left: 4px;
+  }
+  .cascade-step .num {
+    color: var(--text-3); font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; margin-right: 6px;
+  }
+  .cascade-step .det {
+    color: var(--text-3); font-size: 10px; display: block;
+    margin-top: 1px; font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* shortages */
+  .shortage-card {
+    border: 1px solid var(--hairline);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    background: var(--bg-1);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .shortage-card.shortage { border-left: 2px solid var(--red); }
+  .shortage-card.tight { border-left: 2px solid var(--watch); }
+  .shortage-l {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-3);
+    letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 3px;
+  }
+  .shortage-v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: var(--text-1); font-weight: 500;
+  }
+  .shortage-bar-wrap {
+    width: 90px; height: 3px;
+    background: var(--hairline);
+    position: relative;
+  }
+  .shortage-bar {
+    height: 100%; background: var(--watch);
+  }
+  .shortage-bar.over { background: var(--red); }
+  .shortage-numbers {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-3);
+    margin-top: 4px;
+  }
+
+  /* depot summary */
+  .depot-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px; background: var(--hairline); margin-bottom: 18px;
+  }
+  .depot-cell {
+    background: var(--bg-1);
+    padding: 12px 14px;
+  }
+  .depot-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 8px;
+  }
+  .depot-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; color: var(--text-1); font-weight: 400; line-height: 1;
+  }
+  .depot-states {
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-2); line-height: 1.7;
+  }
+  .depot-states .label { color: var(--text-3); display: inline-block; width: 60px; }
+  .depot-states .val.lime { color: var(--lime); }
+  .depot-states .val.amber { color: var(--amber); }
+
+  /* event log */
+  .event-log {
+    margin-top: 4px;
+  }
+  .event-row {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: var(--text-2);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--hairline);
+    display: flex; gap: 10px;
+  }
+  .event-time {
+    color: var(--text-3); flex-shrink: 0;
+  }
+  .event-row:last-child { border-bottom: none; }
+
+  /* irrops bar */
+  .irrops-bar {
+    background: var(--amber);
+    color: var(--bg-deep);
+    padding: 8px 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .irrops-bar.hidden { display: none; }
+  .irrops-dot {
+    width: 8px; height: 8px; background: var(--bg-deep);
+    border-radius: 50%;
+    animation: pulse 1.2s infinite ease-in-out;
+  }
+
+  /* connection status */
+  .connection-state {
+    position: fixed; bottom: 16px; right: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    padding: 8px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--hairline-strong);
+    color: var(--text-3);
+    z-index: 1000;
+  }
+  .connection-state.ok { color: var(--lime); }
+  .connection-state.fail { color: var(--red); }
+
+  /* error placeholder */
+  .placeholder {
+    text-align: center; padding: 40px 20px;
+    color: var(--text-3);
+    font-family: 'Instrument Serif', serif; font-style: italic;
+    font-size: 14px;
+  }
+
+  /* scrollbar styling */
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-track { background: var(--bg-1); }
+  .panel::-webkit-scrollbar-thumb { background: var(--hairline-strong); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand-mark"></div>
+  <div class="brand-name">Ramp<span class="iq">IQ</span></div>
+  <div class="brand-tag">Live Demo · Phase 4 Simulator</div>
+  <div class="header-station">
+    <div>
+      <div class="station-l">Station</div>
+      <div class="station-v">DFW</div>
+    </div>
+    <div>
+      <div class="station-l">Sim Time</div>
+      <div class="station-v" id="sim-time">—</div>
+    </div>
+    <div class="live-pulse"><div class="dot"></div><span>Live</span></div>
+  </div>
+</header>
+
+<div class="irrops-bar hidden" id="irrops-bar">
+  <div class="irrops-dot"></div>
+  <span id="irrops-text">IRROPS Active</span>
+</div>
+
+<div class="kpi-bar">
+  <div class="kpi"><div class="kpi-l">Active Flights</div><div class="kpi-v" id="kpi-active">—</div><div class="kpi-sub" id="kpi-active-sub">scheduled · boarding · pushback</div></div>
+  <div class="kpi"><div class="kpi-l">OTP Forecast</div><div class="kpi-v lime" id="kpi-otp">—</div><div class="kpi-sub" id="kpi-otp-sub">expected on-time rate</div></div>
+  <div class="kpi"><div class="kpi-l">At Risk</div><div class="kpi-v amber" id="kpi-risk">—</div><div class="kpi-sub" id="kpi-risk-sub">watch + critical</div></div>
+  <div class="kpi"><div class="kpi-l">Critical</div><div class="kpi-v red" id="kpi-crit">—</div><div class="kpi-sub">risk score ≥ 65</div></div>
+  <div class="kpi"><div class="kpi-l">Cost Exposure</div><div class="kpi-v" id="kpi-cost">—</div><div class="kpi-sub">expected delay × $80/min</div></div>
+  <div class="kpi"><div class="kpi-l">Teams</div><div class="kpi-v" id="kpi-teams">—</div><div class="kpi-sub" id="kpi-teams-sub">available · assigned</div></div>
+</div>
+
+<main>
+  <!-- Flight queue -->
+  <section class="panel">
+    <div class="panel-h">
+      <div class="panel-title">Flight Queue</div>
+      <div class="panel-meta" id="queue-count">—</div>
+    </div>
+    <div id="flight-list"><div class="placeholder">awaiting state stream</div></div>
+  </section>
+
+  <!-- Intel feed (recommendations + cascades) -->
+  <section class="panel">
+    <div class="panel-h">
+      <div class="panel-title">Intelligence Feed</div>
+      <div class="panel-meta" id="intel-meta">—</div>
+    </div>
+
+    <div class="intel-section">
+      <h2 class="intel-section-title">Recommendations</h2>
+      <div id="recommendations"><div class="placeholder">none active</div></div>
+    </div>
+
+    <div class="intel-section">
+      <h2 class="intel-section-title intel-section-title-amber">Cascades</h2>
+      <div id="cascades"><div class="placeholder">no cascade chains detected</div></div>
+    </div>
+  </section>
+
+  <!-- Equipment + events -->
+  <section class="panel">
+    <div class="panel-h">
+      <div class="panel-title">Equipment & Events</div>
+      <div class="panel-meta" id="equipment-meta">—</div>
+    </div>
+
+    <div class="intel-section">
+      <h2 class="intel-section-title">Depots</h2>
+      <div class="depot-grid" id="depot-grid"></div>
+
+      <div id="shortages"></div>
+    </div>
+
+    <div class="intel-section">
+      <h2 class="intel-section-title">Event Log</h2>
+      <div class="event-log" id="event-log"><div class="placeholder">no events yet</div></div>
+    </div>
+  </section>
+</main>
+
+<div class="connection-state" id="connection-state">connecting</div>
+
+<script>
+  const REFRESH_MS = 3000;
+  const STATE_URL = 'sim/output/state.json';
+
+  const $ = (id) => document.getElementById(id);
+
+  // ───────── escape ─────────
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d)) return '—';
+    return d.toTimeString().substring(0, 5);
+  }
+
+  function fmtMoney(n) {
+    if (typeof n !== 'number') return '—';
+    return '$' + Math.round(n).toLocaleString();
+  }
+
+  // ───────── render ─────────
+  function render(state) {
+    // --- header
+    $('sim-time').textContent = fmtTime(state.sim_time);
+
+    // --- IRROPS bar
+    const irrops = state.irrops || {};
+    if (irrops.active) {
+      $('irrops-bar').classList.remove('hidden');
+      const triggers = (irrops.triggers_hit || []).join(' · ');
+      $('irrops-text').textContent = 'IRROPS Active · ' + triggers;
+    } else {
+      $('irrops-bar').classList.add('hidden');
+    }
+
+    // --- KPIs
+    const k = state.kpis || {};
+    $('kpi-active').textContent = k.active_flight_count ?? '—';
+    $('kpi-otp').textContent = (k.otp_pct ?? 0).toFixed(1) + '%';
+    $('kpi-risk').textContent = k.at_risk_count ?? '—';
+    $('kpi-crit').textContent = k.critical_count ?? '—';
+    $('kpi-cost').textContent = fmtMoney(k.cost_exposure_usd);
+    const teams = state.team_summary || {};
+    $('kpi-teams').textContent = (teams.available ?? 0) + ' · ' + (teams.assigned ?? 0);
+    $('kpi-teams-sub').textContent = teams.high_fatigue ? `${teams.high_fatigue} high-fatigue` : 'normal';
+
+    // --- Flight queue
+    const flights = state.active_flights || [];
+    $('queue-count').textContent = flights.length + ' active';
+    const flList = $('flight-list');
+    if (!flights.length) {
+      flList.innerHTML = '<div class="placeholder">no active flights</div>';
+    } else {
+      flList.innerHTML = flights.slice(0, 25).map(f => {
+        const tierClass = `tier-${f.risk_tier || 'stable'}`;
+        const tierLabel = (f.risk_tier || 'stab').substring(0, 4).toUpperCase();
+        const pot = (f.p_on_time ?? 0);
+        const potClass = pot >= 0.7 ? 'good' : pot >= 0.45 ? 'warn' : 'crit';
+        const potDisplay = (pot * 100).toFixed(0) + '%';
+        const sched = fmtTime(f.scheduled_time);
+        const est = fmtTime(f.estimated_time);
+        const slipBadge = f.delay_minutes > 0 ?
+          ` <span style="color: var(--amber)">+${f.delay_minutes}</span>` : '';
+        return `
+        <div class="flight-row">
+          <div class="flight-id">${esc(f.flight_id)}</div>
+          <div class="flight-tier-pill ${tierClass}">${tierLabel}</div>
+          <div class="flight-cell">
+            <div class="flight-meta-line">
+              <span class="ac">${esc(f.aircraft_type)}</span>
+              · ${esc(f.direction)} ${esc(f.origin)}→${esc(f.destination)}
+              · gate ${esc(f.gate)}
+            </div>
+            <div class="flight-meta-second">
+              ${sched} sched ${est !== sched ? '· ' + est + ' est' : ''}${slipBadge}
+              · ${esc(f.status)}
+              ${f.assigned_team ? '· assigned' : '· <span style="color:var(--amber)">unassigned</span>'}
+            </div>
+          </div>
+          <div class="flight-pot ${potClass}">${potDisplay}</div>
+          <div class="flight-cause">${esc((f.predicted_cause || '').substring(0,4))}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // --- Recommendations
+    const recos = state.recommendations || [];
+    const recoEl = $('recommendations');
+    if (!recos.length) {
+      recoEl.innerHTML = '<div class="placeholder">no active recommendations</div>';
+    } else {
+      recoEl.innerHTML = recos.map(r => {
+        const top = (r.candidates || [])[0];
+        if (!top) return '';
+        const reasons = (top.reasons || []).slice(0, 3).map(rn =>
+          `<div class="reco-reason">${esc(rn)}</div>`
+        ).join('');
+        return `
+        <div class="reco-card">
+          <div class="reco-target">flight <span class="flight">${esc(r.flight_id)}</span></div>
+          <div class="reco-team">${esc(top.team_name)}<span class="arrow">›</span></div>
+          <div class="reco-meta">
+            <div class="reco-meta-item">
+              <div class="reco-meta-l">Score</div>
+              <div class="reco-meta-v">${(top.reco_score || 0).toFixed(1)}</div>
+            </div>
+            <div class="reco-meta-item">
+              <div class="reco-meta-l">Confidence</div>
+              <div class="reco-meta-v">${((r.confidence || 0) * 100).toFixed(0)}%</div>
+            </div>
+            <div class="reco-meta-item">
+              <div class="reco-meta-l">Suit</div>
+              <div class="reco-meta-v">${(top.suitability_score || 0).toFixed(0)}</div>
+            </div>
+            <div class="reco-meta-item">
+              <div class="reco-meta-l">Distance</div>
+              <div class="reco-meta-v">${(top.distance_m || 0).toFixed(0)}m</div>
+            </div>
+          </div>
+          <div class="reco-reasons">${reasons}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // --- Cascades
+    const cascades = state.cascades || [];
+    const cascEl = $('cascades');
+    if (!cascades.length) {
+      cascEl.innerHTML = '<div class="placeholder">no cascade chains</div>';
+    } else {
+      cascEl.innerHTML = cascades.map(c => `
+        <div class="cascade-card">
+          <div class="cascade-origin">
+            ${esc(c.origin_flight)} @ gate ${esc(c.origin_gate)}
+            <span class="delay">+${c.origin_delay_min}min</span>
+          </div>
+          <div class="cascade-pax">${c.estimated_pax} pax exposed · ${c.chain.length}-step chain</div>
+          ${c.chain.slice(0, 4).map(s => `
+            <div class="cascade-step">
+              <span class="num">[${s.step}]</span>${esc(s.event)}
+              <span class="det">${esc(s.detail)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    // --- Equipment depots
+    const depots = state.depot_summary || {};
+    $('depot-grid').innerHTML = Object.entries(depots).map(([id, d]) => `
+      <div class="depot-cell">
+        <div class="depot-name">${esc(d.name)}</div>
+        <div class="depot-total">${d.total}</div>
+        <div class="depot-states">
+          <div><span class="label">Avail</span><span class="val lime">${d.available}</span></div>
+          <div><span class="label">In Use</span><span class="val">${d.in_use}</span></div>
+          <div><span class="label">Maint</span><span class="val amber">${d.maintenance}</span></div>
+        </div>
+      </div>
+    `).join('');
+
+    // --- Shortages
+    const sh = (state.equipment_forecast && state.equipment_forecast.shortage_windows) || [];
+    const shEl = $('shortages');
+    if (!sh.length) {
+      shEl.innerHTML = '';
+    } else {
+      shEl.innerHTML = sh.slice(0, 5).map(s => {
+        const w = (s.demand / Math.max(1, s.supply)) * 100;
+        const cls = s.status === 'shortage' ? 'shortage' : 'tight';
+        const barCls = w > 100 ? 'over' : '';
+        const barW = Math.min(100, w);
+        return `
+        <div class="shortage-card ${cls}">
+          <div>
+            <div class="shortage-l">${esc(s.equipment_type.replace('_',' '))} @ ${esc(s.depot_name)}</div>
+            <div class="shortage-v">${s.status.toUpperCase()}</div>
+            <div class="shortage-numbers">supply ${s.supply} · demand ${s.demand}${s.deficit > 0 ? ' · −' + s.deficit : ''}</div>
+          </div>
+          <div>
+            <div class="shortage-bar-wrap">
+              <div class="shortage-bar ${barCls}" style="width:${barW}%"></div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // --- Event log
+    const events = state.event_log || [];
+    const elog = $('event-log');
+    if (!events.length) {
+      elog.innerHTML = '<div class="placeholder">no events yet</div>';
+    } else {
+      elog.innerHTML = events.slice().reverse().slice(0, 12).map(line => {
+        // events come in as "[HH:MM] message"
+        const m = String(line).match(/^\[([^\]]+)\]\s*(.*)/);
+        if (m) {
+          return `<div class="event-row"><span class="event-time">${esc(m[1])}</span><span>${esc(m[2])}</span></div>`;
+        }
+        return `<div class="event-row">${esc(line)}</div>`;
+      }).join('');
+    }
+
+    // --- meta in headers
+    $('intel-meta').textContent = `${recos.length} recos · ${cascades.length} cascades`;
+    $('equipment-meta').textContent = `${sh.length} shortages`;
+  }
+
+  // ───────── fetch loop ─────────
+  let lastFetchOk = false;
+  async function refresh() {
+    try {
+      const res = await fetch(STATE_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const state = await res.json();
+      render(state);
+      $('connection-state').className = 'connection-state ok';
+      $('connection-state').textContent = 'connected · ' + new Date().toTimeString().substring(0,5);
+      lastFetchOk = true;
+    } catch (err) {
+      $('connection-state').className = 'connection-state fail';
+      $('connection-state').textContent = 'disconnected · ' + err.message;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

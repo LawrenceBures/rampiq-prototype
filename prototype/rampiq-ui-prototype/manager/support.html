@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Manager · Support</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .sup-grid { display: grid; grid-template-columns: 1fr 380px; height: 100%; gap: 1px; background: var(--line); }
+  .sup-list-pane { background: var(--bg-1); overflow-y: auto; }
+  .sup-filters {
+    padding: 12px 20px; display: flex; gap: 8px; align-items: center;
+    border-bottom: 1px solid var(--line); background: #04060a;
+  }
+  .sup-filter {
+    padding: 5px 12px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; border-radius: 3px;
+  }
+  .sup-filter.active { background: var(--bg-4); color: var(--text-0); border-color: var(--line-3); }
+  .sup-filter.crit.active { border-color: var(--red); color: var(--red); }
+  .sup-filter.warn.active { border-color: var(--amber); color: var(--amber); }
+  .sup-detail-pane { background: var(--bg-1); overflow-y: auto; padding: 22px; }
+  .sup-detail-pane h2 { font-size: 17px; margin-bottom: 4px; }
+  .sd-sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 18px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  .meta-block { background: var(--bg-2); padding: 10px 12px; border-radius: 3px; }
+  .meta-block .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .meta-block .val { font-family: var(--mono); font-size: 12px; color: var(--text-0); }
+  .meta-block .val.crit { color: var(--red); }
+  .meta-block .val.warn { color: var(--amber); }
+  @media (max-width: 1024px) { .sup-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="role-nav">
+    <a href="pulse.html"><span class="ic">◉</span>Pulse</a>
+    <a href="incidents.html"><span class="ic">!</span>Incid</a>
+    <a href="recovery.html"><span class="ic">↻</span>Recov</a>
+    <a href="geography.html"><span class="ic">◌</span>Geo</a>
+    <a href="support.html" class="active"><span class="ic">+</span>Sup</a>
+    <a href="turn-queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="workforce.html"><span class="ic">◊</span>Crew</a>
+    <a href="equipment.html"><span class="ic">▤</span>Eq</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">OPERATIONS → SUPPORT REQUESTS</span>
+      <h1>Support Requests</h1>
+      <div class="right">
+        <span class="pill alert" id="pillOpen">3 OPEN</span>
+        <span class="pill warn" id="pillAck">2 ACKNOWLEDGED</span>
+        <span class="pill" id="pillTotal">7 TODAY</span>
+      </div>
+    </div>
+    <div class="body" style="padding: 0;">
+      <div class="sup-grid">
+        <div class="sup-list-pane">
+          <div class="sup-filters">
+            <span style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-right: 6px;">FILTER</span>
+            <div class="sup-filter active" data-f="all">All</div>
+            <div class="sup-filter crit" data-f="crit">Critical</div>
+            <div class="sup-filter warn" data-f="warn">Warning</div>
+            <div class="sup-filter" data-f="open">Open</div>
+            <div class="sup-filter" data-f="ack">Acknowledged</div>
+            <div class="sup-filter" data-f="resolved">Resolved</div>
+          </div>
+          <div class="table-head" style="grid-template-columns: 100px 1fr 90px 100px 90px;">
+            <div>CATEGORY</div><div>LOCATION / DETAIL</div><div>AGE</div><div>FROM</div><div>STATUS</div>
+          </div>
+          <div id="supList"></div>
+        </div>
+        <div class="sup-detail-pane" id="supDetail"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+let state = RampIQ.data.state;
+let selectedId = state.support[0].id;
+let activeFilter = 'all';
+
+function renderList() {
+  let items = state.support.slice();
+  if (activeFilter === 'crit' || activeFilter === 'warn') items = items.filter(s => s.type === activeFilter);
+  else if (activeFilter === 'open' || activeFilter === 'ack' || activeFilter === 'resolved') items = items.filter(s => s.status === activeFilter);
+  // sort: open crit first, then by age
+  items.sort((a, b) => {
+    const prio = (s) => (s.status === 'open' ? 0 : s.status === 'ack' ? 1 : 2) + (s.type === 'crit' ? 0 : 5);
+    return prio(a) - prio(b);
+  });
+  document.getElementById('supList').innerHTML = items.map(s => `
+    <div class="sup-row ${s.status === 'open' && s.type === 'crit' ? 'urgent' : ''} ${s.id === selectedId ? 'active' : ''}" onclick="selectSup('${s.id}')">
+      <span class="sup-cat ${s.type}">${s.cat}</span>
+      <span class="sup-where">${s.where} <span class="sub">${s.detail}</span></span>
+      <span class="sup-age">${s.age}</span>
+      <span class="sup-from">${s.from}</span>
+      <span class="sup-stat ${s.status}">${s.status}</span>
+    </div>
+  `).join('');
+
+  const open = state.support.filter(s => s.status === 'open').length;
+  const ack = state.support.filter(s => s.status === 'ack' || s.status === 'enroute').length;
+  document.getElementById('pillOpen').textContent = open + ' OPEN';
+  document.getElementById('pillAck').textContent = ack + ' ACKNOWLEDGED';
+  document.getElementById('pillTotal').textContent = state.support.length + ' TODAY';
+}
+
+function selectSup(id) {
+  selectedId = id;
+  renderList();
+  renderDetail();
+}
+window.selectSup = selectSup;
+
+function renderDetail() {
+  const s = state.support.find(x => x.id === selectedId);
+  if (!s) { document.getElementById('supDetail').innerHTML = ''; return; }
+  document.getElementById('supDetail').innerHTML = `
+    <h2>${s.cat}</h2>
+    <div class="sd-sub">${s.id} · OPENED ${s.age} AGO</div>
+    <div class="meta-grid">
+      <div class="meta-block"><div class="lbl">Location</div><div class="val">${s.where}</div></div>
+      <div class="meta-block"><div class="lbl">Reported By</div><div class="val">${s.from}</div></div>
+      <div class="meta-block"><div class="lbl">Zone</div><div class="val">Zone ${s.zone}</div></div>
+      <div class="meta-block"><div class="lbl">Status</div><div class="val ${s.status === 'open' ? 'crit' : 'warn'}">${s.status.toUpperCase()}</div></div>
+    </div>
+    <div style="margin-bottom: 22px;">
+      <h3 style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 10px;">Description</h3>
+      <div style="background: var(--bg-2); padding: 12px 14px; border-radius: 3px; font-size: 13px; line-height: 1.5;">${s.detail}</div>
+    </div>
+    <div style="margin-bottom: 22px;">
+      <h3 style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 10px;">Acknowledgment History</h3>
+      <div class="tl-event"><div class="t">${s.age}</div><div class="m">Request created by ${s.from}<span class="who">${s.id}</span></div></div>
+      ${s.status !== 'open' ? `<div class="tl-event info"><div class="t">2m</div><div class="m">Acknowledged by Chief ${s.zone === 'B' ? 'Kenworth' : s.zone === 'A' ? 'Morales' : 'Donovan'}<span class="who">ETA 2 min</span></div></div>` : ''}
+      ${s.status === 'enroute' ? `<div class="tl-event info"><div class="t">1m</div><div class="m">En route · Crew dispatched</div></div>` : ''}
+      ${s.status === 'resolved' ? `<div class="tl-event good"><div class="t">now</div><div class="m">Resolved · Issue cleared</div></div>` : ''}
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      ${s.status === 'open' ? '<button class="act-btn primary" onclick="ackSup()">ACKNOWLEDGE</button>' : ''}
+      <button class="act-btn" onclick="escalateSup()">ESCALATE</button>
+      ${s.status !== 'resolved' ? '<button class="act-btn" onclick="resolveSup()">MARK RESOLVED</button>' : ''}
+      <button class="act-btn" onclick="location.href='geography.html?gate=' + '${s.where.replace('Gate ','')}'">VIEW GATE</button>
+    </div>
+  `;
+}
+
+function ackSup() {
+  RampIQ.data.update(s => { const x = s.support.find(y => y.id === selectedId); if (x) x.status = 'ack'; });
+  state = RampIQ.data.state;
+  RampIQ.events.supportAcknowledged(selectedId, '2 min', 'MANAGER');
+  RampIQ.ui.showToast('Support acknowledged · event sent', 'success');
+  renderList(); renderDetail();
+}
+function escalateSup() {
+  RampIQ.ui.showToast('Escalated to ops director', 'crit');
+}
+function resolveSup() {
+  RampIQ.data.update(s => { const x = s.support.find(y => y.id === selectedId); if (x) x.status = 'resolved'; });
+  state = RampIQ.data.state;
+  RampIQ.events.supportResolved(selectedId, 'MANAGER');
+  RampIQ.ui.showToast('Support resolved · event sent', 'success');
+  renderList(); renderDetail();
+}
+window.ackSup = ackSup;
+window.escalateSup = escalateSup;
+window.resolveSup = resolveSup;
+
+document.querySelectorAll('.sup-filter').forEach(f => {
+  f.addEventListener('click', () => {
+    activeFilter = f.dataset.f;
+    document.querySelectorAll('.sup-filter').forEach(x => x.classList.toggle('active', x === f));
+    renderList();
+  });
+});
+
+renderList();
+renderDetail();
+</script>
+</body>
+</html>

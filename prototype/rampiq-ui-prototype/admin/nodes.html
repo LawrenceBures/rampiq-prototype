@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Admin · Nodes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .admin-nav { width: 200px; background: #03050a; border-right: 1px solid var(--line); flex-shrink: 0; padding-top: 14px; }
+  .admin-nav-section { padding: 12px 18px 6px; font-family: var(--mono); font-size: 9px; color: var(--text-4); letter-spacing: 0.14em; text-transform: uppercase; }
+  .admin-nav a { display: block; padding: 10px 18px; color: var(--text-2); font-size: 12px; border-left: 2px solid transparent; transition: all 0.1s; }
+  .admin-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+  .admin-nav a.active { color: var(--text-0); background: var(--bg-2); border-left-color: var(--amber); }
+  .admin-nav a .ic { display: inline-block; width: 18px; color: var(--text-3); }
+  .list-2col { display: grid; grid-template-columns: 280px 1fr; gap: 16px; }
+  .list-pane { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; max-height: 700px; overflow-y: auto; }
+  .list-pane-head { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); background: #04060a; position: sticky; top: 0; }
+  .add-btn { background: var(--amber); color: #000; border: none; padding: 5px 10px; font-family: var(--mono); font-size: 10px; font-weight: 700; cursor: pointer; border-radius: 3px; }
+  .list-item { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .list-item:hover { background: var(--bg-2); }
+  .list-item.active { background: var(--bg-2); border-left: 2px solid var(--amber); padding-left: 12px; }
+  .li-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .li-meta { font-family: var(--mono); font-size: 10px; color: var(--text-2); }
+  .admin-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px; }
+  .admin-card-head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: #04060a; display: flex; justify-content: space-between; align-items: center; }
+  .admin-card-head h3 { font-size: 13px; font-weight: 600; }
+  .admin-card-body { padding: 18px; }
+  .adj-pill { padding: 5px 10px; background: var(--bg-3); border: 1px solid var(--line-3); border-radius: 3px; font-family: var(--mono); font-size: 11px; }
+  .node-graph {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 20px; min-height: 320px;
+    position: relative;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .node {
+    position: absolute; padding: 6px 10px;
+    background: var(--bg-3); border: 1px solid var(--line-3);
+    border-radius: 4px;
+    display: flex; flex-direction: column; align-items: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    cursor: move; min-width: 60px;
+  }
+  .node .nt { font-size: 8px; color: var(--text-3); font-weight: 400; margin-top: 1px; }
+  .node.chokepoint { background: rgba(232,161,58,0.22); border-color: var(--amber); }
+  .node.bag { background: rgba(74,154,239,0.18); border-color: var(--blue); }
+  svg.adj-lines { position: absolute; inset: 0; pointer-events: none; }
+  @media (max-width: 900px) { .list-2col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="admin-nav">
+    <div class="admin-nav-section">Configuration</div>
+    <a href="stations.html"><span class="ic">▣</span>Station Setup</a>
+    <a href="zones.html"><span class="ic">▤</span>Zones</a>
+    <a href="nodes.html" class="active"><span class="ic">◌</span>Nodes / Gates</a>
+    <a href="qr.html"><span class="ic">⊞</span>QR Codes</a>
+    <a href="workflows.html"><span class="ic">↦</span>Workflows</a>
+    <div class="admin-nav-section">Access &amp; Tuning</div>
+    <a href="permissions.html"><span class="ic">◊</span>Permissions</a>
+    <a href="thresholds.html"><span class="ic">▥</span>Thresholds</a>
+  </nav>
+  <div class="main">
+    <div class="page-head">
+      <span class="breadcrumb">ADMIN → NODES</span>
+      <h1>Node / Gate Setup</h1>
+      <div class="right">
+        <span class="pill">84 NODES</span>
+        <span class="pill">156 ADJACENCIES</span>
+      </div>
+    </div>
+    <div class="body" style="padding: 22px;">
+      <div class="list-2col">
+        <div class="list-pane">
+          <div class="list-pane-head"><span>Nodes · 12 shown</span><button class="add-btn">+ ADD</button></div>
+          <div class="list-item active" onclick="selectNode('B7')"><div class="li-name">B7 · Gate</div><div class="li-meta">Zone B · Wide-body</div></div>
+          <div class="list-item" onclick="selectNode('B8')"><div class="li-name">B8 · Gate</div><div class="li-meta">Zone B · Narrow-body</div></div>
+          <div class="list-item" onclick="selectNode('B9')"><div class="li-name">B9 · Gate</div><div class="li-meta">Zone B · Narrow-body</div></div>
+          <div class="list-item" onclick="selectNode('B-PUSH')"><div class="li-name">B-PUSH · Push Alley</div><div class="li-meta">Zone B · Chokepoint</div></div>
+          <div class="list-item" onclick="selectNode('BAG-B')"><div class="li-name">BAG-B · Bag Room</div><div class="li-meta">Zone B · Capacity 4</div></div>
+          <div class="list-item" onclick="selectNode('GSE-B-01')"><div class="li-name">GSE-B-01 · Staging</div><div class="li-meta">Zone B · Tug staging</div></div>
+          <div class="list-item" onclick="selectNode('B10')"><div class="li-name">B10 · Gate</div><div class="li-meta">Zone B</div></div>
+          <div class="list-item" onclick="selectNode('B14')"><div class="li-name">B14 · Gate</div><div class="li-meta">Zone B</div></div>
+        </div>
+        <div class="admin-card">
+          <div class="admin-card-head"><h3 id="nodeName">Node: B7 · Gate</h3><span style="font-family:var(--mono); font-size:10px; color:var(--text-3);" id="nodeQR">QR: 482-117 · LAST SCAN 14:18</span></div>
+          <div class="admin-card-body">
+            <div class="form-grid-3">
+              <div class="form-row"><label>Operational Name</label><input type="text" id="fName" value="B7" /></div>
+              <div class="form-row"><label>Type</label><select id="fType"><option>Gate</option><option>Push Alley</option><option>Bag Room</option><option>Staging</option><option>Chokepoint</option><option>Remote Stand</option></select></div>
+              <div class="form-row"><label>Zone</label><select><option>Zone B · Central</option></select></div>
+              <div class="form-row"><label>Capacity</label><input type="text" value="1 wide-body" /></div>
+              <div class="form-row"><label>Constraint</label><input type="text" value="Up to B777" /></div>
+              <div class="form-row"><label>Status</label><select><option>Active</option><option>Maintenance</option><option>Closed</option></select></div>
+            </div>
+            <div class="form-row" style="margin-top:10px;">
+              <label>Adjacencies (graph edges)</label>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; padding: 6px 0;">
+                <span class="adj-pill">B-PUSH ×</span>
+                <span class="adj-pill">BAG-B ×</span>
+                <span class="adj-pill">GSE-B-01 ×</span>
+                <button style="padding: 5px 10px; background: transparent; border: 1px dashed var(--line-3); border-radius: 3px; font-family: var(--mono); font-size: 11px; color: var(--text-2); cursor: pointer;">+ Add</button>
+              </div>
+            </div>
+            <div style="margin-top: 14px;">
+              <label style="font-family:var(--mono); font-size:9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.12em; display: block; margin-bottom: 8px;">Visual Node Graph</label>
+              <div class="node-graph">
+                <svg class="adj-lines" viewBox="0 0 600 280" preserveAspectRatio="none" width="100%" height="280">
+                  <line x1="120" y1="60" x2="300" y2="140" stroke="#3a4656" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <line x1="300" y1="140" x2="480" y2="60" stroke="#3a4656" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <line x1="300" y1="140" x2="180" y2="220" stroke="#3a4656" stroke-width="1.5" stroke-dasharray="4 4"/>
+                  <line x1="300" y1="140" x2="420" y2="220" stroke="#3a4656" stroke-width="1.5" stroke-dasharray="4 4"/>
+                </svg>
+                <div class="node" style="left: 92px; top: 40px;">B7<div class="nt">GATE</div></div>
+                <div class="node chokepoint" style="left: 258px; top: 120px;">B-PUSH<div class="nt" style="color:#000;">PUSH</div></div>
+                <div class="node" style="left: 448px; top: 40px;">B8<div class="nt">GATE</div></div>
+                <div class="node bag" style="left: 148px; top: 200px;">BAG-B<div class="nt" style="color:#000;">BAG</div></div>
+                <div class="node" style="left: 392px; top: 200px;">GSE-B-01<div class="nt">STAGE</div></div>
+              </div>
+            </div>
+            <button class="act-btn primary" style="margin-top: 14px;" onclick="saveNode()">SAVE NODE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('admin');
+function selectNode(id) {
+  document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('nodeName').textContent = `Node: ${id}`;
+  document.getElementById('fName').value = id;
+}
+function saveNode() {
+  RampIQ.events.configChange('Node updated · ' + document.getElementById('fName').value, 'admin');
+  RampIQ.ui.showToast('Node saved · event recorded', 'success');
+}
+window.selectNode = selectNode;
+window.saveNode = saveNode;
+</script>
+</body>
+</html>

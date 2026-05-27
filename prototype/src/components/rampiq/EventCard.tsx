@@ -1,4 +1,4 @@
-// RampIQ — Canonical event card.
+// SOI — Canonical event card.
 // Presentation-only. No data fetching. No side effects.
 // Extracted from dashboard page for console layout reuse.
 

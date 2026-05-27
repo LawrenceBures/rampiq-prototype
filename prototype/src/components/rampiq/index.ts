@@ -1,4 +1,4 @@
-// RampIQ — Shared operational primitives.
+// SOI — Shared operational primitives.
 //
 // ARCHITECTURAL RULES:
 //   1. Every component is presentation-only

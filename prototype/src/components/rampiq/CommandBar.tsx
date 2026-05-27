@@ -1,4 +1,4 @@
-// RampIQ — Operations command bar.
+// SOI — Operations command bar.
 // Presentation-only. No data fetching. No side effects.
 // Top-level strip for the desktop operations console.
 

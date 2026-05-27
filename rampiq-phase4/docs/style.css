@@ -1,0 +1,477 @@
+/* RampIQ document stylesheet — PDF print version */
+/* Adapts the dark operational console aesthetic to a print-optimized format */
+/* while preserving the JetBrains Mono / Inter Tight / Instrument Serif typographic identity */
+
+@page {
+  size: letter;
+  margin: 0.7in 0.8in 0.9in 0.8in;
+  @bottom-left {
+    content: "RampIQ · " counter(page) " / " counter(pages);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  @bottom-right {
+    content: string(doctitle);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.08em;
+  }
+  @top-right {
+    content: "v1.0 · pre-pilot";
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: #aab3c0;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+}
+
+@page :first {
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+  @top-right { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  font-family: 'Inter Tight', 'Helvetica Neue', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1a1f29;
+  background: #ffffff;
+}
+
+body {
+  string-set: doctitle attr(data-title);
+}
+
+/* COVER PAGE */
+.cover {
+  page-break-after: always;
+  height: 9.5in;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5in 0.2in 0.4in;
+  position: relative;
+  background:
+    linear-gradient(135deg, #0a0d12 0%, #141922 100%);
+  color: #e8ecf2;
+  margin: -0.7in -0.8in -0.9in -0.8in;
+}
+
+.cover-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #2a3442;
+  margin-bottom: 60px;
+}
+
+.cover-mark {
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid #c9ff3a;
+  position: relative;
+  flex-shrink: 0;
+}
+.cover-mark::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid #c9ff3a;
+  opacity: 0.55;
+}
+.cover-mark::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #c9ff3a;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cover-brand {
+  font-size: 22pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #e8ecf2;
+}
+.cover-brand .iq { color: #c9ff3a; }
+
+.cover-tag {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  border: 1px solid rgba(201, 255, 58, 0.4);
+  padding: 6px 10px;
+}
+
+.cover-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cover-eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: #c9ff3a;
+}
+
+.cover-title {
+  font-size: 38pt;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: #e8ecf2;
+  margin-bottom: 14px;
+  max-width: 6in;
+}
+.cover-title em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #c9ff3a;
+}
+
+.cover-sub {
+  font-size: 13pt;
+  color: #aab3c0;
+  font-weight: 300;
+  line-height: 1.5;
+  max-width: 5.4in;
+  margin-bottom: 50px;
+}
+
+.cover-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px 36px;
+  margin-top: auto;
+  padding: 24px 0 0;
+  border-top: 1px solid #2a3442;
+}
+.cover-meta-l {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 6px;
+}
+.cover-meta-v {
+  font-size: 11pt;
+  color: #e8ecf2;
+  font-weight: 500;
+}
+.cover-meta-v b { color: #c9ff3a; font-weight: 600; }
+
+.cover-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #454e5d;
+  text-align: center;
+  margin-top: 30px;
+}
+
+/* HEADINGS */
+h1 {
+  font-size: 24pt;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0d12;
+  margin-top: 0;
+  margin-bottom: 14px;
+  page-break-after: avoid;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: #0a0d12;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #1a1f29;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #0a0d12;
+  margin-top: 22px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+/* PROSE */
+p {
+  margin: 0 0 11pt 0;
+  text-align: left;
+  hyphens: none;
+}
+
+strong, b {
+  font-weight: 600;
+  color: #0a0d12;
+}
+
+em, i {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* LISTS */
+ul, ol {
+  margin: 0 0 14pt 0;
+  padding-left: 18pt;
+}
+
+ul li {
+  margin-bottom: 5pt;
+  list-style: none;
+  position: relative;
+  padding-left: 12pt;
+}
+
+ul li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: #c9ff3a;
+  font-weight: 700;
+  font-size: 14pt;
+  line-height: 1;
+  top: 1pt;
+}
+
+ol li {
+  margin-bottom: 5pt;
+}
+
+li > strong:first-child {
+  color: #0a0d12;
+}
+
+/* TABLES */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14pt 0 18pt;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+
+th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  text-align: left;
+  padding: 8pt 10pt;
+  border-bottom: 1.5pt solid #1a1f29;
+  vertical-align: bottom;
+}
+
+td {
+  padding: 8pt 10pt;
+  border-bottom: 0.5pt solid #cad0d9;
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: 1.5pt solid #1a1f29; }
+
+td.mono, th.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+}
+
+/* HORIZONTAL RULE */
+hr {
+  border: none;
+  border-top: 1px solid #1a1f29;
+  margin: 24pt 0;
+}
+
+/* SECTION DIVIDER */
+.section-divider {
+  margin: 30pt 0 24pt;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #6b7585;
+  padding: 8pt 0;
+  border-top: 1px solid #1a1f29;
+  border-bottom: 1px solid #1a1f29;
+}
+
+/* PULL QUOTES / CALLOUTS */
+.callout {
+  background: #f4f6fa;
+  border-left: 3px solid #c9ff3a;
+  padding: 14pt 18pt;
+  margin: 16pt 0;
+  font-size: 10pt;
+}
+
+.callout em {
+  color: #2a3442;
+}
+
+/* EYEBROW */
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  margin-bottom: 6pt;
+}
+
+/* CODE / mono inline */
+code, .mono-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 1pt 5pt;
+  border-radius: 2pt;
+  color: #2a3442;
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 12pt 14pt;
+  border-left: 2pt solid #1a1f29;
+  margin: 12pt 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* CLOSING SIGNATURE PARA */
+.signature {
+  margin-top: 30pt;
+  padding-top: 18pt;
+  border-top: 1px solid #1a1f29;
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 11pt;
+  color: #2a3442;
+  text-align: left;
+}
+
+/* PAGE BREAK HELPERS */
+.page-break { page-break-before: always; }
+table { page-break-inside: avoid; }
+h2, h3 { page-break-after: avoid; }
+
+/* TABLE OF CONTENTS */
+.toc {
+  margin: 24pt 0 32pt;
+}
+.toc-h {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 12pt;
+}
+.toc ol {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: toc-counter;
+}
+.toc li {
+  counter-increment: toc-counter;
+  display: flex;
+  align-items: baseline;
+  padding: 6pt 0;
+  border-bottom: 0.5pt dotted #cad0d9;
+  font-size: 11pt;
+}
+.toc li::before {
+  content: counter(toc-counter, decimal-leading-zero);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  color: #c9ff3a;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-right: 14pt;
+  min-width: 24pt;
+}
+
+/* TIER LABELS in dependency map */
+.tier-label {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3pt 7pt;
+  margin-right: 6pt;
+}
+.tier-label.t1 { background: #1a1f29; color: #c9ff3a; }
+.tier-label.t2 { background: #f4f6fa; color: #2a3442; border: 1px solid #1a1f29; }
+.tier-label.t3 { background: transparent; color: #6b7585; border: 1px dashed #6b7585; }
+
+/* REALITY pills */
+.reality {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2pt 6pt;
+  margin-left: 4pt;
+}
+.reality.mature { color: #1f6b4d; border: 1px solid #1f6b4d; }
+.reality.variable { color: #7a5512; border: 1px solid #7a5512; }
+.reality.gap { color: #7a1f1f; border: 1px solid #7a1f1f; }

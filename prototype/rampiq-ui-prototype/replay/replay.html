@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Replay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  /* override .body to remove scroll for fixed-layout replay */
+  .replay-shell { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+
+  .replay-head {
+    padding: 14px 22px; background: #04060a; border-bottom: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr auto auto; gap: 22px; align-items: center;
+  }
+  .replay-head h2 { font-size: 14px; font-weight: 600; }
+  .replay-head .sub { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+  .replay-head .session-select {
+    background: var(--bg-3); border: 1px solid var(--line-3);
+    color: var(--text-0); padding: 8px 14px; font-family: var(--mono);
+    font-size: 11px; border-radius: 3px;
+  }
+  .replay-head .pos-badge {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--amber); padding: 6px 14px;
+    background: var(--amber-bg); border: 1px solid var(--amber-d);
+    border-radius: 3px; font-variant-numeric: tabular-nums;
+  }
+
+  .replay-body {
+    display: grid; grid-template-columns: 360px 1fr 380px;
+    gap: 1px; background: var(--line); overflow: hidden;
+  }
+  .replay-pane { background: var(--bg-1); overflow-y: auto; }
+  .pane-head {
+    height: 30px; padding: 0 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-3);
+    border-bottom: 1px solid var(--line); background: #04060a;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .pane-head .meta { color: var(--text-2); font-size: 10px; letter-spacing: 0.06em; }
+
+  .event-list-item {
+    padding: 8px 14px; border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    display: grid; grid-template-columns: 36px 70px 1fr;
+    gap: 8px; align-items: start;
+    font-size: 11px; transition: background 0.1s;
+  }
+  .event-list-item:hover { background: var(--bg-2); }
+  .event-list-item.current {
+    background: var(--amber-bg); border-left: 3px solid var(--amber); padding-left: 11px;
+  }
+  .event-list-item.past { opacity: 0.5; }
+  .event-list-item.future { opacity: 0.3; }
+  .eli-idx { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-align: right; }
+  .eli-time { font-family: var(--mono); font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .eli-msg { color: var(--text-1); line-height: 1.4; }
+  .eli-msg .type {
+    display: inline-block; font-family: var(--mono); font-size: 8.5px;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 5px;
+    border-radius: 2px; margin-right: 6px; font-weight: 600;
+    vertical-align: 1px;
+  }
+  .eli-msg .type.crit { background: var(--red-bg); color: var(--red); }
+  .eli-msg .type.warn { background: var(--amber-bg); color: var(--amber); }
+  .eli-msg .type.info { background: var(--blue-bg); color: var(--blue); }
+  .eli-msg .type.good { background: var(--green-bg); color: var(--green); }
+  .eli-msg .where { font-family: var(--mono); font-size: 10px; color: var(--text-3); display: block; margin-top: 3px; }
+
+  .state-canvas { padding: 16px 22px; }
+  .state-stage {
+    background: radial-gradient(circle at 50% 40%, #0c1118 0%, var(--bg-1) 70%);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    min-height: 400px; position: relative; overflow: hidden;
+  }
+  .state-stage .schematic { position: absolute; inset: 0; padding: 20px; }
+  .state-meta {
+    margin-top: 16px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  }
+  .state-block {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 3px;
+    padding: 12px 14px;
+  }
+  .state-block .lbl { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .state-block .val { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--text-0); font-variant-numeric: tabular-nums; }
+  .state-block .val.crit { color: var(--red); }
+  .state-block .val.warn { color: var(--amber); }
+
+  /* derived state panel (right) */
+  .derived-section { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .derived-section h4 {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+    color: var(--text-3); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .derived-section .row {
+    display: grid; grid-template-columns: 1fr auto;
+    padding: 6px 0; font-family: var(--mono); font-size: 11px;
+    border-bottom: 1px solid var(--line);
+  }
+  .derived-section .row:last-child { border-bottom: none; }
+  .derived-section .row .k { color: var(--text-2); }
+  .derived-section .row .v { color: var(--text-0); }
+  .derived-section .row .v.crit { color: var(--red); }
+  .derived-section .row .v.warn { color: var(--amber); }
+  .derived-section .row .v.good { color: var(--green); }
+  .derived-section .row .v.info { color: var(--blue); }
+
+  /* playback controls */
+  .replay-controls {
+    background: #04060a; border-top: 1px solid var(--line);
+    padding: 14px 22px;
+    display: grid; grid-template-columns: auto 1fr auto auto auto auto; gap: 16px; align-items: center;
+  }
+  .control-btn {
+    background: var(--bg-3); border: 1px solid var(--line-3); color: var(--text-0);
+    padding: 8px 14px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+    border-radius: 3px; cursor: pointer; transition: all 0.1s;
+    min-width: 40px;
+  }
+  .control-btn:hover { background: var(--bg-4); }
+  .control-btn.primary { background: var(--amber); border-color: var(--amber); color: #000; }
+  .control-btn.primary:hover { background: #f3b25c; }
+  .control-btns { display: flex; gap: 4px; }
+  .scrubber {
+    width: 100%; height: 8px; background: var(--bg-3); border-radius: 4px;
+    position: relative; cursor: pointer;
+  }
+  .scrubber .filled { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amber); border-radius: 4px; }
+  .scrubber .head { position: absolute; top: -4px; width: 16px; height: 16px; background: var(--text-0); border-radius: 50%; border: 2px solid var(--amber); transform: translateX(-50%); box-shadow: 0 0 8px rgba(232,161,58,0.5); }
+  .scrubber .marker {
+    position: absolute; top: -2px; width: 2px; height: 12px; background: var(--text-3); transform: translateX(-50%);
+  }
+  .scrubber .marker.crit { background: var(--red); }
+  .scrubber .marker.warn { background: var(--amber); }
+  .speed-control { display: flex; gap: 2px; }
+  .speed-btn {
+    padding: 6px 10px; background: var(--bg-3); border: 1px solid var(--line-2);
+    color: var(--text-2); font-family: var(--mono); font-size: 10px;
+    cursor: pointer; border-radius: 3px;
+  }
+  .speed-btn.active { background: var(--bg-4); color: var(--text-0); border-color: var(--line-3); }
+  .pos-readout {
+    font-family: var(--mono); font-size: 11px; color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .pos-readout .v { color: var(--text-0); font-weight: 600; }
+
+  /* schematic copy */
+  .pier { background: rgba(15,20,26,0.6); border: 1px solid var(--line-2); border-radius: 4px; padding: 8px; }
+  .pier-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.14em; color: var(--text-3); text-transform: uppercase; margin-bottom: 6px; }
+  .pier-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .gate { width: 46px; padding: 4px 2px; }
+  .gate-id { font-size: 10px; }
+  .gate-tail { font-size: 8px; }
+  .gate-dep { font-size: 8px; }
+
+  @media (max-width: 1280px) { .replay-body { grid-template-columns: 320px 1fr 320px; } }
+  @media (max-width: 1024px) {
+    .replay-body { grid-template-columns: 1fr; grid-template-rows: 260px 1fr 280px; }
+    .replay-controls { grid-template-columns: auto 1fr auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="main" style="flex: 1;">
+    <div class="page-head">
+      <span class="breadcrumb">REPLAY → EVENT TIMELINE</span>
+      <h1>Replay · Reconstruct Station State from Events</h1>
+      <div class="right">
+        <a href="../manager/pulse.html" style="font-family: var(--mono); font-size: 10px; color: var(--text-3); padding: 3px 8px; background: var(--bg-3); border: 1px solid var(--line-2); border-radius: 3px;">← BACK TO LIVE</a>
+      </div>
+    </div>
+
+    <div class="body" style="overflow: hidden; padding: 0;">
+      <div class="replay-shell">
+        <!-- session selector + readout -->
+        <div class="replay-head">
+          <div>
+            <h2>Shift Replay · DFW · 25 May 2026</h2>
+            <div class="sub" id="sessionMeta">PM SHIFT · 14:00 — 14:25 · <span id="totalEvents">22</span> EVENTS · INC-0142 ANCHOR</div>
+          </div>
+          <select class="session-select" onchange="loadSession(this.value)">
+            <option value="pm-shift">PM Shift · 14:00 — 14:25 (current)</option>
+            <option value="inc-0142">INC-0142 · Belt Loader Cascade (14:15 — 14:23)</option>
+            <option value="am-shift">AM Shift · 04:00 — 12:00</option>
+            <option value="last-week">Last week PM · 25 May 2026</option>
+          </select>
+          <div class="pos-badge"><span id="posBadge">EVENT 11 / 22</span></div>
+        </div>
+
+        <!-- 3-column body -->
+        <div class="replay-body">
+          <!-- LEFT: event list -->
+          <div class="replay-pane">
+            <div class="pane-head"><span>Event Log</span><span class="meta" id="paneMeta">22 EVENTS</span></div>
+            <div id="eventList"></div>
+          </div>
+
+          <!-- CENTER: reconstructed state -->
+          <div class="replay-pane">
+            <div class="pane-head"><span>Reconstructed Station State</span><span class="meta" id="stateMeta">AT EVENT 11</span></div>
+            <div class="state-canvas">
+              <div class="state-stage">
+                <div class="stage-grid"></div>
+                <div class="schematic" id="schematic" style="grid-template-areas: 'n n n' 'w c e' 's s s'; grid-template-rows: auto 1fr auto; grid-template-columns: 1fr 1fr 1fr;"></div>
+              </div>
+              <div class="state-meta">
+                <div class="state-block"><div class="lbl">Active Turns</div><div class="val" id="m_turns">—</div></div>
+                <div class="state-block"><div class="lbl">Open Support</div><div class="val warn" id="m_sup">—</div></div>
+                <div class="state-block"><div class="lbl">Active Incidents</div><div class="val crit" id="m_inc">—</div></div>
+                <div class="state-block"><div class="lbl">Station Pressure</div><div class="val warn" id="m_osi">—</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: derived state detail -->
+          <div class="replay-pane">
+            <div class="pane-head"><span>Derived State Detail</span></div>
+            <div class="derived-section">
+              <h4>Last Event Applied</h4>
+              <div id="lastEvent" style="font-family: var(--mono); font-size: 11px; color: var(--text-1); line-height: 1.5;"></div>
+            </div>
+            <div class="derived-section">
+              <h4>Incident Status</h4>
+              <div id="incStatus"></div>
+            </div>
+            <div class="derived-section">
+              <h4>Recovery Actions State</h4>
+              <div id="recovStatus"></div>
+            </div>
+            <div class="derived-section">
+              <h4>Acknowledgment Counts</h4>
+              <div id="ackStatus"></div>
+            </div>
+            <div class="derived-section">
+              <h4>Causal Chain</h4>
+              <div id="causal" style="font-family: var(--mono); font-size: 10px; color: var(--text-2); line-height: 1.6;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- playback controls -->
+        <div class="replay-controls">
+          <div class="control-btns">
+            <button class="control-btn" onclick="step(-10)" title="−10">⟨⟨</button>
+            <button class="control-btn" onclick="step(-1)" title="−1">⟨</button>
+            <button class="control-btn primary" id="playBtn" onclick="togglePlay()">▶</button>
+            <button class="control-btn" onclick="step(1)" title="+1">⟩</button>
+            <button class="control-btn" onclick="step(10)" title="+10">⟩⟩</button>
+            <button class="control-btn" onclick="seek(0)" title="reset">↺</button>
+          </div>
+          <div class="scrubber" id="scrubber" onclick="scrub(event)">
+            <div class="filled" id="filled"></div>
+            <div class="head" id="head"></div>
+          </div>
+          <div class="pos-readout"><span class="v" id="posTime">14:21:15</span></div>
+          <div class="pos-readout">| <span id="posCount">11 / 22</span></div>
+          <div class="speed-control">
+            <button class="speed-btn" data-x="0.5">0.5×</button>
+            <button class="speed-btn active" data-x="1">1×</button>
+            <button class="speed-btn" data-x="2">2×</button>
+            <button class="speed-btn" data-x="4">4×</button>
+            <button class="speed-btn" data-x="10">10×</button>
+          </div>
+          <button class="control-btn" onclick="exportReplay()" style="font-size: 10px;">EXPORT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('manager');
+
+// ==================== EVENT LOG (oldest → newest) ====================
+// Curated replay log: events in chronological order, each producing a state change.
+// In production, this comes from the append-only event store.
+const LOG = [
+  { idx:1, t:'14:00:01', type:'POSITION', cls:'info', m:'PM shift opened · all crew checked in', w:'STATION', who:'SYSTEM',
+    apply: (s) => { s.note = 'PM shift active'; } },
+  { idx:2, t:'14:02:11', type:'CONFIG', cls:'info', m:'Threshold tuned · Zone B push alley (v.143)', w:'CONFIG', who:'admin',
+    apply: (s) => { s.configVersion = 143; } },
+  { idx:3, t:'14:09:33', type:'POSITION', cls:'info', m:'Crew on-position at B14', w:'B14', who:'ALVAREZ,M',
+    apply: (s) => { s.gates['B14'].state = 'occupied'; s.gates['B14'].step = 'On-position'; } },
+  { idx:4, t:'14:11:08', type:'SERVICE', cls:'good', m:'Bag offload complete', w:'B14 · N728UA', who:'REYES,T',
+    apply: (s) => { s.gates['B14'].step = 'Bag offload done'; } },
+  { idx:5, t:'14:14:22', type:'SERVICE', cls:'good', m:'Cabin clean confirmed', w:'B14 · N728UA', who:'PARK,R',
+    apply: (s) => { s.gates['B14'].step = 'Cabin clean done'; } },
+  { idx:6, t:'14:15:08', type:'EXCEPTION', cls:'crit', m:'Belt Loader 4 reported inoperable', w:'B7 · N401UA', who:'MORALES,J',
+    apply: (s) => { s.equipment['BL-04'] = 'failed'; s.gates['B7'].state = 'crit'; s.gates['B7'].step = 'EQ failure'; } },
+  { idx:7, t:'14:15:33', type:'SUPPORT', cls:'warn', m:'Support requested · EQ Failure · Belt Loader 4', w:'B7 · N401UA', who:'MORALES,J',
+    apply: (s) => { s.support++; s.zonePressure['B'] = 65; } },
+  { idx:8, t:'14:16:42', type:'SUPPORT', cls:'info', m:'Support acknowledged by Chief Kenworth · ETA 2m', w:'B7', who:'KENWORTH,T',
+    apply: (s) => { s.ackPending = 1; } },
+  { idx:9, t:'14:17:21', type:'INCIDENT', cls:'crit', m:'Incident opened · INC-0142 · EQ Failure cascade', w:'B7 · N401UA', who:'KENWORTH,T',
+    apply: (s) => { s.incident = { id:'INC-0142', age:0, partic:2, actions:0 }; s.zonePressure['B'] = 72; } },
+  { idx:10, t:'14:17:55', type:'RECOVERY', cls:'info', m:'Action proposed · Replace belt loader from staging', w:'B7', who:'KENWORTH,T',
+    apply: (s) => { s.incident.actions = 1; s.actions = { proposed:1, ackd:0, inprog:0, done:0 }; } },
+  { idx:11, t:'14:18:22', type:'RECOVERY', cls:'warn', m:'Action in progress · PARK dispatched with backup loader', w:'B7', who:'PARK,R',
+    apply: (s) => { s.actions.proposed = 0; s.actions.inprog = 1; s.equipment['BL-12'] = 'enroute'; } },
+  { idx:12, t:'14:18:48', type:'SERVICE', cls:'good', m:'Lav service complete', w:'B14 · N728UA', who:'ALVAREZ,M',
+    apply: (s) => { s.gates['B14'].step = 'Lav done'; } },
+  { idx:13, t:'14:19:08', type:'RECOVERY', cls:'info', m:'Action acknowledged · Dispatch hold UA1842 push 6m', w:'B7', who:'DISPATCH',
+    apply: (s) => { s.actions.proposed = 0; s.actions.ackd = 1; s.actions.inprog = 1; s.gates['B7'].step = 'Hold push authorized'; } },
+  { idx:14, t:'14:19:42', type:'RECOVERY', cls:'info', m:'Action proposed · Reassign 2 crew from Zone A', w:'B7', who:'KENWORTH,T',
+    apply: (s) => { s.actions.proposed = 1; s.incident.actions = 3; } },
+  { idx:15, t:'14:20:11', type:'RECOVERY', cls:'good', m:'Manager Reese added as participant', w:'INC-0142', who:'KENWORTH,T',
+    apply: (s) => { s.incident.partic = 3; } },
+  { idx:16, t:'14:20:48', type:'RECOVERY', cls:'warn', m:'Cascade ref added · B8 connecting bags impacted', w:'B7 → B8', who:'KENWORTH,T',
+    apply: (s) => { s.gates['B8'].state = 'warn'; s.gates['B8'].step = 'Connecting bag risk'; s.zonePressure['B'] = 78; } },
+  { idx:17, t:'14:21:02', type:'POSITION', cls:'info', m:'Crew on-position confirmed at B12', w:'B12 · N105UA', who:'HAYES,S',
+    apply: (s) => { s.gates['B12'].state = 'occupied'; } },
+  { idx:18, t:'14:21:18', type:'SUPPORT', cls:'warn', m:'Support request created · Bag count off 14', w:'B14 · N728UA', who:'ALVAREZ,M',
+    apply: (s) => { s.support++; } },
+  { idx:19, t:'14:21:42', type:'RECOVERY', cls:'info', m:'Chen acknowledged · 2 crew en route from Zone A', w:'B7', who:'CHEN,J',
+    apply: (s) => { s.actions.proposed = 0; s.actions.ackd = 0; s.actions.inprog = 2; s.incident.partic = 4; } },
+  { idx:20, t:'14:22:09', type:'INCIDENT', cls:'crit', m:'EQ failure event logged to incident record', w:'B7', who:'MORALES,J',
+    apply: (s) => { s.zonePressure['B'] = 82; } },
+  { idx:21, t:'14:22:43', type:'RECOVERY', cls:'info', m:'Action proposed · Hold push B15 (6 min)', w:'B15 · N311UA', who:'KENWORTH,T',
+    apply: (s) => { s.gates['B15'].state = 'recovery'; s.actions.proposed = 1; } },
+  { idx:22, t:'14:23:08', type:'SERVICE', cls:'good', m:'Service confirmed · Bag load complete', w:'B14 · N728UA', who:'ALVAREZ,M',
+    apply: (s) => { s.gates['B14'].step = 'Bag load done'; } }
+];
+
+// ==================== STATE BUILDER ====================
+function emptyState() {
+  return {
+    gates: Object.fromEntries(['A1','A2','A4','A5','B7','B8','B9','B10','B11','B12','B14','B15','C1','C3','C4','R2'].map(g => [g, { state:'empty', step:'—' }])),
+    equipment: {},
+    support: 0,
+    incident: null,
+    actions: { proposed:0, ackd:0, inprog:0, done:0 },
+    ackPending: 0,
+    zonePressure: { A:54, B:48, C:48, D:32, E:24 },
+    configVersion: 142,
+    note: ''
+  };
+}
+
+function buildStateAt(eventIdx) {
+  // Replay events 0..eventIdx onto empty state
+  const s = emptyState();
+  for (let i = 0; i <= eventIdx && i < LOG.length; i++) {
+    LOG[i].apply(s);
+  }
+  return s;
+}
+
+// ==================== UI STATE ====================
+let position = 11; // current event index (1-based for display, 0-based for indexing — using LOG[position-1])
+let playing = false;
+let speed = 1;
+let playInterval = null;
+
+// ==================== RENDER EVENT LIST ====================
+function renderEventList() {
+  document.getElementById('eventList').innerHTML = LOG.map((e, i) => {
+    const idx = i + 1;
+    const stateCls = idx < position ? 'past' : idx === position ? 'current' : 'future';
+    return `
+      <div class="event-list-item ${stateCls}" onclick="seek(${idx})">
+        <div class="eli-idx">#${e.idx}</div>
+        <div class="eli-time">${e.t}</div>
+        <div class="eli-msg"><span class="type ${e.cls}">${e.type}</span>${e.m}<span class="where">${e.w} · ${e.who}</span></div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('totalEvents').textContent = LOG.length;
+  document.getElementById('paneMeta').textContent = LOG.length + ' EVENTS';
+
+  // auto-scroll to current
+  const cur = document.querySelector('.event-list-item.current');
+  if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+// ==================== RENDER STATE PANEL (CENTER) ====================
+function renderState() {
+  const state = buildStateAt(position - 1);
+
+  // schematic
+  const piers = {
+    n: { label: 'Zone A · North', ids: ['A1','A2','A4','A5'] },
+    w: { label: 'Zone C · West', ids: ['C1','C3','C4'] },
+    e: { label: 'Zone B · East', ids: ['B7','B8','B9','B10','B11','B12','B14','B15'] },
+    s: { label: 'Zone D · Remote', ids: ['R2'] }
+  };
+  const tails = { A1:'N219UA',A2:'N847UA',A4:'N551UA',A5:'N722UA',B7:'N401UA',B8:'N916UA',B9:'N224UA',B10:'N637UA',B11:'N802UA',B12:'N105UA',B14:'N728UA',B15:'N311UA',C1:'N409UA',C3:'N183UA',C4:'N678UA',R2:'N890UA' };
+  const deps = { A1:'14:45',A2:'14:32',A4:'14:28',A5:'15:02',B7:'14:18',B8:'14:30',B9:'15:05',B10:'14:41',B11:'14:32',B12:'14:54',B14:'14:32',B15:'14:50',C1:'14:55',C3:'15:20',C4:'14:48',R2:'15:45' };
+  const sc = (s) => s === 'crit' ? 'crit' : s === 'warn' ? 'warn' : s === 'recovery' ? 'recovery' : s === 'occupied' ? 'occupied' : '';
+  const osi = Math.round((state.zonePressure.A + state.zonePressure.B + state.zonePressure.C + state.zonePressure.D + state.zonePressure.E) / 5);
+  const turns = Object.values(state.gates).filter(g => g.state !== 'empty').length;
+  const supCount = 7 + state.support; // baseline + delta
+
+  document.getElementById('schematic').innerHTML = `
+    ${['n','w','e','s'].map(p => `
+      <div class="pier" style="grid-area: ${p};">
+        <div class="pier-label">${piers[p].label}</div>
+        <div class="pier-row">
+          ${piers[p].ids.map(id => {
+            const g = state.gates[id] || { state:'empty' };
+            return `
+              <div class="gate ${sc(g.state)}">
+                <div class="gate-id">${id}</div>
+                <div class="gate-tail">${tails[id] || '—'}</div>
+                <div class="gate-dep">${deps[id] || '—'}</div>
+                ${g.state === 'crit' ? '<div class="gate-pin"></div>' : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `).join('')}
+    <div class="stage-center" style="grid-area: c; display: flex; align-items: center; justify-content: center;">
+      <div class="osi-gauge">
+        <div class="osi-label">Pressure at this moment</div>
+        <div class="osi-value">${osi}</div>
+        <div class="osi-trend">${osi > 60 ? '▲ ELEVATED' : osi > 50 ? '◌ NOMINAL' : '▼ LOW'}</div>
+      </div>
+    </div>
+  `;
+
+  // state-meta blocks
+  document.getElementById('m_turns').textContent = turns;
+  document.getElementById('m_sup').textContent = supCount;
+  document.getElementById('m_inc').textContent = state.incident ? 1 : 0;
+  document.getElementById('m_osi').textContent = osi;
+  document.getElementById('stateMeta').textContent = `AT EVENT ${position}`;
+
+  // ==================== RIGHT PANEL ====================
+  const cur = LOG[position - 1];
+  document.getElementById('lastEvent').innerHTML = `
+    <div style="color: var(--text-3); margin-bottom: 4px;">#${cur.idx} · ${cur.t}</div>
+    <div style="color: var(--text-0); margin-bottom: 6px;">${cur.m}</div>
+    <div style="color: var(--text-3);">${cur.w} · ${cur.who}</div>
+  `;
+
+  const inc = state.incident;
+  document.getElementById('incStatus').innerHTML = inc ? `
+    <div class="row"><span class="k">ID</span><span class="v">INC-0142</span></div>
+    <div class="row"><span class="k">Age at this moment</span><span class="v">${Math.floor((position - 9) * 0.4)}m</span></div>
+    <div class="row"><span class="k">Participants</span><span class="v">${inc.partic}</span></div>
+    <div class="row"><span class="k">Actions opened</span><span class="v">${inc.actions}</span></div>
+  ` : '<div style="font-family: var(--mono); font-size: 11px; color: var(--text-3); padding: 6px 0;">No active incident at this point</div>';
+
+  document.getElementById('recovStatus').innerHTML = `
+    <div class="row"><span class="k">Proposed</span><span class="v warn">${state.actions.proposed}</span></div>
+    <div class="row"><span class="k">Acknowledged</span><span class="v">${state.actions.ackd}</span></div>
+    <div class="row"><span class="k">In Progress</span><span class="v info">${state.actions.inprog}</span></div>
+    <div class="row"><span class="k">Done</span><span class="v good">${state.actions.done}</span></div>
+  `;
+
+  document.getElementById('ackStatus').innerHTML = `
+    <div class="row"><span class="k">My pending acks</span><span class="v warn">${state.ackPending}</span></div>
+    <div class="row"><span class="k">Sent · awaiting response</span><span class="v">${position > 14 ? 2 : position > 10 ? 1 : 0}</span></div>
+    <div class="row"><span class="k">Acks received this session</span><span class="v good">${Math.max(0, Math.min(5, position - 8))}</span></div>
+  `;
+
+  // causal chain
+  const causalEvents = LOG.slice(Math.max(0, position - 5), position).reverse();
+  document.getElementById('causal').innerHTML = causalEvents.map((e, i) =>
+    `<div style="padding: 3px 0; ${i === 0 ? 'color: var(--text-0);' : ''}">${i === 0 ? '→' : '  '} #${e.idx} ${e.t.slice(3)} · ${e.m.slice(0, 60)}</div>`
+  ).join('');
+
+  // ==================== controls ====================
+  document.getElementById('posBadge').textContent = `EVENT ${position} / ${LOG.length}`;
+  document.getElementById('posTime').textContent = cur.t;
+  document.getElementById('posCount').textContent = `${position} / ${LOG.length}`;
+  const pct = ((position - 1) / (LOG.length - 1)) * 100;
+  document.getElementById('filled').style.width = pct + '%';
+  document.getElementById('head').style.left = pct + '%';
+
+  renderEventList();
+}
+
+// ==================== CONTROLS ====================
+function seek(idx) {
+  position = Math.max(1, Math.min(LOG.length, idx));
+  renderState();
+}
+function step(delta) {
+  if (delta === 0) seek(1);
+  else seek(position + delta);
+}
+function scrub(e) {
+  const r = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - r.left) / r.width;
+  const idx = Math.round(1 + pct * (LOG.length - 1));
+  seek(idx);
+}
+function togglePlay() {
+  if (playing) {
+    playing = false;
+    clearInterval(playInterval);
+    document.getElementById('playBtn').textContent = '▶';
+  } else {
+    playing = true;
+    document.getElementById('playBtn').textContent = '⏸';
+    const stepEvery = () => {
+      if (position >= LOG.length) { togglePlay(); return; }
+      position++;
+      renderState();
+    };
+    playInterval = setInterval(stepEvery, 1500 / speed);
+  }
+}
+function setSpeed(x) {
+  speed = x;
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.toggle('active', +b.dataset.x === x));
+  if (playing) {
+    clearInterval(playInterval);
+    playing = false;
+    togglePlay();
+  }
+}
+function loadSession(s) {
+  RampIQ.ui.showToast('Loading session: ' + s + ' (mock)');
+}
+function exportReplay() {
+  const events = LOG.slice(0, position);
+  RampIQ.ui.showToast(`Export queued · ${events.length} events · JSON`, 'success');
+}
+window.seek = seek;
+window.step = step;
+window.scrub = scrub;
+window.togglePlay = togglePlay;
+window.setSpeed = setSpeed;
+window.loadSession = loadSession;
+window.exportReplay = exportReplay;
+
+document.querySelectorAll('.speed-btn').forEach(b => {
+  b.addEventListener('click', () => setSpeed(+b.dataset.x));
+});
+
+// keyboard
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'ArrowRight') step(1);
+  else if (e.key === 'ArrowLeft') step(-1);
+  else if (e.key === 'Home') seek(1);
+  else if (e.key === 'End') seek(LOG.length);
+});
+
+renderState();
+</script>
+</body>
+</html>

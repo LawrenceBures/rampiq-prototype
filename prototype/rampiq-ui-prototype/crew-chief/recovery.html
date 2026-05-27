@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Crew Chief · Recovery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<style>
+  .chief-head {
+    height: 56px; padding: 0 22px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 24px;
+    background: #04060a;
+    border-bottom: 1px solid var(--line);
+  }
+  .chief-zone { font-size: 16px; font-weight: 700; }
+  .chief-zone .sub { font-family: var(--mono); font-size: 11px; color: var(--text-2); font-weight: 400; margin-left: 8px; }
+  .tabs-row { display: flex; gap: 4px; margin-left: auto; }
+  .tabs-row button {
+    background: transparent; border: 1px solid var(--line-2); color: var(--text-2);
+    padding: 8px 14px; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    border-radius: 3px; position: relative;
+  }
+  .tabs-row button:hover { color: var(--text-0); border-color: var(--line-3); }
+  .tabs-row button.active { background: var(--bg-3); color: var(--text-0); border-color: var(--amber); }
+  .tabs-row button .b { background: var(--red); color: white; font-size: 9px; padding: 1px 5px; border-radius: 6px; margin-left: 6px; font-weight: 700; }
+
+  .tab-page { display: none; padding: 20px; }
+  .tab-page.active { display: block; }
+
+  /* Support card */
+  .chief-sup-row {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    padding: 14px 16px; margin-bottom: 8px;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 16px; align-items: center;
+  }
+  .chief-sup-row.urgent { border-left: 3px solid var(--red); background: linear-gradient(90deg, var(--red-bg), var(--bg-1)); }
+  .csr-info .head { display: flex; gap: 14px; align-items: baseline; margin-bottom: 4px; }
+  .csr-info .cat { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+  .csr-info .cat.crit { color: var(--red); }
+  .csr-info .cat.warn { color: var(--amber); }
+  .csr-info .age { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+  .csr-info .where { font-size: 13px; color: var(--text-0); font-weight: 500; margin-bottom: 2px; }
+  .csr-info .from { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+  .csr-actions { display: flex; gap: 8px; }
+  .csr-btn {
+    padding: 10px 16px; font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+    border-radius: 3px; font-weight: 600;
+    border: 1px solid var(--line-3);
+    background: var(--bg-3); color: var(--text-0);
+  }
+  .csr-btn.primary { background: var(--amber); border-color: var(--amber); color: #000; }
+  .csr-btn.primary:hover { background: #f3b25c; }
+
+  /* Crew cards */
+  .cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .cc-card {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    padding: 14px;
+  }
+  .cc-card.break { opacity: 0.7; }
+  .cc-card-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .cc-card-head .av {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--bg-4); border: 1px solid var(--line-3);
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cc-card-head .av.chief { border-color: var(--amber); color: var(--amber); }
+  .cc-card-head .name { font-weight: 600; font-size: 13px; }
+  .cc-card-head .role { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .cc-card-stat {
+    margin-left: auto;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 7px; border-radius: 3px; font-weight: 600;
+  }
+  .cc-card-stat.active { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-d); }
+  .cc-card-stat.break { background: var(--bg-3); color: var(--text-2); }
+  .cc-card-body { font-family: var(--mono); font-size: 10px; color: var(--text-2); line-height: 1.6; }
+  .cc-card-body .v { color: var(--text-1); }
+
+  /* Recovery banner */
+  .recov-banner {
+    padding: 14px 18px; background: linear-gradient(90deg, var(--red-bg), transparent);
+    border: 1px solid var(--red-d); border-radius: 4px;
+    display: flex; align-items: center; gap: 16px; margin-bottom: 16px;
+  }
+  .recov-banner .cat { font-family: var(--mono); font-size: 11px; color: var(--red); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .recov-banner .title { font-size: 15px; font-weight: 700; }
+  .recov-banner .clock { margin-left: auto; font-family: var(--mono); font-size: 13px; color: var(--text-0); font-variant-numeric: tabular-nums; }
+
+  /* Ack panel */
+  .ack-section {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;
+    padding: 16px 18px; margin-bottom: 12px;
+  }
+  .ack-section h3 { font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 14px; }
+  .ack-item {
+    padding: 10px 12px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 3px;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 12px; align-items: center; margin-bottom: 6px;
+  }
+  .ack-item.pending { border-left: 3px solid var(--amber); }
+  .ack-item .label { font-size: 12px; }
+  .ack-item .label .sub { font-family: var(--mono); font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-top: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+    <nav class="role-nav">
+    <a href="zone.html"><span class="ic">▣</span>Zone</a>
+    <a href="queue.html"><span class="ic">↦</span>Queue</a>
+    <a href="recovery.html" class="active"><span class="ic">↻</span>Recov</a>
+    <a href="../replay/replay.html"><span class="ic">▶</span>Replay</a>
+  </nav>
+  <div class="main">
+    <div class="chief-head">
+      <div class="chief-zone">Recovery &amp; Support <span class="sub">CHIEF KENWORTH · ZONE B</span></div>
+      <div class="tabs-row">
+        <button class="tab-btn active" data-tab="recovery">Recovery</button>
+        <button class="tab-btn" data-tab="support">Support <span class="b">4</span></button>
+        <button class="tab-btn" data-tab="crew">Crew</button>
+        <button class="tab-btn" data-tab="ack">Acks</button>
+        <button class="tab-btn" data-tab="feed">Feed</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <!-- RECOVERY TAB -->
+      <div class="tab-page active" data-tab="recovery">
+        <div class="recov-banner">
+          <span class="cat">EQ FAILURE · CASCADE</span>
+          <span class="title">Gate B7 · N401UA · INC-0142</span>
+          <span class="clock" id="recovClock">08:14</span>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 280px; gap: 16px;">
+          <div>
+            <h3 style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 12px;">Action Board</h3>
+            <div id="recovActions"></div>
+          </div>
+          <div>
+            <h3 style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 12px;">Add Action</h3>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <button class="act-btn" onclick="proposeAction('Request crew from Zone A')">+ Crew from adj zone</button>
+              <button class="act-btn" onclick="proposeAction('Replace belt loader')">+ Replace equipment</button>
+              <button class="act-btn" onclick="proposeAction('Hold push 6 min')">+ Hold push</button>
+              <button class="act-btn" onclick="proposeAction('Verify connecting bag transfer')">+ Verify bags</button>
+              <button class="act-btn danger" onclick="proposeAction('Escalate to Manager Reese')">+ Escalate</button>
+            </div>
+            <div style="margin-top: 18px;">
+              <h3 style="font-family: var(--mono); font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 12px;">Affected</h3>
+              <div style="display:flex; gap: 6px; flex-wrap: wrap;">
+                <span style="background: var(--red-bg); color: var(--red); border: 1px solid var(--red-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px;">B7 ORIGIN</span>
+                <span style="background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px;">B8</span>
+                <span style="background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-d); padding: 5px 9px; border-radius: 3px; font-family: var(--mono); font-size: 11px;">B9</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUPPORT TAB -->
+      <div class="tab-page" data-tab="support">
+        <div id="chiefSupList"></div>
+      </div>
+
+      <!-- CREW TAB -->
+      <div class="tab-page" data-tab="crew">
+        <div class="cc-grid" id="chiefCrew"></div>
+      </div>
+
+      <!-- ACK TAB -->
+      <div class="tab-page" data-tab="ack">
+        <div class="ack-section">
+          <h3>Pending My Acknowledgment · 3</h3>
+          <div class="ack-item pending"><div class="label">Hold push UA1842 6 min<span class="sub">REQUESTED BY DISPATCH · 19s AGO</span></div><button class="csr-btn primary" onclick="ackItem(this)">ACK</button></div>
+          <div class="ack-item pending"><div class="label">Reassign Crew 7 to B7<span class="sub">PROPOSED BY KENWORTH · 42s AGO</span></div><button class="csr-btn primary" onclick="ackItem(this)">ACK</button></div>
+          <div class="ack-item pending"><div class="label">Manager Reese added as participant<span class="sub">RECOVERY · INC-0142</span></div><button class="csr-btn primary" onclick="ackItem(this)">ACK</button></div>
+        </div>
+        <div class="ack-section">
+          <h3>Sent · Awaiting Response · 2</h3>
+          <div class="ack-item"><div class="label">Request 2 loaders from Zone A<span class="sub">SENT TO CHIEF MORALES · 1m AGO</span></div><span style="color: var(--amber); font-family: var(--mono); font-size: 10px;">PENDING</span></div>
+          <div class="ack-item"><div class="label">Belt loader replacement ready?<span class="sub">SENT TO PARK,R · 38s AGO</span></div><span style="color: var(--blue); font-family: var(--mono); font-size: 10px;">EN ROUTE</span></div>
+        </div>
+        <div class="ack-section">
+          <h3>Recent Acks Received · 5</h3>
+          <div class="ack-item"><div class="label">Dispatch hold authorized<span class="sub">DISPATCH · 14:19:08</span></div><span style="color: var(--green); font-family: var(--mono); font-size: 10px;">✓ ACK</span></div>
+          <div class="ack-item"><div class="label">Manager notified · cascade risk<span class="sub">REESE,L · 14:20:11</span></div><span style="color: var(--green); font-family: var(--mono); font-size: 10px;">✓ ACK</span></div>
+        </div>
+      </div>
+
+      <!-- FEED TAB -->
+      <div class="tab-page" data-tab="feed">
+        <div style="background: var(--bg-1); border: 1px solid var(--line); border-radius: 4px;">
+          <div id="chiefFeed"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('chief');
+let state = RampIQ.data.state;
+const incId = 'INC-0142';
+
+// ===== tab switching =====
+document.querySelectorAll('.tab-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    const t = b.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.toggle('active', p.dataset.tab === t));
+  });
+});
+
+// ===== recovery actions =====
+function renderActions() {
+  const acts = state.recoveryActions.filter(a => a.incId === incId);
+  document.getElementById('recovActions').innerHTML = acts.map(a => `
+    <div class="act-card ${a.status}">
+      <div class="act-head"><span class="act-title">${a.title}</span><span class="act-status ${a.status}">${a.status}</span></div>
+      <div class="act-meta">
+        <span>ASSIGNED <span class="v">${a.assigned}</span></span>
+        <span>ETA <span class="v">${a.eta}</span></span>
+        <span>${a.ts}</span>
+      </div>
+      <div class="act-btns">
+        ${a.status === 'proposed' ? `<button class="act-btn primary" onclick="acknowledgeAction(${a.id})">ACK</button>` : ''}
+        ${a.status === 'ackd' ? `<button class="act-btn primary" onclick="startAction(${a.id})">START</button>` : ''}
+        ${a.status === 'inprog' ? `<button class="act-btn primary" onclick="completeAction(${a.id})">COMPLETE</button>` : ''}
+        ${a.status === 'done' ? `<span style="color: var(--green); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;">✓ RESOLVED</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function acknowledgeAction(id) {
+  RampIQ.data.update(s => { const a = s.recoveryActions.find(x => x.id === id); if (a) { a.status = 'ackd'; a.ts = RampIQ.events.nowStr(); } });
+  state = RampIQ.data.state;
+  RampIQ.events.actionAcknowledged(state.recoveryActions.find(x=>x.id===id).title, incId, 'CHIEF');
+  RampIQ.ui.showToast('Action acknowledged', 'success');
+  renderActions();
+}
+function startAction(id) {
+  RampIQ.data.update(s => { const a = s.recoveryActions.find(x => x.id === id); if (a) { a.status = 'inprog'; a.ts = RampIQ.events.nowStr(); } });
+  state = RampIQ.data.state;
+  renderActions();
+}
+function completeAction(id) {
+  RampIQ.data.update(s => { const a = s.recoveryActions.find(x => x.id === id); if (a) { a.status = 'done'; a.ts = RampIQ.events.nowStr(); } });
+  state = RampIQ.data.state;
+  const a = state.recoveryActions.find(x => x.id === id);
+  RampIQ.events.actionCompleted(a.title, incId, a.assigned);
+  RampIQ.ui.showToast('Action complete · event sent', 'success');
+  renderActions();
+}
+function proposeAction(title) {
+  const newId = Date.now();
+  RampIQ.data.update(s => s.recoveryActions.push({ id:newId, incId, title, status:'proposed', assigned:'unassigned', eta:'—', ts:RampIQ.events.nowStr() }));
+  state = RampIQ.data.state;
+  RampIQ.events.actionProposed(title, incId, 'CHIEF');
+  RampIQ.ui.showToast('Action proposed', 'success');
+  renderActions();
+}
+window.acknowledgeAction = acknowledgeAction;
+window.startAction = startAction;
+window.completeAction = completeAction;
+window.proposeAction = proposeAction;
+
+// ===== support =====
+function renderSupport() {
+  const items = state.support.filter(s => s.zone === 'B' && s.status !== 'resolved');
+  document.getElementById('chiefSupList').innerHTML = items.map(s => `
+    <div class="chief-sup-row ${s.type === 'crit' ? 'urgent' : ''}">
+      <div class="csr-info">
+        <div class="head">
+          <span class="cat ${s.type}">${s.cat}</span>
+          <span class="age">${s.age} AGO</span>
+        </div>
+        <div class="where">${s.where} · ${s.detail}</div>
+        <div class="from">FROM: ${s.from}</div>
+      </div>
+      <div class="csr-actions">
+        <button class="csr-btn primary" onclick="ackSupport('${s.id}', this)">ACK</button>
+        <button class="csr-btn" onclick="reassignSupport('${s.id}')">REASSIGN</button>
+        <button class="csr-btn" onclick="resolveSupport('${s.id}', this)">RESOLVE</button>
+      </div>
+    </div>
+  `).join('');
+}
+function ackSupport(id, btn) {
+  RampIQ.data.update(s => { const x = s.support.find(y => y.id === id); if (x) x.status = 'ack'; });
+  state = RampIQ.data.state;
+  RampIQ.events.supportAcknowledged(id, '2m', 'KENWORTH,T');
+  RampIQ.ui.showToast('Support acknowledged', 'success');
+  btn.textContent = '✓ ACK';
+  btn.disabled = true;
+}
+function reassignSupport(id) { RampIQ.ui.showToast('Reassign picker · (mock)'); }
+function resolveSupport(id, btn) {
+  RampIQ.data.update(s => { const x = s.support.find(y => y.id === id); if (x) x.status = 'resolved'; });
+  state = RampIQ.data.state;
+  RampIQ.events.supportResolved(id, 'KENWORTH,T');
+  RampIQ.ui.showToast('Support resolved · event sent', 'success');
+  setTimeout(renderSupport, 500);
+}
+window.ackSupport = ackSupport;
+window.reassignSupport = reassignSupport;
+window.resolveSupport = resolveSupport;
+
+// ===== crew =====
+function renderCrew() {
+  const crew = state.crew.filter(c => c.zone === 'B');
+  document.getElementById('chiefCrew').innerHTML = crew.map(c => {
+    const initials = c.name.split(/\s+/).map(s => s[0]).join('').slice(0, 2);
+    return `
+      <div class="cc-card ${c.status === 'break' ? 'break' : ''}">
+        <div class="cc-card-head">
+          <div class="av ${c.role === 'Chief' ? 'chief' : ''}">${initials}</div>
+          <div>
+            <div class="name">${c.name}</div>
+            <div class="role">${c.role}</div>
+          </div>
+          <span class="cc-card-stat ${c.status === 'break' ? 'break' : 'active'}">${c.status === 'break' ? 'BREAK' : 'ACTIVE'}</span>
+        </div>
+        <div class="cc-card-body">
+          <div>POS: <span class="v">${c.pos}</span></div>
+          <div>LAST EVT: <span class="v">${c.lastEvt}</span></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== feed =====
+function renderFeed() {
+  const stream = RampIQ.events.stream().slice(0, 30);
+  document.getElementById('chiefFeed').innerHTML = stream.map(e => `
+    <div class="event-row">
+      <div class="ev-time">${e[0]}</div>
+      <div class="ev-type ${e[2]}">${e[1]}</div>
+      <div class="ev-msg">${e[3]}</div>
+      <div class="ev-where">${e[4]}</div>
+      <div class="ev-who">${e[5]}</div>
+    </div>
+  `).join('');
+}
+
+// ===== ack item interaction =====
+function ackItem(btn) {
+  const card = btn.closest('.ack-item');
+  btn.textContent = '✓';
+  btn.disabled = true;
+  card.style.borderLeftColor = 'var(--green)';
+  card.style.opacity = '0.6';
+  RampIQ.ui.showToast('Acknowledged', 'success');
+}
+window.ackItem = ackItem;
+
+// ===== tick recovery clock =====
+let recovSec = 8*60 + 14;
+setInterval(() => {
+  recovSec++;
+  const m = Math.floor(recovSec / 60), s = recovSec % 60;
+  const el = document.getElementById('recovClock');
+  if (el) el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}, 1000);
+
+RampIQ.events.onEvent(() => renderFeed());
+
+renderActions();
+renderSupport();
+renderCrew();
+renderFeed();
+</script>
+</body>
+</html>

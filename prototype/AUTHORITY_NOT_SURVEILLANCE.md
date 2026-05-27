@@ -1,6 +1,6 @@
 # AUTHORITY_NOT_SURVEILLANCE
 
-## Permanent Architectural Doctrine — RampIQ
+## Permanent Architectural Doctrine — SOI
 
 This document defines the governance boundary between operational coordination
 and workforce surveillance. It is not a style guide. It is an architectural
@@ -11,7 +11,7 @@ derivation function in the platform.
 
 ## Core Principle
 
-RampIQ is **operational coordination software**, not workforce evaluation software.
+SOI is **operational coordination software**, not workforce evaluation software.
 
 The system exists to help coordinators manage operational pressure. It does NOT
 exist to rank, score, or evaluate individual operators.
@@ -88,7 +88,7 @@ operational condition, not evaluate the person.
 
 ## 5. Explicit Non-Goals
 
-RampIQ is **NOT**:
+SOI is **NOT**:
 - HR software
 - performance evaluation software
 - labor analytics software
@@ -144,10 +144,10 @@ When recommendations exist:
 
 ## 6. Trust Test
 
-RampIQ succeeds if operators feel:
+SOI succeeds if operators feel:
 > "This system helps coordination."
 
-RampIQ fails if operators feel:
+SOI fails if operators feel:
 > "This system evaluates me."
 
 Every feature, every insight, every surface must pass this test.

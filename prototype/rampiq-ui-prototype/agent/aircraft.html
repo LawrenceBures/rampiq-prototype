@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RampIQ · Agent · Aircraft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/styles.css">
+<link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<div class="app agent-app">
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-status"><span>14:23</span><span class="right">● ● ●</span></div>
+
+    <div class="agent-head">
+      <div class="agent-head-lbl">Aircraft Detail</div>
+      <div class="agent-assignment"><span class="gate">B14</span> · N728UA</div>
+      <div class="agent-sub">
+        <span>UA 1408 → SEA</span>
+        <span class="countdown crit">−9m to push</span>
+      </div>
+    </div>
+
+    <div class="agent-body" style="padding: 0;">
+      <div style="padding: 14px 18px 4px;">
+        <div class="agent-head-lbl">Service Checklist · 5 of 9 done</div>
+      </div>
+      <div style="padding: 0 18px 18px;" id="svcList">
+        <div class="svc-row-m"><div class="svc-check-m done"></div><div class="svc-name-m done">On-position confirmed</div><div class="svc-meta-m">14:09</div></div>
+        <div class="svc-row-m"><div class="svc-check-m done"></div><div class="svc-name-m done">Bag offload</div><div class="svc-meta-m">14:11</div></div>
+        <div class="svc-row-m"><div class="svc-check-m done"></div><div class="svc-name-m done">Cabin clean</div><div class="svc-meta-m">14:14</div></div>
+        <div class="svc-row-m"><div class="svc-check-m done"></div><div class="svc-name-m done">Catering loaded</div><div class="svc-meta-m">14:14</div></div>
+        <div class="svc-row-m"><div class="svc-check-m done"></div><div class="svc-name-m done">Lav serviced</div><div class="svc-meta-m">14:18</div></div>
+        <div class="svc-row-m" onclick="toggleSvc(this, 'Bag load complete')" style="cursor: pointer;"><div class="svc-check-m progress"></div><div class="svc-name-m">Bag load (142/156)</div><div class="svc-meta-m">TAP</div></div>
+        <div class="svc-row-m" onclick="toggleSvc(this, 'Fuel verify')"><div class="svc-check-m"></div><div class="svc-name-m">Fuel verify</div><div class="svc-meta-m">PENDING</div></div>
+        <div class="svc-row-m" onclick="toggleSvc(this, 'Doors closed')"><div class="svc-check-m"></div><div class="svc-name-m">Doors closed</div><div class="svc-meta-m">PENDING</div></div>
+        <div class="svc-row-m" onclick="toggleSvc(this, 'Push approved')"><div class="svc-check-m"></div><div class="svc-name-m">Push approved</div><div class="svc-meta-m">PENDING</div></div>
+      </div>
+    </div>
+
+    <div class="agent-tabs">
+      <a href="now.html" class="agent-tab"><span class="ico">●</span>Now</a>
+      <a href="aircraft.html" class="agent-tab active"><span class="ico">✈</span>Aircraft</a>
+      <a href="scan.html" class="agent-tab"><span class="ico">⊞</span>Scan</a>
+      <a href="../crew-chief/zone.html" class="agent-tab"><span class="ico">◊</span>Team</a>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/mock-data.js"></script>
+<script src="../shared/events.js"></script>
+<script src="../shared/interactions.js"></script>
+<script>
+RampIQ.ui.init('agent');
+
+function toggleSvc(row, service) {
+  const check = row.querySelector('.svc-check-m');
+  const name = row.querySelector('.svc-name-m');
+  const meta = row.querySelector('.svc-meta-m');
+  if (check.classList.contains('done')) return;
+  check.classList.remove('progress');
+  check.classList.add('done');
+  name.classList.add('done');
+  meta.textContent = RampIQ.events.nowStr().slice(0,5);
+  RampIQ.events.serviceConfirmed(service, 'B14', 'N728UA', 'ALVAREZ,M');
+  RampIQ.ui.showToast('Service confirmed · ' + service, 'success');
+}
+window.toggleSvc = toggleSvc;
+</script>
+</body>
+</html>

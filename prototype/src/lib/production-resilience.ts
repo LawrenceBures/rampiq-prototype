@@ -1,4 +1,4 @@
-// RampIQ — Production Resilience Layer
+// SOI — Production Resilience Layer
 // Phase 17: Durability under degraded conditions.
 //
 // RULES:

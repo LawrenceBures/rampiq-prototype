@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>System Boundary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>/* RampIQ document stylesheet — PDF print version */
+/* Adapts the dark operational console aesthetic to a print-optimized format */
+/* while preserving the JetBrains Mono / Inter Tight / Instrument Serif typographic identity */
+
+@page {
+  size: letter;
+  margin: 0.7in 0.8in 0.9in 0.8in;
+  @bottom-left {
+    content: "RampIQ · " counter(page) " / " counter(pages);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  @bottom-right {
+    content: string(doctitle);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #6b7585;
+    letter-spacing: 0.08em;
+  }
+  @top-right {
+    content: "v1.0 · pre-pilot";
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: #aab3c0;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+}
+
+@page :first {
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+  @top-right { content: none; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  font-family: 'Inter Tight', 'Helvetica Neue', sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1a1f29;
+  background: #ffffff;
+}
+
+body {
+  string-set: doctitle attr(data-title);
+}
+
+/* COVER PAGE */
+.cover {
+  page-break-after: always;
+  height: 9.5in;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5in 0.2in 0.4in;
+  position: relative;
+  background:
+    linear-gradient(135deg, #0a0d12 0%, #141922 100%);
+  color: #e8ecf2;
+  margin: -0.7in -0.8in -0.9in -0.8in;
+}
+
+.cover-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #2a3442;
+  margin-bottom: 60px;
+}
+
+.cover-mark {
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid #c9ff3a;
+  position: relative;
+  flex-shrink: 0;
+}
+.cover-mark::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid #c9ff3a;
+  opacity: 0.55;
+}
+.cover-mark::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #c9ff3a;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.cover-brand {
+  font-size: 22pt;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #e8ecf2;
+}
+.cover-brand .iq { color: #c9ff3a; }
+
+.cover-tag {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  border: 1px solid rgba(201, 255, 58, 0.4);
+  padding: 6px 10px;
+}
+
+.cover-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #c9ff3a;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cover-eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: #c9ff3a;
+}
+
+.cover-title {
+  font-size: 38pt;
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: #e8ecf2;
+  margin-bottom: 14px;
+  max-width: 6in;
+}
+.cover-title em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+  color: #c9ff3a;
+}
+
+.cover-sub {
+  font-size: 13pt;
+  color: #aab3c0;
+  font-weight: 300;
+  line-height: 1.5;
+  max-width: 5.4in;
+  margin-bottom: 50px;
+}
+
+.cover-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px 36px;
+  margin-top: auto;
+  padding: 24px 0 0;
+  border-top: 1px solid #2a3442;
+}
+.cover-meta-l {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 6px;
+}
+.cover-meta-v {
+  font-size: 11pt;
+  color: #e8ecf2;
+  font-weight: 500;
+}
+.cover-meta-v b { color: #c9ff3a; font-weight: 600; }
+
+.cover-foot {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #454e5d;
+  text-align: center;
+  margin-top: 30px;
+}
+
+/* HEADINGS */
+h1 {
+  font-size: 24pt;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0d12;
+  margin-top: 0;
+  margin-bottom: 14px;
+  page-break-after: avoid;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: #0a0d12;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #1a1f29;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #0a0d12;
+  margin-top: 22px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h2:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+/* PROSE */
+p {
+  margin: 0 0 11pt 0;
+  text-align: left;
+  hyphens: none;
+}
+
+strong, b {
+  font-weight: 600;
+  color: #0a0d12;
+}
+
+em, i {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* LISTS */
+ul, ol {
+  margin: 0 0 14pt 0;
+  padding-left: 18pt;
+}
+
+ul li {
+  margin-bottom: 5pt;
+  list-style: none;
+  position: relative;
+  padding-left: 12pt;
+}
+
+ul li::before {
+  content: '·';
+  position: absolute;
+  left: 0;
+  color: #c9ff3a;
+  font-weight: 700;
+  font-size: 14pt;
+  line-height: 1;
+  top: 1pt;
+}
+
+ol li {
+  margin-bottom: 5pt;
+}
+
+li > strong:first-child {
+  color: #0a0d12;
+}
+
+/* TABLES */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14pt 0 18pt;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+
+th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  text-align: left;
+  padding: 8pt 10pt;
+  border-bottom: 1.5pt solid #1a1f29;
+  vertical-align: bottom;
+}
+
+td {
+  padding: 8pt 10pt;
+  border-bottom: 0.5pt solid #cad0d9;
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: 1.5pt solid #1a1f29; }
+
+td.mono, th.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+}
+
+/* HORIZONTAL RULE */
+hr {
+  border: none;
+  border-top: 1px solid #1a1f29;
+  margin: 24pt 0;
+}
+
+/* SECTION DIVIDER */
+.section-divider {
+  margin: 30pt 0 24pt;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #6b7585;
+  padding: 8pt 0;
+  border-top: 1px solid #1a1f29;
+  border-bottom: 1px solid #1a1f29;
+}
+
+/* PULL QUOTES / CALLOUTS */
+.callout {
+  background: #f4f6fa;
+  border-left: 3px solid #c9ff3a;
+  padding: 14pt 18pt;
+  margin: 16pt 0;
+  font-size: 10pt;
+}
+
+.callout em {
+  color: #2a3442;
+}
+
+/* EYEBROW */
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  font-weight: 600;
+  margin-bottom: 6pt;
+}
+
+/* CODE / mono inline */
+code, .mono-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 1pt 5pt;
+  border-radius: 2pt;
+  color: #2a3442;
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  background: #f4f6fa;
+  padding: 12pt 14pt;
+  border-left: 2pt solid #1a1f29;
+  margin: 12pt 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* CLOSING SIGNATURE PARA */
+.signature {
+  margin-top: 30pt;
+  padding-top: 18pt;
+  border-top: 1px solid #1a1f29;
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 11pt;
+  color: #2a3442;
+  text-align: left;
+}
+
+/* PAGE BREAK HELPERS */
+.page-break { page-break-before: always; }
+table { page-break-inside: avoid; }
+h2, h3 { page-break-after: avoid; }
+
+/* TABLE OF CONTENTS */
+.toc {
+  margin: 24pt 0 32pt;
+}
+.toc-h {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6b7585;
+  margin-bottom: 12pt;
+}
+.toc ol {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: toc-counter;
+}
+.toc li {
+  counter-increment: toc-counter;
+  display: flex;
+  align-items: baseline;
+  padding: 6pt 0;
+  border-bottom: 0.5pt dotted #cad0d9;
+  font-size: 11pt;
+}
+.toc li::before {
+  content: counter(toc-counter, decimal-leading-zero);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9pt;
+  color: #c9ff3a;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-right: 14pt;
+  min-width: 24pt;
+}
+
+/* TIER LABELS in dependency map */
+.tier-label {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3pt 7pt;
+  margin-right: 6pt;
+}
+.tier-label.t1 { background: #1a1f29; color: #c9ff3a; }
+.tier-label.t2 { background: #f4f6fa; color: #2a3442; border: 1px solid #1a1f29; }
+.tier-label.t3 { background: transparent; color: #6b7585; border: 1px dashed #6b7585; }
+
+/* REALITY pills */
+.reality {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2pt 6pt;
+  margin-left: 4pt;
+}
+.reality.mature { color: #1f6b4d; border: 1px solid #1f6b4d; }
+.reality.variable { color: #7a5512; border: 1px solid #7a5512; }
+.reality.gap { color: #7a1f1f; border: 1px solid #7a1f1f; }
+</style>
+</head>
+<body data-title="System Boundary">
+
+<div class="cover">
+  <div class="cover-header">
+    <div class="cover-mark"></div>
+    <div class="cover-brand">Ramp<span class="iq">IQ</span></div>
+    <div class="cover-tag">DOC 01 · BOUNDARY</div>
+  </div>
+
+  <div class="cover-eyebrow">Phase 4 · Pre-Pilot · Internal & Pilot-Audience</div>
+  <h1 class="cover-title">System <em>Boundary</em><br/>Document</h1>
+  <p class="cover-sub">What RampIQ is, what it does, what it does not do, and what assumptions must hold for it to operate. Read this before any integration discussion.</p>
+
+  <div class="cover-meta-grid">
+    <div>
+      <div class="cover-meta-l">Audience</div>
+      <div class="cover-meta-v">Pilot leadership · IT integration · ramp leadership</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Status</div>
+      <div class="cover-meta-v"><b>Pre-pilot</b> · scope-locking</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Version</div>
+      <div class="cover-meta-v">1.0 · May 2026</div>
+    </div>
+    <div>
+      <div class="cover-meta-l">Companion docs</div>
+      <div class="cover-meta-v">System Boundary · Data Map</div>
+    </div>
+  </div>
+
+  <div class="cover-foot">RampIQ · Operational intelligence for ramp · Confidential</div>
+</div>
+
+<h1>RampIQ · System Boundary Document</h1>
+<p class="signature"><strong>Version 1.0 · Phase 4 · Pre-Pilot</strong></p>
+<p><strong>Audience:</strong> Pilot airline operations leadership, IT integration teams, ramp leadership</p>
+<hr/>
+<h2>Purpose of this document</h2>
+<p>This document defines what RampIQ is, what it does, what it does not do, and what assumptions must hold for it to operate. It exists to lock scope before integration discussions begin and to give an operations leader a clear picture of the risk surface they are taking on.</p>
+<p>If you are evaluating RampIQ for pilot deployment, this is the document to read first. Every other RampIQ document — integration spec, simulation results, pricing — is downstream of what is decided here.</p>
+<hr/>
+<h2>What RampIQ is</h2>
+<p>RampIQ is a <strong>decision-support platform for airline ramp operations</strong>. It runs alongside existing dispatch and ground-handling systems, ingests their data, and produces structured operational intelligence for ramp leadership and ground crews.</p>
+<p>It is not a system of record. It does not replace the AODB, the crew management system, or the BHS. It is a layer of inference and recommendation that sits on top of existing infrastructure.</p>
+<p>The platform produces six classes of output:</p>
+<p>1. <strong>Flight risk scores.</strong> A 0-100 difficulty rating per turnaround, computed from bag load, turn-time pressure, equipment requirements, upstream delay, and weather.</p>
+<p>2. <strong>Team suitability rankings.</strong> For any flight, a ranked list of available crews with explainability for each ranking.</p>
+<p>3. <strong>Assignment recommendations.</strong> For unassigned or reassignment-candidate flights, a ranked set of options with confidence scores and dependency analysis.</p>
+<p>4. <strong>Delay predictions.</strong> Probability of on-time departure, predicted single largest contributor, and forecast slip in minutes.</p>
+<p>5. <strong>Equipment shortage alerts.</strong> Forward-looking forecasts of where equipment supply will fall below demand within a 90-minute horizon.</p>
+<p>6. <strong>Recovery simulations.</strong> During disruption events, a small set of intervention paths with simulated outcomes and tradeoffs.</p>
+<p>These outputs are surfaced through three interfaces: a desktop console for ramp leadership, a mobile companion app for managers, and a separate mobile app for ground crew members.</p>
+<hr/>
+<h2>What RampIQ is not</h2>
+<p>RampIQ does not control aircraft. It does not communicate with the FAA NAS, ATC, or any FAA system. It does not generate or modify flight plans. It does not transmit operational directives to flight crew. It does not interface with airworthiness, weight and balance, or maintenance certification systems beyond reading scheduled maintenance windows.</p>
+<p>RampIQ does not replace human judgment. Every recommendation is presented as a recommendation, not a directive. A ramp lead can override any recommendation. The system logs overrides as training signal but never escalates against operator decisions.</p>
+<p>RampIQ does not autonomously act. It does not move equipment, dispatch crews, modify gate assignments, or change flight times without explicit human confirmation in the interface. The system can pre-stage actions for one-tap execution but the action requires a human tap.</p>
+<p>RampIQ does not handle passenger data. No PNR, no passenger names, no seat assignments, no special-services data. The only passenger-related figure RampIQ ingests is total passenger count per flight, used in cascade impact estimation.</p>
+<p>RampIQ does not provide HR-grade performance evaluation. The crew-side mobile app surfaces operational competencies for each agent's own benefit and career progression. It does not compute performance ratings used in disciplinary, compensation, or retention decisions. This is a deliberate political and ethical boundary, discussed in the worker-experience section below.</p>
+<p>RampIQ does not require crew GPS tracking. Crew location is inferred from current flight assignment and last-known gate. Real-time GPS or BLE tracking is supported as an optional enhancement where available, but is never a deployment dependency.</p>
+<hr/>
+<h2>What RampIQ requires from the airline</h2>
+<p>Three integration tiers, in increasing order of capability.</p>
+<h3>Tier 1 — Minimum viable deployment (read-only)</h3>
+<p>The smallest data footprint that allows RampIQ to operate with measurable lift.</p>
+<ul>
+<li><strong>Flight schedule feed.</strong> Scheduled and current flight data for the operating station: tail, route, gate, scheduled and estimated times, aircraft type. Standard formats accepted: AODB feed, SITA Type-B, ARINC AIM, or proprietary REST. Update interval: 60 seconds or better.</li>
+<li><strong>Crew assignment data.</strong> Current shift roster, team composition, base assignments, and active flight assignments. Source: airline's crew management system (CrewTrac, FOS, ARC, or proprietary). Update interval: 5 minutes or better.</li>
+<li><strong>Crew certifications.</strong> Per-crew-member certification records: pushback, heavy-load, hazmat class, deicing, wide-body authorization, and any airline-specific qualifications. Source: training/qualifications system. Update interval: 24 hours acceptable.</li>
+<li><strong>Bag count per flight.</strong> Forecasted and actual checked bag count per flight. Source: BHS feed, departure control system (Altea DCS, SabreSonic, or proprietary), or manual override entry. Update interval: 10 minutes acceptable for forecast, 60 seconds for actual.</li>
+</ul>
+<p>With Tier 1 data, RampIQ produces flight risk scoring, team suitability rankings, assignment recommendations, and basic delay prediction. Equipment forecasting and crew mobility features are limited or unavailable.</p>
+<h3>Tier 2 — Enhanced deployment (adds equipment visibility)</h3>
+<p>Adds operational depth around equipment and physical operations.</p>
+<ul>
+<li><strong>Equipment location and state.</strong> Either real-time BLE/GPS tracking, or polled state from the airline's GSE management system, or scheduled-state inference from depot check-in/check-out logs. Update interval: 60 seconds for RTLS, 5 minutes for inference.</li>
+<li><strong>Equipment maintenance schedules.</strong> Service intervals, in-shop windows, and known faults. Source: maintenance system or manual entry.</li>
+<li><strong>Gate occupancy and turnaround events.</strong> Block-on, block-off, door-open, door-close, ground-power-on, ground-power-off events. Source: AODB or ACARS integration.</li>
+</ul>
+<p>With Tier 2 data, the equipment intelligence layer becomes operational, including shortage forecasting, cross-depot rebalancing recommendations, and the recovery-simulation features that depend on equipment positioning.</p>
+<h3>Tier 3 — Full deployment (adds environmental and crew-mobility data)</h3>
+<p>Adds the predictive layer needed for full IRROPS mode and crew mobility intelligence.</p>
+<ul>
+<li><strong>Weather feed.</strong> METAR, TAF, and convective forecasts for the station and surrounding airspace. Source: NOAA, Schneider, FlightAware, or similar third-party weather provider. Update interval: 5 minutes.</li>
+<li><strong>ATC ground-stop and EDCT data.</strong> FAA ASDI feed or commercial equivalent. Source: FlightAware Firehose, Cirium, or similar.</li>
+<li><strong>Crew location signal (optional).</strong> Either BLE tag positioning, phone-based assignment-confirmation pings, or vehicle-mounted GPS. This is optional and may be politically constrained at certain stations. RampIQ does not require it. Where present, it improves crew-mobility visualizations.</li>
+</ul>
+<p>With Tier 3 data, IRROPS mode becomes fully autonomous, crew mobility intelligence is fully active, and recovery simulations achieve their highest accuracy.</p>
+<hr/>
+<h2>What the airline does not need to give RampIQ</h2>
+<p>To preempt common questions and concerns from IT and operations leadership.</p>
+<ul>
+<li>No passenger data. Names, PNRs, special-services indicators, frequent-flyer status, and seat maps are not required and not requested.</li>
+<li>No payment, billing, or financial data.</li>
+<li>No safety reporting data (ASAP, ASRS submissions). RampIQ does not interact with the safety reporting chain.</li>
+<li>No personnel records beyond active certifications and shift assignments. No disciplinary records, performance reviews, attendance records, or compensation data.</li>
+<li>No access to airline credentials, customer-facing systems, or revenue management.</li>
+<li>No write access to the AODB, crew system, or any system of record. RampIQ is read-only against airline systems and writes only to its own data store.</li>
+</ul>
+<hr/>
+<h2>Operational boundaries</h2>
+<h3>Geographic scope</h3>
+<p>RampIQ operates per-station. A deployment at one hub is independent from a deployment at another hub. There is no cross-station dependency in the core algorithms. Multi-station benchmarking and network-level views are available in the executive interface but require separate deployments at each participating station.</p>
+<h3>Flight scope</h3>
+<p>RampIQ models the ground-side turnaround. From block-on to block-off. Pre-arrival readiness and post-departure cleanup are out of scope. The system does not predict block-to-block flight times, en-route delays, or arrival times beyond what the existing flight schedule feed provides.</p>
+<h3>Crew scope</h3>
+<p>RampIQ tracks ramp crews — ground handlers, pushback operators, baggage handlers, cargo handlers, deicing operators, and equipment operators. It does not track flight crew (pilots, flight attendants), customer-service agents, or maintenance personnel. The system reads but does not act on flight crew schedules.</p>
+<h3>Decision scope</h3>
+<p>RampIQ recommends and forecasts. It does not decide. Every action that affects an aircraft, a crew assignment, an equipment dispatch, or a gate assignment requires explicit human confirmation in the interface. The system can stage actions for one-tap execution but the tap is required.</p>
+<hr/>
+<h2>Worker experience boundary</h2>
+<p>This section is explicit because deployment depends on it.</p>
+<p>RampIQ surfaces operational data about ramp crews. That data is structured to be useful to the crew member first, to ramp leadership second, and is never used for HR-grade performance evaluation.</p>
+<p>The operational competency model in the crew-side mobile app — the apprentice / journeyman / specialist / master tier progression, the certification roadmap, the practice metrics — is built around career growth and the unlocking of new assignment types. The framing is craft trade progression, not performance grading.</p>
+<p>Specific commitments:</p>
+<ul>
+<li><strong>No anonymous performance comparison.</strong> Crew members cannot see rankings, leaderboards, or relative performance comparisons against peers. The data shown to a crew member is their own data only.</li>
+<li><strong>No performance score that affects compensation, retention, or discipline.</strong> RampIQ produces operational competency indicators. These are not performance ratings and are not exported to systems that drive HR decisions. This is contractually committed in the deployment agreement.</li>
+<li><strong>Visibility controls.</strong> Each crew member can toggle which competency surfaces are visible to themselves, to their direct lead, and to station leadership. Default visibility is conservative.</li>
+<li><strong>Override transparency.</strong> When a recommendation involves reassigning a crew member, the affected crew member sees the recommendation in their own app and can request a swap before accepting. Recommendations are never silently executed against an individual.</li>
+<li><strong>Union review.</strong> Where a station is unionized, the worker-experience surfaces are reviewed with union representation before deployment.</li>
+</ul>
+<hr/>
+<h2>Data residency and retention</h2>
+<ul>
+<li>All operational data is stored in the airline's choice of cloud region. RampIQ does not operate a multi-tenant data plane that mixes airline data.</li>
+<li>Hot operational data is retained for 90 days. Aggregate historical data used for model improvement is retained for 24 months and is anonymized at the crew-member level after 90 days.</li>
+<li>Crew location data, where collected, is retained for 14 days, used only for operational visualizations and crew-mobility computations, and is deleted on a rolling basis.</li>
+<li>An airline can request export and deletion of all data within 30 days of contract termination. This is contractually committed.</li>
+</ul>
+<hr/>
+<h2>Failure modes and degraded operation</h2>
+<p>Three documented failure modes and the system's behavior in each.</p>
+<h3>Loss of upstream feed</h3>
+<p>If the flight schedule feed, crew system, or BHS feed is unavailable, RampIQ continues operating on its last-known state and surfaces a clear "stale data" indicator across all relevant screens. Recommendations are paused after 5 minutes of stale primary data. The operator can switch to manual override mode, where they enter critical changes by hand and the system continues to model downstream effects.</p>
+<h3>Loss of RampIQ availability</h3>
+<p>If RampIQ itself is unavailable, ramp operations continue using the airline's existing tools and procedures. RampIQ is a layer on top, not a replacement; the underlying systems remain functional. There is no scenario in which a RampIQ outage grounds the operation.</p>
+<h3>Disagreement between RampIQ and human judgment</h3>
+<p>When a ramp lead overrides a recommendation, the override is logged with reason code and outcome. After 90 days, the override log is reviewed and used to retrain weighting in the relevant algorithm. The ramp lead's authority is absolute; the system's role in disagreement is to learn, not to escalate.</p>
+<hr/>
+<h2>What RampIQ commits to in pilot deployment</h2>
+<p>These are the contractual commitments to a pilot airline.</p>
+<ul>
+<li><strong>Measurable lift target.</strong> A pilot is structured around a measurable target metric agreed in advance. Typical targets: a 5-10% reduction in tarmac delay minutes, a 2-4% reduction in turnaround time on heavy-load operations, or a documented count of cascade-events contained per shift.</li>
+<li><strong>Pilot duration.</strong> 90 days minimum, 180 days recommended. Below 90 days the system has not yet completed its first full retraining cycle and lift measurement is unreliable.</li>
+<li><strong>Single-station scope.</strong> Pilot is one hub or one spoke station. Multi-station rollout is a separate engagement after pilot results.</li>
+<li><strong>Read-only by default.</strong> No write access to airline systems is provisioned during pilot.</li>
+<li><strong>Audit trail.</strong> Every recommendation, every override, every action staged or executed is logged with timestamp, operator, and reason code. The airline receives full audit access.</li>
+<li><strong>Right of withdrawal.</strong> The airline may terminate the pilot at any time with 30 days notice. RampIQ exports all data within 30 days of termination notice.</li>
+</ul>
+<hr/>
+<h2>Out of scope for v1</h2>
+<p>Documented here so that scope discussions stay anchored.</p>
+<ul>
+<li>Multi-station coordination and network-wide optimization. Single-station deployments only in v1.</li>
+<li>Direct integration with the FAA NAS, NOTAMs system, or air-traffic control feeds beyond commercial relays.</li>
+<li>Passenger-facing communications, gate change announcements, or rebooking decisions.</li>
+<li>Cargo specialty handling beyond hazmat class indication. No live animals, no human remains, no high-value courier handling.</li>
+<li>Integration with airline revenue management or yield decisions.</li>
+<li>Predictive maintenance for ground equipment beyond reading scheduled maintenance windows.</li>
+<li>Ramp-side weather decisions (deicing fluid type, anti-icing timing). RampIQ surfaces deicing demand but does not specify procedure.</li>
+</ul>
+<hr/>
+<h2>Document version control</h2>
+<table>
+<thead><tr>
+<th>Version</th>
+<th>Date</th>
+<th>Status</th>
+<th>Notes</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>May 2026</td>
+<td>Pre-pilot</td>
+<td>Initial scope lock for pilot conversations</td>
+</tr>
+</tbody></table>
+<hr/>
+<p class="signature"><em>RampIQ is a decision-support platform. Operational decisions are made by humans. The system's job is to make those decisions easier, faster, and better-informed.</em></p>
+</body>
+</html>

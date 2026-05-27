@@ -1,4 +1,4 @@
-// RampIQ Phase 1 — Type definitions and constants.
+// SOI Phase 1 — Type definitions and constants.
 // All operational state comes from events. No hardcoded seed state.
 
 // ============================================================
