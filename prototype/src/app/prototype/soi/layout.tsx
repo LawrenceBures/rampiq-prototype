@@ -18,8 +18,8 @@ export default function SOILayout({
           <div className="rq-topbar-row">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/icons/icon-192.png" alt="SOI" style={{ width: 28, height: 28, borderRadius: 6 }} />
-            <span className="rq-brand-text">
-              SOI
+            <span className="rq-brand-text" style={{ fontSize: 11, letterSpacing: '.06em' }}>
+              Systems Operational Intelligence
             </span>
             <div className="rq-topbar-meta">
               <span>LAX</span>
