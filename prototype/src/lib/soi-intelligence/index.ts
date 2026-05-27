@@ -54,3 +54,15 @@ export {
   resolveZonePattern,
   type CommandIntent,
 } from './soi-command-parser';
+
+export {
+  answerOperationalQuestion,
+  type CopilotAnswer,
+  type OperationalContext,
+} from './operational-copilot';
+
+export {
+  routeQuestion,
+  type RoutedQuestion,
+  type QuestionIntent,
+} from './operational-question-router';

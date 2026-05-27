@@ -47,8 +47,10 @@ import {
   resolveZonePattern,
   explainInstability,
   assessOperation,
+  answerOperationalQuestion,
   type SoiRecommendation,
   type CommandIntent,
+  type CopilotAnswer,
 } from '@/lib/soi-intelligence';
 
 // ============================================================
@@ -88,6 +90,7 @@ export default function ManagerDashboard() {
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
   const [commandResponse, setCommandResponse] = useState<string[] | null>(null);
+  const [copilotAnswer, setCopilotAnswer] = useState<CopilotAnswer | null>(null);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
@@ -442,6 +445,7 @@ export default function ManagerDashboard() {
     const intent = parseCommand(raw);
     switch (intent.type) {
       case 'summarize_operation': {
+        setCopilotAnswer(null);
         setCommandResponse([
           operationalAssessment.summary,
           ...operationalAssessment.topPressureSources.slice(0, 3).map(ps => `· ${ps.description}`),
@@ -449,6 +453,7 @@ export default function ManagerDashboard() {
         break;
       }
       case 'explain_instability': {
+        setCopilotAnswer(null);
         const zoneId = resolveZonePattern(intent.target, zones);
         if (zoneId) {
           const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
@@ -459,6 +464,7 @@ export default function ManagerDashboard() {
         break;
       }
       case 'recommend_recovery': {
+        setCopilotAnswer(null);
         if (soiRecommendations.length === 0) {
           setCommandResponse(['No recovery recommendations at this time. Operation is within normal parameters.']);
         } else {
@@ -468,6 +474,7 @@ export default function ManagerDashboard() {
         break;
       }
       case 'show_zone': {
+        setCopilotAnswer(null);
         const zoneId = resolveZonePattern(intent.zonePattern, zones);
         if (zoneId) {
           setSelectedZoneId(zoneId);
@@ -478,11 +485,13 @@ export default function ManagerDashboard() {
         break;
       }
       case 'show_recommendations': {
+        setCopilotAnswer(null);
         setView('intelligence');
         setCommandResponse(null);
         break;
       }
       case 'show_cascades': {
+        setCopilotAnswer(null);
         const cascades = operationalAssessment.zoneAssessments.filter(z => z.stability === 'critical' || z.stability === 'unstable');
         if (cascades.length === 0) {
           setCommandResponse(['No active cascades detected.']);
@@ -495,12 +504,23 @@ export default function ManagerDashboard() {
         break;
       }
       case 'what_if': {
+        setCopilotAnswer(null);
         setCommandResponse([`What-if simulation: ${intent.action} → ${intent.target}. Use the intelligence panel to run detailed simulations.`]);
         setView('intelligence');
         break;
       }
-      default:
-        setCommandResponse([`Unknown command. Try: summarize, recommend recovery, why is 52E unstable, show zone 52A-C`]);
+      default: {
+        // Copilot fallback: route through operational question answering
+        setCommandResponse(null);
+        const answer = answerOperationalQuestion(raw, {
+          assessment: operationalAssessment,
+          recommendations: soiRecommendations,
+          dispatchPlan,
+          activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
+          activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
+        }, zones);
+        setCopilotAnswer(answer);
+      }
     }
     setCommandInput('');
   }
@@ -1767,6 +1787,77 @@ export default function ManagerDashboard() {
                 >
                   dismiss
                 </button>
+              </div>
+            )}
+
+            {/* Copilot answer panel */}
+            {copilotAnswer && (
+              <div style={{
+                margin: '4px 16px 0', padding: '10px 12px',
+                background: 'var(--rq-bg-1)', borderLeft: '2px solid var(--rq-blue)',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--rq-blue)' }}>
+                    SOI Copilot
+                  </span>
+                  <span style={{
+                    fontSize: 7, padding: '1px 5px',
+                    border: `1px solid ${copilotAnswer.confidence === 'high' ? 'var(--rq-green-dim)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber-dim)' : 'var(--rq-line)'}`,
+                    color: copilotAnswer.confidence === 'high' ? 'var(--rq-green)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
+                    letterSpacing: '.08em', textTransform: 'uppercase',
+                  }}>
+                    {copilotAnswer.confidence}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 4 }}>
+                  {copilotAnswer.title}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>
+                  {copilotAnswer.answer}
+                </div>
+                {copilotAnswer.bullets.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    {copilotAnswer.bullets.map((b, i) => (
+                      <div key={i} style={{ fontSize: 9, color: 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>
+                        · {b}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {copilotAnswer.assumptions.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+                      Assumptions
+                    </div>
+                    {copilotAnswer.assumptions.map((a, i) => (
+                      <div key={i} style={{ fontSize: 8, color: 'var(--rq-ink-4)', padding: '1px 0', lineHeight: 1.3, fontStyle: 'italic' }}>
+                        {a}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {copilotAnswer.recommendedNextAction && (
+                  <div style={{ fontSize: 9, color: 'var(--rq-blue)', marginBottom: 4 }}>
+                    Recommended: {copilotAnswer.recommendedNextAction}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 7, color: 'var(--rq-ink-4)' }}>
+                    {copilotAnswer.source.replace(/_/g, ' ')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCopilotAnswer(null)}
+                    style={{
+                      marginLeft: 'auto', padding: '2px 6px',
+                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                      fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
+                    }}
+                  >
+                    dismiss
+                  </button>
+                </div>
               </div>
             )}
 
