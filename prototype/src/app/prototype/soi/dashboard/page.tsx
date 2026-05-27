@@ -40,12 +40,22 @@ import type { AuthenticatedOperator } from '@/lib/auth-identity';
 import type { EscalationSignal } from '@/lib/workforce-coordination';
 import { analyzeOperationalPatterns } from '@/lib/operational-patterns';
 import type { PatternInsight, InsightCategory, PressureState } from '@/lib/operational-patterns';
+import {
+  generateRecommendations,
+  rankRecommendations,
+  parseCommand,
+  resolveZonePattern,
+  explainInstability,
+  assessOperation,
+  type SoiRecommendation,
+  type CommandIntent,
+} from '@/lib/soi-intelligence';
 
 // ============================================================
 // TYPES
 // ============================================================
 
-type View = 'feed' | 'unresolved' | 'patterns' | 'incidents';
+type View = 'feed' | 'unresolved' | 'patterns' | 'incidents' | 'intelligence';
 type FilterKey = keyof EventFilters;
 
 const EMPTY_FILTERS: EventFilters = {
@@ -74,6 +84,11 @@ export default function ManagerDashboard() {
   const prevIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+
+  // ── SOI Command Input ──
+  const [commandInput, setCommandInput] = useState('');
+  const [commandResponse, setCommandResponse] = useState<string[] | null>(null);
+  const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
 
   // ============================================================
   // REPLAY MODE
@@ -387,6 +402,13 @@ export default function ManagerDashboard() {
     zoneScopedIncidents, temporalIncidents, temporalRecoveryActions, temporalEvents, asOf
   );
 
+  // ── SOI Intelligence Core ──
+  const soiRecommendations = generateRecommendations(
+    temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf
+  );
+  const dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
+  const operationalAssessment = assessOperation(temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf);
+
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
   const currentFilterCount = countActiveFilters(filters);
@@ -401,6 +423,98 @@ export default function ManagerDashboard() {
     await updateEventStatus(eventId, status);
     refresh();
     setUpdatingId(null);
+  }
+
+  // ── SOI Command Handler ──
+  function handleCommand(raw: string) {
+    const intent = parseCommand(raw);
+    switch (intent.type) {
+      case 'summarize_operation': {
+        setCommandResponse([
+          operationalAssessment.summary,
+          ...operationalAssessment.topPressureSources.slice(0, 3).map(ps => `· ${ps.description}`),
+        ]);
+        break;
+      }
+      case 'explain_instability': {
+        const zoneId = resolveZonePattern(intent.target, zones);
+        if (zoneId) {
+          const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
+          setCommandResponse(lines);
+        } else {
+          setCommandResponse([`Could not resolve "${intent.target}" to a known zone or gate.`]);
+        }
+        break;
+      }
+      case 'recommend_recovery': {
+        if (soiRecommendations.length === 0) {
+          setCommandResponse(['No recovery recommendations at this time. Operation is within normal parameters.']);
+        } else {
+          setView('intelligence');
+          setCommandResponse(null);
+        }
+        break;
+      }
+      case 'show_zone': {
+        const zoneId = resolveZonePattern(intent.zonePattern, zones);
+        if (zoneId) {
+          setSelectedZoneId(zoneId);
+          setCommandResponse([`Focused on zone: ${zones.find(z => z.id === zoneId)?.label ?? zoneId}`]);
+        } else {
+          setCommandResponse([`Could not resolve "${intent.zonePattern}" to a known zone.`]);
+        }
+        break;
+      }
+      case 'show_recommendations': {
+        setView('intelligence');
+        setCommandResponse(null);
+        break;
+      }
+      case 'show_cascades': {
+        const cascades = operationalAssessment.zoneAssessments.filter(z => z.stability === 'critical' || z.stability === 'unstable');
+        if (cascades.length === 0) {
+          setCommandResponse(['No active cascades detected.']);
+        } else {
+          setCommandResponse([
+            `${cascades.length} zone${cascades.length > 1 ? 's' : ''} under pressure:`,
+            ...cascades.map(z => `· ${z.zoneLabel}: ${z.stability} (${z.unresolvedCount} incidents, pressure ${z.pressure}/100)`),
+          ]);
+        }
+        break;
+      }
+      case 'what_if': {
+        setCommandResponse([`What-if simulation: ${intent.action} → ${intent.target}. Use the intelligence panel to run detailed simulations.`]);
+        setView('intelligence');
+        break;
+      }
+      default:
+        setCommandResponse([`Unknown command. Try: summarize, recommend recovery, why is 52E unstable, show zone 52A-C`]);
+    }
+    setCommandInput('');
+  }
+
+  // ── Approve SOI Recommendation → create recovery action ──
+  async function handleApproveRecommendation(rec: SoiRecommendation) {
+    if (rec.sourceIncidentIds.length === 0) return;
+    setApprovingRecId(rec.id);
+    const incidentId = rec.sourceIncidentIds[0];
+    const topAction = rec.recommendedActions[0];
+    await createRecoveryAction({
+      incident_id: incidentId,
+      title: rec.title,
+      action_type: topAction?.type === 'dispatch_agent' ? 'DISPATCH'
+        : topAction?.type === 'reassign_equipment' ? 'EQUIPMENT_SWAP'
+        : topAction?.type === 'escalate_support' ? 'ESCALATION'
+        : 'OTHER',
+      severity: rec.severity === 'critical' ? 'CRITICAL' : rec.severity === 'high' ? 'HIGH' : 'MEDIUM',
+      proposed_by: operator.userId,
+      zone_id: rec.affectedZone,
+      gate_id: rec.affectedGate ?? undefined,
+      description: `SOI recommendation: ${rec.summary}`,
+    });
+    setApprovingRecId(null);
+    refreshRecovery();
+    refresh();
   }
 
   // EventCard — extracted to components/soi/EventCard.tsx
@@ -807,6 +921,192 @@ export default function ManagerDashboard() {
             </button>
           </div>
         )}
+      </>
+    );
+  }
+
+  // ============================================================
+  // INTELLIGENCE VIEW
+  // ============================================================
+
+  function renderIntelligence() {
+    const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
+
+    return (
+      <>
+        {/* Assessment banner */}
+        <div style={{
+          margin: '8px 16px', padding: '10px 12px',
+          background: operationalAssessment.globalStability === 'critical' ? 'rgba(255,92,92,.06)' :
+            operationalAssessment.globalStability === 'unstable' ? 'rgba(245,177,61,.06)' : 'var(--rq-bg-1)',
+          borderLeft: `3px solid ${operationalAssessment.globalStability === 'critical' ? 'var(--rq-red)' :
+            operationalAssessment.globalStability === 'unstable' ? 'var(--rq-amber)' :
+            operationalAssessment.globalStability === 'degrading' ? 'var(--rq-amber)' : 'var(--rq-green)'}`,
+        }}>
+          <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 4 }}>
+            SOI Assessment
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--rq-ink)', lineHeight: 1.4 }}>
+            {operationalAssessment.summary}
+          </div>
+        </div>
+
+        {/* Dispatch plan summary */}
+        {dispatchPlan.actions.length > 0 && (
+          <div style={{ margin: '0 16px 4px', ...mono, fontSize: 8, color: 'var(--rq-ink-3)', letterSpacing: '.06em' }}>
+            {dispatchPlan.summary} &middot; est. {dispatchPlan.totalEstimatedMinutes}m total stabilization
+          </div>
+        )}
+
+        {/* Recommendations */}
+        {dispatchPlan.actions.length === 0 && (
+          <div className="rq-quiet" style={{ padding: '24px 16px', fontSize: 11 }}>
+            No recovery recommendations at this time. Operation is within normal parameters.
+          </div>
+        )}
+
+        {dispatchPlan.actions.map(({ recommendation: rec, rank, urgencyScore, reasoning: urgencyReason }) => {
+          const sevColor = rec.severity === 'critical' ? 'var(--rq-red)' :
+            rec.severity === 'high' ? 'var(--rq-amber)' : 'var(--rq-blue)';
+          const isApproving = approvingRecId === rec.id;
+
+          return (
+            <div key={rec.id} style={{
+              margin: '6px 16px', padding: '10px 12px',
+              background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+              borderLeft: `3px solid ${sevColor}`,
+            }}>
+              {/* Header: rank + title + severity */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{
+                  ...mono, fontSize: 9, fontWeight: 700, color: sevColor,
+                  width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: `1px solid ${sevColor}`, flexShrink: 0, opacity: 0.7,
+                }}>
+                  {rank}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--rq-ink)', flex: 1 }}>
+                  {rec.title}
+                </span>
+                <span style={{
+                  ...mono, fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
+                  color: sevColor, padding: '2px 6px', border: `1px solid ${sevColor}`, opacity: 0.7,
+                }}>
+                  {rec.severity}
+                </span>
+              </div>
+
+              {/* Summary */}
+              <div style={{ fontSize: 11, color: 'var(--rq-ink-2)', lineHeight: 1.4, marginBottom: 6 }}>
+                {rec.summary}
+              </div>
+
+              {/* Reasoning chain */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+                  Reasoning
+                </div>
+                {rec.reasoning.map((r, i) => (
+                  <div key={i} style={{ fontSize: 10, color: 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.3 }}>
+                    · {r}
+                  </div>
+                ))}
+              </div>
+
+              {/* Recommended actions */}
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+                  Recovery Path
+                </div>
+                {rec.recommendedActions.map((a, i) => (
+                  <div key={i} style={{
+                    padding: '4px 8px', marginBottom: 2,
+                    background: 'var(--rq-bg-2)', fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.3,
+                  }}>
+                    <div style={{ fontWeight: 600, color: 'var(--rq-ink)' }}>{a.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--rq-ink-3)' }}>{a.expectedImpact}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Metrics row: confidence + stabilization + preview */}
+              <div style={{
+                display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 8,
+                ...mono, fontSize: 9,
+              }}>
+                <div>
+                  <span style={{ color: 'var(--rq-ink-4)' }}>confidence </span>
+                  <span style={{ color: rec.confidence.score >= 70 ? 'var(--rq-green)' : rec.confidence.score >= 50 ? 'var(--rq-amber)' : 'var(--rq-ink-3)' }}>
+                    {rec.confidence.score}%
+                  </span>
+                  <span style={{ color: 'var(--rq-ink-4)' }}> ({rec.confidence.label})</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--rq-ink-4)' }}>est. stabilization </span>
+                  <span style={{ color: 'var(--rq-ink-2)' }}>{rec.estimatedStabilizationMinutes}m</span>
+                </div>
+              </div>
+
+              {/* Preview: before/after pressure */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+                ...mono, fontSize: 9,
+              }}>
+                <span style={{ color: 'var(--rq-ink-4)' }}>pressure</span>
+                <span style={{
+                  color: rec.preview.beforePressure >= 60 ? 'var(--rq-red)' : 'var(--rq-amber)',
+                }}>{rec.preview.beforePressure}</span>
+                <span style={{ color: 'var(--rq-ink-4)' }}>→</span>
+                <span style={{
+                  color: rec.preview.afterPressure < 30 ? 'var(--rq-green)' : 'var(--rq-amber)',
+                }}>{rec.preview.afterPressure}</span>
+                <span style={{ color: 'var(--rq-ink-4)' }}>
+                  (−{rec.preview.riskReducedBy}%)
+                </span>
+                {rec.preview.possibleTradeoffs.length > 0 && rec.preview.possibleTradeoffs[0] !== 'No significant tradeoffs identified' && (
+                  <span style={{ color: 'var(--rq-ink-4)', fontSize: 8 }}>
+                    ⚠ {rec.preview.possibleTradeoffs[0]}
+                  </span>
+                )}
+              </div>
+
+              {/* Confidence factors */}
+              {rec.confidence.factors.length > 0 && (
+                <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 8 }}>
+                  {rec.confidence.factors.join(' · ')}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {!replayMode && (
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button type="button" disabled={isApproving} onClick={() => handleApproveRecommendation(rec)} style={{
+                    flex: 2, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
+                    background: isApproving ? 'var(--rq-bg-2)' : 'none',
+                    border: `1px solid ${sevColor}`, color: sevColor, cursor: isApproving ? 'default' : 'pointer',
+                    opacity: isApproving ? 0.5 : 1,
+                    textTransform: 'uppercase',
+                  }}>
+                    {isApproving ? 'Creating...' : 'Approve Recovery'}
+                  </button>
+                  <button type="button" onClick={() => {
+                    setCommandInput(`what if ${rec.recommendedActions[0]?.type ?? 'dispatch'} to ${rec.affectedGate ?? rec.affectedZone}`);
+                  }} style={{
+                    flex: 1, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
+                    background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)',
+                    cursor: 'pointer', textTransform: 'uppercase',
+                  }}>
+                    Simulate
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div style={{ ...mono, fontSize: 7, color: 'var(--rq-ink-4)', padding: '8px 16px', textAlign: 'center', letterSpacing: '.06em' }}>
+          deterministic modeled estimates · not probabilistic predictions
+        </div>
       </>
     );
   }
@@ -1264,6 +1564,7 @@ export default function ManagerDashboard() {
                 { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
                 { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
                 { key: 'patterns' as const, label: 'Patterns', count: null },
+                { key: 'intelligence' as const, label: 'Intelligence', count: soiRecommendations.length > 0 ? soiRecommendations.length : null },
               ]).map(tab => (
                 <button
                   type="button"
@@ -1302,6 +1603,67 @@ export default function ManagerDashboard() {
             {view === 'unresolved' && renderUnresolved()}
             {view === 'incidents' && renderIncidents()}
             {view === 'patterns' && renderPatterns()}
+            {view === 'intelligence' && renderIntelligence()}
+
+            {/* SOI Command Input */}
+            <div style={{
+              margin: '4px 16px 0', display: 'flex', gap: 4,
+            }}>
+              <input
+                type="text"
+                value={commandInput}
+                onChange={e => setCommandInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) handleCommand(commandInput); }}
+                placeholder="Ask SOI... show zone, explain instability, recommend recovery"
+                style={{
+                  flex: 1, padding: '6px 10px',
+                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+                  color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => { if (commandInput.trim()) handleCommand(commandInput); }}
+                disabled={!commandInput.trim()}
+                style={{
+                  padding: '6px 10px',
+                  background: 'none', border: '1px solid var(--rq-line)',
+                  color: commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '.06em',
+                  cursor: commandInput.trim() ? 'pointer' : 'default',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Run
+              </button>
+            </div>
+
+            {/* Command response */}
+            {commandResponse && (
+              <div style={{
+                margin: '4px 16px 0', padding: '8px 10px',
+                background: 'var(--rq-bg-1)', borderLeft: '2px solid var(--rq-accent)',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+              }}>
+                {commandResponse.map((line, i) => (
+                  <div key={i} style={{ color: i === 0 ? 'var(--rq-ink)' : 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>
+                    {line}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCommandResponse(null)}
+                  style={{
+                    marginTop: 4, padding: '2px 6px',
+                    background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                    fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
+                  }}
+                >
+                  dismiss
+                </button>
+              </div>
+            )}
 
             {/* Operator selector + dev controls */}
             <div style={{ padding: '10px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
