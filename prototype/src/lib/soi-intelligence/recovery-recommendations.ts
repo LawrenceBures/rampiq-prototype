@@ -40,6 +40,8 @@ export interface SoiRecommendation {
   reasoning: string[];
   recommendedActions: RecommendedAction[];
   preview: WhatIfResult;
+  /** Single primary incident for recovery action creation. Deterministic: CRITICAL > HIGH > oldest. */
+  primaryIncidentId: string | null;
   sourceIncidentIds: string[];
   generatedAt: string;
 }
@@ -49,6 +51,20 @@ export interface SoiRecommendation {
 // ============================================================
 
 const SEV_WEIGHT: Record<Severity, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+
+/**
+ * Select a single primary incident for recovery action creation.
+ * Deterministic: CRITICAL > HIGH > oldest unresolved > first by ID.
+ */
+function selectPrimaryIncident(incidents: readonly Incident[]): string | null {
+  if (incidents.length === 0) return null;
+  const sorted = [...incidents].sort((a, b) => {
+    const sevDiff = (SEV_WEIGHT[b.severity as Severity] ?? 1) - (SEV_WEIGHT[a.severity as Severity] ?? 1);
+    if (sevDiff !== 0) return sevDiff;
+    return new Date(a.opened_at).getTime() - new Date(b.opened_at).getTime();
+  });
+  return sorted[0].id;
+}
 
 export function generateRecommendations(
   events: readonly SoiEvent[],
@@ -155,6 +171,7 @@ function generateZoneRecommendations(
       reasoning,
       recommendedActions: actions,
       preview,
+      primaryIncidentId: selectPrimaryIncident(zoneIncidents),
       sourceIncidentIds: zoneIncidents.map(i => i.id),
       generatedAt: now.toISOString(),
     });
@@ -201,6 +218,9 @@ function generateZoneRecommendations(
       reasoning,
       recommendedActions: actions,
       preview,
+      primaryIncidentId: selectPrimaryIncident(zoneIncidents.filter(i =>
+        i.gate_id && equipSource.affectedGates.includes(i.gate_id)
+      )) ?? selectPrimaryIncident(zoneIncidents),
       sourceIncidentIds: equipSource.contributingIds,
       generatedAt: now.toISOString(),
     });
@@ -260,6 +280,9 @@ function generateZoneRecommendations(
       reasoning,
       recommendedActions: actions,
       preview,
+      primaryIncidentId: selectPrimaryIncident(
+        zoneIncidents.filter(i => agedSource.contributingIds.includes(i.id))
+      ) ?? selectPrimaryIncident(zoneIncidents),
       sourceIncidentIds: agedSource.contributingIds,
       generatedAt: now.toISOString(),
     });

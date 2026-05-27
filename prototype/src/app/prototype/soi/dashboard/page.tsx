@@ -89,6 +89,8 @@ export default function ManagerDashboard() {
   const [commandInput, setCommandInput] = useState('');
   const [commandResponse, setCommandResponse] = useState<string[] | null>(null);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
+  const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
+  const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
   // ============================================================
   // REPLAY MODE
@@ -495,11 +497,25 @@ export default function ManagerDashboard() {
 
   // ── Approve SOI Recommendation → create recovery action ──
   async function handleApproveRecommendation(rec: SoiRecommendation) {
-    if (rec.sourceIncidentIds.length === 0) return;
+    const incidentId = rec.primaryIncidentId;
+    if (!incidentId) {
+      setApproveResult(prev => ({ ...prev, [rec.id]: 'error' }));
+      return;
+    }
+
+    // Check for existing active/proposed recovery on this incident
+    const existingRA = temporalRecoveryActions.find(ra =>
+      ra.incident_id === incidentId &&
+      (ra.status === 'PROPOSED' || ra.status === 'ACKNOWLEDGED' || ra.status === 'ACTIVE')
+    );
+    if (existingRA) {
+      setApproveResult(prev => ({ ...prev, [rec.id]: 'duplicate' }));
+      return;
+    }
+
     setApprovingRecId(rec.id);
-    const incidentId = rec.sourceIncidentIds[0];
     const topAction = rec.recommendedActions[0];
-    await createRecoveryAction({
+    const result = await createRecoveryAction({
       incident_id: incidentId,
       title: rec.title,
       action_type: topAction?.type === 'dispatch_agent' ? 'DISPATCH'
@@ -512,7 +528,9 @@ export default function ManagerDashboard() {
       gate_id: rec.affectedGate ?? undefined,
       description: `SOI recommendation: ${rec.summary}`,
     });
+
     setApprovingRecId(null);
+    setApproveResult(prev => ({ ...prev, [rec.id]: result ? 'success' : 'error' }));
     refreshRecovery();
     refresh();
   }
@@ -1077,28 +1095,105 @@ export default function ManagerDashboard() {
                 </div>
               )}
 
-              {/* Action buttons */}
-              {!replayMode && (
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button type="button" disabled={isApproving} onClick={() => handleApproveRecommendation(rec)} style={{
-                    flex: 2, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
-                    background: isApproving ? 'var(--rq-bg-2)' : 'none',
-                    border: `1px solid ${sevColor}`, color: sevColor, cursor: isApproving ? 'default' : 'pointer',
-                    opacity: isApproving ? 0.5 : 1,
-                    textTransform: 'uppercase',
-                  }}>
-                    {isApproving ? 'Creating...' : 'Approve Recovery'}
-                  </button>
-                  <button type="button" onClick={() => {
-                    setCommandInput(`what if ${rec.recommendedActions[0]?.type ?? 'dispatch'} to ${rec.affectedGate ?? rec.affectedZone}`);
-                  }} style={{
-                    flex: 1, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
-                    background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)',
-                    cursor: 'pointer', textTransform: 'uppercase',
-                  }}>
-                    Simulate
-                  </button>
+              {/* Simulation expansion */}
+              {expandedSimId === rec.id && (
+                <div style={{
+                  padding: '8px 10px', marginBottom: 8,
+                  background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
+                }}>
+                  <div style={{ ...mono, fontSize: 8, color: 'var(--rq-accent)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+                    Simulation Result
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6, ...mono, fontSize: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 2 }}>Before Pressure</div>
+                      <div style={{ color: rec.preview.beforePressure >= 60 ? 'var(--rq-red)' : 'var(--rq-amber)', fontWeight: 700, fontSize: 16 }}>
+                        {rec.preview.beforePressure}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 2 }}>Modeled After</div>
+                      <div style={{ color: rec.preview.afterPressure < 30 ? 'var(--rq-green)' : rec.preview.afterPressure < 60 ? 'var(--rq-amber)' : 'var(--rq-red)', fontWeight: 700, fontSize: 16 }}>
+                        {rec.preview.afterPressure}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 2 }}>Risk Reduced</div>
+                      <div style={{ color: 'var(--rq-green)', fontWeight: 700 }}>−{rec.preview.riskReducedBy}%</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 2 }}>Est. Stabilization</div>
+                      <div style={{ color: 'var(--rq-ink)', fontWeight: 700 }}>{rec.estimatedStabilizationMinutes}m</div>
+                    </div>
+                  </div>
+                  {rec.preview.possibleTradeoffs.filter(t => t !== 'No significant tradeoffs identified').length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <div style={{ ...mono, fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 2 }}>Tradeoffs</div>
+                      {rec.preview.possibleTradeoffs.filter(t => t !== 'No significant tradeoffs identified').map((t, i) => (
+                        <div key={i} style={{ fontSize: 9, color: 'var(--rq-amber)', lineHeight: 1.3 }}>· {t}</div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ ...mono, fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center' }}>
+                    Deterministic modeled estimate — not live state change.
+                  </div>
                 </div>
+              )}
+
+              {/* Action buttons + result feedback */}
+              {!replayMode && (
+                <>
+                  {approveResult[rec.id] === 'success' && (
+                    <div style={{
+                      ...mono, fontSize: 9, color: 'var(--rq-green)', padding: '4px 8px', marginBottom: 4,
+                      background: 'rgba(62,213,152,.06)', border: '1px solid var(--rq-green-dim)',
+                    }}>
+                      Recovery approved and dispatched
+                    </div>
+                  )}
+                  {approveResult[rec.id] === 'error' && (
+                    <div style={{
+                      ...mono, fontSize: 9, color: 'var(--rq-red)', padding: '4px 8px', marginBottom: 4,
+                      background: 'rgba(255,92,92,.06)', border: '1px solid var(--rq-red-dim)',
+                    }}>
+                      {rec.primaryIncidentId ? 'Failed to create recovery action' : 'No valid incident to attach recovery action to'}
+                    </div>
+                  )}
+                  {approveResult[rec.id] === 'duplicate' && (
+                    <div style={{
+                      ...mono, fontSize: 9, color: 'var(--rq-amber)', padding: '4px 8px', marginBottom: 4,
+                      background: 'rgba(245,177,61,.06)', border: '1px solid var(--rq-amber-dim)',
+                    }}>
+                      Recovery already active for this incident — progress existing action instead
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button type="button"
+                      disabled={isApproving || !rec.primaryIncidentId || approveResult[rec.id] === 'success'}
+                      onClick={() => handleApproveRecommendation(rec)} style={{
+                      flex: 2, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
+                      background: approveResult[rec.id] === 'success' ? 'rgba(62,213,152,.06)' : isApproving ? 'var(--rq-bg-2)' : 'none',
+                      border: `1px solid ${approveResult[rec.id] === 'success' ? 'var(--rq-green-dim)' : sevColor}`,
+                      color: approveResult[rec.id] === 'success' ? 'var(--rq-green)' : sevColor,
+                      cursor: isApproving || !rec.primaryIncidentId || approveResult[rec.id] === 'success' ? 'default' : 'pointer',
+                      opacity: isApproving || !rec.primaryIncidentId ? 0.5 : 1,
+                      textTransform: 'uppercase',
+                    }}>
+                      {isApproving ? 'Creating...' : approveResult[rec.id] === 'success' ? 'Dispatched' : 'Approve Recovery'}
+                    </button>
+                    <button type="button" onClick={() => {
+                      setExpandedSimId(expandedSimId === rec.id ? null : rec.id);
+                    }} style={{
+                      flex: 1, padding: '5px 8px', ...mono, fontSize: 9, letterSpacing: '.06em',
+                      background: expandedSimId === rec.id ? 'var(--rq-bg-2)' : 'none',
+                      border: `1px solid ${expandedSimId === rec.id ? 'var(--rq-accent)' : 'var(--rq-line)'}`,
+                      color: expandedSimId === rec.id ? 'var(--rq-accent)' : 'var(--rq-ink-3)',
+                      cursor: 'pointer', textTransform: 'uppercase',
+                    }}>
+                      {expandedSimId === rec.id ? 'Close' : 'Simulate'}
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           );
