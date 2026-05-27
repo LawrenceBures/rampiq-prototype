@@ -17,7 +17,7 @@
 // because it remembers what destabilization looked like before.
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import type { RecurringCondition } from './institutional-memory';
 import { deriveInstitutionalMemory } from './institutional-memory';
 
@@ -118,7 +118,7 @@ const T = {
 export function deriveAnticipatoryState(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): AnticipatoryOutput {
   const now = asOf ?? new Date();
@@ -138,7 +138,7 @@ export function deriveAnticipatoryState(
 function detectDestabilization(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   recurringConditions: readonly RecurringCondition[],
   now: Date,
 ): DestabilizationSignal[] {
@@ -255,7 +255,7 @@ function detectDestabilization(
 function computeStabilityIndex(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   now: Date,
 ): OperationalStabilityIndex {
   const unresolved = incidents.filter(i => !i.resolved_at && !i.closed_at);

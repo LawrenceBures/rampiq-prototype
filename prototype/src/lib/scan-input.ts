@@ -4,7 +4,7 @@
 // Accepts decoded strings from jsQR camera OR Zebra DataWedge keystrokes.
 // Downstream code sees only: { decoded_value, source, timestamp }.
 
-import type { ScanEvent, ScanSource } from './rampiq-types';
+import type { ScanEvent, ScanSource } from '@/lib/soi-types';
 
 type ScanCallback = (event: ScanEvent) => void;
 

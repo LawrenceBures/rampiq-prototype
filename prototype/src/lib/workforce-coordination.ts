@@ -14,7 +14,7 @@
 //   3. Escalation Semantics — when intervention is required
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 
 // ============================================================
 // TYPES
@@ -130,7 +130,7 @@ const LOAD_THRESHOLDS = {
 export function deriveWorkforceCoordination(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): WorkforceCoordinationState {
   const now = asOf ?? new Date();

@@ -14,7 +14,7 @@
 // It does NOT render anything (that's components/).
 // It does NOT fetch data (that's store.ts).
 
-import type { RampiqEvent, Severity, OperationalStatus } from './rampiq-types';
+import type { SoiEvent, Severity, OperationalStatus } from '@/lib/soi-types';
 import {
   SEVERITY_RANK,
   elapsedSeconds,
@@ -28,17 +28,17 @@ import {
 // ============================================================
 
 /** Event is operationally open (not terminal). */
-export function isOpen(e: RampiqEvent): boolean {
+export function isOpen(e: SoiEvent): boolean {
   return e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED';
 }
 
 /** Event is resolved. */
-export function isResolved(e: RampiqEvent): boolean {
+export function isResolved(e: SoiEvent): boolean {
   return e.operational_status === 'RESOLVED';
 }
 
 /** Event is terminal (resolved or cancelled). */
-export function isTerminal(e: RampiqEvent): boolean {
+export function isTerminal(e: SoiEvent): boolean {
   return e.operational_status === 'RESOLVED' || e.operational_status === 'CANCELLED';
 }
 
@@ -75,15 +75,15 @@ export interface EventSummary {
   critHighCount: number;
   severity: SeverityBreakdown;
   status: StatusBreakdown;
-  oldestOpen: RampiqEvent | null;
+  oldestOpen: SoiEvent | null;
   resolutionLatency: ResolutionLatency;
 }
 
 /** Compute summary statistics from an event list. */
-export function summarizeEvents(events: readonly RampiqEvent[]): EventSummary {
+export function summarizeEvents(events: readonly SoiEvent[]): EventSummary {
   const severity: SeverityBreakdown = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
   const status: StatusBreakdown = { OPEN: 0, ACKNOWLEDGED: 0, IN_PROGRESS: 0, RESOLVED: 0, CANCELLED: 0 };
-  let oldestOpen: RampiqEvent | null = null;
+  let oldestOpen: SoiEvent | null = null;
   const resTimes: number[] = [];
 
   for (const e of events) {
@@ -157,9 +157,9 @@ export interface EventFilters {
 
 /** Apply filters to an event list. Returns a new array. */
 export function filterEvents(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   filters: EventFilters,
-): RampiqEvent[] {
+): SoiEvent[] {
   let out = [...events];
   if (filters.severity && filters.severity !== 'ALL') {
     out = out.filter(e => e.severity === filters.severity);
@@ -185,7 +185,7 @@ export function activeFilterCount(filters: EventFilters): number {
 }
 
 /** Extract unique values for filter chip options. */
-export function extractFilterOptions(events: readonly RampiqEvent[]): {
+export function extractFilterOptions(events: readonly SoiEvent[]): {
   gates: string[];
   equipment: string[];
   shifts: string[];
@@ -212,7 +212,7 @@ export function extractFilterOptions(events: readonly RampiqEvent[]): {
 // ============================================================
 
 /** Sort events by severity (most severe first), then by age (oldest first within same severity). */
-export function sortBySeverityThenAge(events: readonly RampiqEvent[]): RampiqEvent[] {
+export function sortBySeverityThenAge(events: readonly SoiEvent[]): SoiEvent[] {
   return [...events].sort((a, b) => {
     const sd = (SEVERITY_RANK[a.severity as Severity] ?? 99) - (SEVERITY_RANK[b.severity as Severity] ?? 99);
     if (sd !== 0) return sd;
@@ -221,7 +221,7 @@ export function sortBySeverityThenAge(events: readonly RampiqEvent[]): RampiqEve
 }
 
 /** Sort events by replay-safe timestamp (chronological). */
-export function sortByReplayOrder(events: readonly RampiqEvent[]): RampiqEvent[] {
+export function sortByReplayOrder(events: readonly SoiEvent[]): SoiEvent[] {
   return [...events].sort((a, b) => {
     const ta = replayTimestamp(a);
     const tb = replayTimestamp(b);
@@ -234,7 +234,7 @@ export function sortByReplayOrder(events: readonly RampiqEvent[]): RampiqEvent[]
 // ============================================================
 
 /** Aging CSS class for an event card. Replay-safe. */
-export function agingClass(e: RampiqEvent, asOf?: Date): string {
+export function agingClass(e: SoiEvent, asOf?: Date): string {
   if (isTerminal(e)) return '';
   const age = classifyAge(e.created_at, asOf);
   const map: Record<AgeClass, string> = {
@@ -265,13 +265,13 @@ export interface AgingGroup<T> {
 
 /** Group events by aging band. Replay-safe. */
 export function groupByAging(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
-): AgingGroup<RampiqEvent>[] {
-  const stale: RampiqEvent[] = [];
-  const hot: RampiqEvent[] = [];
-  const warm: RampiqEvent[] = [];
-  const fresh: RampiqEvent[] = [];
+): AgingGroup<SoiEvent>[] {
+  const stale: SoiEvent[] = [];
+  const hot: SoiEvent[] = [];
+  const warm: SoiEvent[] = [];
+  const fresh: SoiEvent[] = [];
 
   for (const e of events) {
     const mins = ageMinutes(e.created_at, asOf);
@@ -281,7 +281,7 @@ export function groupByAging(
     else fresh.push(e);
   }
 
-  const groups: AgingGroup<RampiqEvent>[] = [];
+  const groups: AgingGroup<SoiEvent>[] = [];
   if (stale.length > 0) groups.push({ label: `Stale > 30 min (${stale.length})`, cssClass: 'ag-stale', events: stale });
   if (hot.length > 0) groups.push({ label: `Aging 15\u201330 min (${hot.length})`, cssClass: 'ag-hot', events: hot });
   if (warm.length > 0) groups.push({ label: `Active 5\u201315 min (${warm.length})`, cssClass: 'ag-warm', events: warm });
@@ -296,10 +296,10 @@ export function groupByAging(
 
 /** Group events by a key function. Returns entries sorted by count descending. */
 export function groupEventsBy(
-  events: readonly RampiqEvent[],
-  keyFn: (e: RampiqEvent) => string | null,
-): { key: string; count: number; events: RampiqEvent[] }[] {
-  const map = new Map<string, RampiqEvent[]>();
+  events: readonly SoiEvent[],
+  keyFn: (e: SoiEvent) => string | null,
+): { key: string; count: number; events: SoiEvent[] }[] {
+  const map = new Map<string, SoiEvent[]>();
 
   for (const e of events) {
     const key = keyFn(e);
@@ -315,14 +315,14 @@ export function groupEventsBy(
 }
 
 /** Group events by entity (entity_type:entity_id). */
-export function groupByEntity(events: readonly RampiqEvent[]) {
+export function groupByEntity(events: readonly SoiEvent[]) {
   return groupEventsBy(events, e =>
     e.entity_type && e.entity_id ? `${e.entity_type}:${e.entity_id}` : null,
   );
 }
 
 /** Group events by zone. */
-export function groupByZone(events: readonly RampiqEvent[]) {
+export function groupByZone(events: readonly SoiEvent[]) {
   return groupEventsBy(events, e => e.zone_id ?? null);
 }
 
@@ -340,7 +340,7 @@ export function groupByZone(events: readonly RampiqEvent[]) {
  * Replay-safe via asOf parameter.
  */
 export function derivePressure(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): number {
   const openEvents = events.filter(isOpen);
@@ -371,10 +371,10 @@ export function derivePressure(
  * Returns a map of gate_id → pressure value.
  */
 export function deriveGatePressures(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): Map<string, number> {
-  const byGate = new Map<string, RampiqEvent[]>();
+  const byGate = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (!e.gate_id) continue;
     const arr = byGate.get(e.gate_id);
@@ -394,10 +394,10 @@ export function deriveGatePressures(
  * Returns a map of zone_id → pressure value.
  */
 export function deriveZonePressures(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): Map<string, number> {
-  const byZone = new Map<string, RampiqEvent[]>();
+  const byZone = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (!e.zone_id) continue;
     const arr = byZone.get(e.zone_id);
@@ -427,8 +427,8 @@ export interface DistributionEntry {
 
 /** Compute distribution by a key function with resolution time averages. */
 export function computeDistribution(
-  events: readonly RampiqEvent[],
-  keyFn: (e: RampiqEvent) => string | null,
+  events: readonly SoiEvent[],
+  keyFn: (e: SoiEvent) => string | null,
 ): DistributionEntry[] {
   const counts = new Map<string, number>();
   const resTotals = new Map<string, { total: number; count: number }>();
@@ -479,7 +479,7 @@ export interface DashboardState {
   };
 
   /** Events grouped by aging band (for unresolved view). */
-  unresolvedByAging: AgingGroup<RampiqEvent>[];
+  unresolvedByAging: AgingGroup<SoiEvent>[];
 
   /** Pattern distributions. */
   patterns: {
@@ -490,7 +490,7 @@ export interface DashboardState {
   };
 
   /** Attention events (CRITICAL + HIGH, sorted by severity). */
-  attentionEvents: RampiqEvent[];
+  attentionEvents: SoiEvent[];
 
   /** Operational insights — pattern detection signals. */
   insights: OperationalInsight[];
@@ -505,7 +505,7 @@ export interface DashboardState {
  * Replay-safe via asOf parameter.
  */
 export function deriveDashboardState(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): DashboardState {
   const summary = summarizeEvents(events);
@@ -553,8 +553,8 @@ export interface OperationalInsight {
 }
 
 function deriveInsights(
-  events: readonly RampiqEvent[],
-  openEvents: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
+  openEvents: readonly SoiEvent[],
   summary: EventSummary,
   asOf?: Date,
 ): OperationalInsight[] {
@@ -601,7 +601,7 @@ function deriveInsights(
 
   // ── Zone clustering ──
   // Multiple high-severity open events in nearby gates
-  const highOpenByGate = new Map<string, RampiqEvent[]>();
+  const highOpenByGate = new Map<string, SoiEvent[]>();
   for (const e of openEvents) {
     if (e.gate_id && (e.severity === 'CRITICAL' || e.severity === 'HIGH')) {
       const existing = highOpenByGate.get(e.gate_id) ?? [];

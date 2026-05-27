@@ -15,7 +15,7 @@
 //   - Zone stabilization velocity
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 
 // ============================================================
 // TYPES
@@ -90,7 +90,7 @@ export interface OperationalOutcomes {
 export function deriveOperationalOutcomes(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): OperationalOutcomes {
   const now = asOf ?? new Date();
@@ -134,7 +134,7 @@ export function deriveOperationalOutcomes(
 function computeRecoveryEffectiveness(
   inc: Incident,
   allActions: readonly RecoveryAction[],
-  allEvents: readonly RampiqEvent[],
+  allEvents: readonly SoiEvent[],
 ): RecoveryEffectiveness {
   const actions = allActions.filter(a => a.incident_id === inc.id);
   const incEvents = allEvents.filter(e => e.entity_id === inc.id || e.correlation_id === inc.correlation_id);
@@ -169,7 +169,7 @@ function computeRecoveryEffectiveness(
 
 function computePressureDeltas(
   incidents: readonly Incident[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   now: Date,
 ): PressureDelta[] {
   const deltas: PressureDelta[] = [];

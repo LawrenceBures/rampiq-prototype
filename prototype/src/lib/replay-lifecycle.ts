@@ -20,7 +20,7 @@
 // The reconstructed entities flow through the same deriveDashboardState
 // and analyzeOperationalPatterns pipeline as live data.
 
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import type { Incident, RecoveryAction } from './lifecycle-types';
 import type { IncidentStatus, RecoveryActionStatus } from './operational-states';
 
@@ -39,13 +39,13 @@ import type { IncidentStatus, RecoveryActionStatus } from './operational-states'
  */
 export function reconstructIncidents(
   incidents: readonly Incident[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf: Date,
 ): Incident[] {
   const cutoff = asOf.getTime();
 
   // Index lifecycle events by entity_id
-  const incidentEvents = new Map<string, RampiqEvent[]>();
+  const incidentEvents = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (e.entity_type === 'incident' && e.entity_id && new Date(e.created_at).getTime() <= cutoff) {
       const existing = incidentEvents.get(e.entity_id) ?? [];
@@ -138,13 +138,13 @@ export function reconstructIncidents(
  */
 export function reconstructRecoveryActions(
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf: Date,
 ): RecoveryAction[] {
   const cutoff = asOf.getTime();
 
   // Index lifecycle events by entity_id
-  const actionEvents = new Map<string, RampiqEvent[]>();
+  const actionEvents = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (e.entity_type === 'recovery_action' && e.entity_id && new Date(e.created_at).getTime() <= cutoff) {
       const existing = actionEvents.get(e.entity_id) ?? [];

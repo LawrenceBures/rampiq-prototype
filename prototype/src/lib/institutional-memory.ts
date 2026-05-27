@@ -11,7 +11,7 @@
 // The system begins understanding: "this keeps happening."
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 
 // ============================================================
 // TYPES
@@ -68,7 +68,7 @@ export interface InstitutionalMemoryOutput {
 export function deriveInstitutionalMemory(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): InstitutionalMemoryOutput {
   const now = asOf ?? new Date();
@@ -90,7 +90,7 @@ export function deriveInstitutionalMemory(
 
 function detectRecurringConditions(
   incidents: readonly Incident[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   now: Date,
 ): RecurringCondition[] {
   const conditions: RecurringCondition[] = [];
@@ -124,7 +124,7 @@ function detectRecurringConditions(
   }
 
   // Equipment bottlenecks: equipment in 2+ events
-  const equipEvents = new Map<string, RampiqEvent[]>();
+  const equipEvents = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (e.equipment_id) {
       const existing = equipEvents.get(e.equipment_id) ?? [];
@@ -188,7 +188,7 @@ function detectRecurringConditions(
 function deriveShiftHandoff(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   now: Date,
 ): ShiftHandoff | null {
   const unresolvedIncidents = incidents.filter(i => !i.resolved_at && !i.closed_at);

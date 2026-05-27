@@ -27,7 +27,7 @@
 //   Never "Who is best?"
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import type { RecoveryEffectiveness } from './outcome-measurement';
 import { deriveOperationalOutcomes } from './outcome-measurement';
 
@@ -110,7 +110,7 @@ const SEV_WEIGHT: Record<string, number> = { CRITICAL: 5, HIGH: 4, MEDIUM: 2, LO
 export function deriveWorkforceIntelligence(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): WorkforceIntelligenceOutput {
   const now = asOf ?? new Date();
@@ -161,7 +161,7 @@ function analyzeOperator(
   operatorId: string,
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   recoveryEffectiveness: readonly RecoveryEffectiveness[],
   now: Date,
 ): OperatorIntelligence {
@@ -274,7 +274,7 @@ function analyzeOperator(
 function deriveSystemPatterns(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   outcomes: ReturnType<typeof deriveOperationalOutcomes>,
   now: Date,
 ): ContextualizedInsight[] {

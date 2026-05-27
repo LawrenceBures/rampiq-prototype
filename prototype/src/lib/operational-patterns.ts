@@ -14,7 +14,7 @@
 //   - Incident objects (lifecycle current state)
 //   - RecoveryAction objects (recovery current state)
 
-import type { RampiqEvent, Severity } from './rampiq-types';
+import type { SoiEvent, Severity } from '@/lib/soi-types';
 import type { Incident, RecoveryAction } from './lifecycle-types';
 import { SEVERITY_RANK, replayTimestamp } from './operational-states';
 
@@ -116,7 +116,7 @@ export interface PatternEngineOutput {
  * Pure function — no side effects, replay-safe.
  */
 export function analyzeOperationalPatterns(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
   asOf?: Date,
@@ -150,7 +150,7 @@ export function analyzeOperationalPatterns(
 // ============================================================
 
 function detectGatePatterns(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   incidents: readonly Incident[],
   now: Date,
 ): PatternInsight[] {
@@ -204,14 +204,14 @@ function detectGatePatterns(
 // ============================================================
 
 function detectEquipmentRisk(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   incidents: readonly Incident[],
   now: Date,
 ): PatternInsight[] {
   const results: PatternInsight[] = [];
 
   // Equipment referenced in events
-  const equipEvents = new Map<string, RampiqEvent[]>();
+  const equipEvents = new Map<string, SoiEvent[]>();
   for (const e of events) {
     if (e.equipment_id) {
       const existing = equipEvents.get(e.equipment_id) ?? [];
@@ -324,7 +324,7 @@ function detectRecoveryFriction(
 // ============================================================
 
 function detectZoneInstability(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   incidents: readonly Incident[],
   now: Date,
 ): PatternInsight[] {
@@ -388,7 +388,7 @@ function detectZoneInstability(
 // ============================================================
 
 function computeTrends(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
   now: Date,

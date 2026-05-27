@@ -12,7 +12,7 @@
 // evolution descriptions, escalation chain analysis.
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import type { OperationalStabilityIndex } from './anticipatory-cognition';
 import type { ShiftContext } from './auth-identity';
 
@@ -44,7 +44,7 @@ export interface OperationalNarrative {
 export function generateOperationalNarratives(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   stability: OperationalStabilityIndex,
   shiftContext: ShiftContext,
   asOf?: Date,

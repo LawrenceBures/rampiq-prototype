@@ -3,10 +3,11 @@
 // SOI Phase 1 — Offline event queue.
 // Stores events in IndexedDB when offline, syncs when connection returns.
 
-import type { EventSubmission } from './rampiq-types';
+import type { EventSubmission } from '@/lib/soi-types';
 import { postEvent } from './store';
 
-const DB_NAME = 'rampiq_offline';
+// IndexedDB migrated: rampiq_offline → soi_offline
+const DB_NAME = 'soi_offline';
 const DB_VERSION = 1;
 const STORE_NAME = 'pending_events';
 

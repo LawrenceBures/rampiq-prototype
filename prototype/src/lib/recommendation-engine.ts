@@ -16,7 +16,7 @@
 //   B. Zone pressure balancing — zone-level, no individual comparison
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import type { RecoveryEffectiveness } from './outcome-measurement';
 import { deriveOperationalOutcomes } from './outcome-measurement';
 import { getSupabase } from './supabase';
@@ -75,7 +75,7 @@ export function deriveRecommendations(
   currentIncidents: readonly Incident[],
   historicalIncidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];

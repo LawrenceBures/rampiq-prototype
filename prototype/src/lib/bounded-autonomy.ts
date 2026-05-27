@@ -27,7 +27,7 @@
 import { getSupabase } from './supabase';
 import { EVENT_TYPES } from './operational-states';
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 
 // ============================================================
 // TYPES
@@ -125,7 +125,7 @@ export interface AutonomyState {
  * Pure function — deterministic, replay-safe.
  */
 export function deriveAutonomyState(
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): AutonomyState {
   const now = asOf ?? new Date();

@@ -3,14 +3,21 @@
 // SOI Phase 1 — Agent identity management.
 // Persists selected identity to localStorage so agents don't re-identify each page load.
 
-import type { AgentIdentity } from './rampiq-types';
+import type { AgentIdentity } from '@/lib/soi-types';
 
-const IDENTITY_KEY = 'rampiq_agent_identity';
+// Storage key migrated: rampiq_agent_identity → soi_agent_identity
+const IDENTITY_KEY = 'soi_agent_identity';
+const LEGACY_KEY = 'rampiq_agent_identity';
 
 export function getIdentity(): AgentIdentity | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(IDENTITY_KEY);
+    // Try new key first, fall back to legacy for migration
+    let raw = localStorage.getItem(IDENTITY_KEY);
+    if (!raw) {
+      raw = localStorage.getItem(LEGACY_KEY);
+      if (raw) localStorage.setItem(IDENTITY_KEY, raw); // migrate
+    }
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }

@@ -4,8 +4,8 @@
   "description": "Systems Operational Intelligence — operational cognition infrastructure for high-tempo coordination environments.",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "start_url": "/prototype/rampiq/dashboard",
-  "scope": "/prototype/rampiq",
+  "start_url": "/prototype/soi/dashboard",
+  "scope": "/prototype/soi",
   "background_color": "#050816",
   "theme_color": "#050816",
   "icons": [

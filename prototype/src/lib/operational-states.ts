@@ -690,7 +690,7 @@ export function sortForReplay<T extends { created_at: string; offline_created_at
 // ============================================================
 // BACKWARD COMPATIBILITY ALIASES
 // ============================================================
-// The existing rampiq-types.ts exports these names.
+// The existing soi-types.ts exports these names.
 // Pages that haven't migrated yet can continue importing from there.
 // New code should import from this module.
 

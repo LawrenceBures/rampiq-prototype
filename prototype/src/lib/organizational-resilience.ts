@@ -15,7 +15,7 @@
 //   - Which recovery structures absorb pressure best
 
 import type { Incident, RecoveryAction } from './lifecycle-types';
-import type { RampiqEvent } from './rampiq-types';
+import type { SoiEvent } from '@/lib/soi-types';
 import { deriveOperationalOutcomes } from './outcome-measurement';
 
 // ============================================================
@@ -91,7 +91,7 @@ const SEV_W: Record<string, number> = { CRITICAL: 5, HIGH: 4, MEDIUM: 2, LOW: 1 
 export function deriveOrganizationalResilience(
   incidents: readonly Incident[],
   recoveryActions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   asOf?: Date,
 ): OrganizationalResilienceOutput {
   const now = asOf ?? new Date();
@@ -137,7 +137,7 @@ export function deriveOrganizationalResilience(
 function deriveResilienceIndicators(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   outcomes: ReturnType<typeof deriveOperationalOutcomes>,
   now: Date,
 ): ResilienceIndicator[] {
@@ -223,7 +223,7 @@ function deriveResilienceIndicators(
 function deriveOperationalDebt(
   incidents: readonly Incident[],
   actions: readonly RecoveryAction[],
-  events: readonly RampiqEvent[],
+  events: readonly SoiEvent[],
   now: Date,
 ): OperationalDebt {
   const unresolved = incidents.filter(i => !i.resolved_at && !i.closed_at);

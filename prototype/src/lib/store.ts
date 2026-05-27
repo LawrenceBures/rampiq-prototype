@@ -6,29 +6,39 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSupabase } from './supabase';
 import type {
-  RampiqEvent,
+  SoiEvent,
   QrTarget,
   EventType,
   UserLite,
   EventSubmission,
   OperationalStatus,
-} from './rampiq-types';
+} from '@/lib/soi-types';
+
+// ============================================================
+// SUPABASE TABLE NAMES (legacy internal names retained for data continuity)
+// These table names predate the SOI rebrand. Production Supabase tables
+// remain: rampiq_events, rampiq_incidents, rampiq_recovery_actions.
+// A future database migration will rename them to soi_* equivalents.
+// ============================================================
 
 // ============================================================
 // EVENTS — CRUD
 // ============================================================
 
-const LS_KEY = 'rampiq_events_v2';
+// Storage key migrated: rampiq_events_v2 → soi_events_v2
+const LS_KEY = 'soi_events_v2';
+const LEGACY_LS_KEY = 'rampiq_events_v2';
 
-function lsRead(): RampiqEvent[] {
+function lsRead(): SoiEvent[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    let raw = localStorage.getItem(LS_KEY);
+    if (!raw) { raw = localStorage.getItem(LEGACY_LS_KEY); if (raw) localStorage.setItem(LS_KEY, raw); }
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
-function lsWrite(events: RampiqEvent[]): void {
+function lsWrite(events: SoiEvent[]): void {
   if (typeof window === 'undefined') return;
   try { localStorage.setItem(LS_KEY, JSON.stringify(events)); } catch { /* */ }
 }
@@ -38,7 +48,7 @@ export async function fetchEvents(filters?: {
   status?: OperationalStatus;
   severity?: string;
   event_type?: string;
-}): Promise<RampiqEvent[]> {
+}): Promise<SoiEvent[]> {
   const sb = getSupabase();
   if (sb) {
     let query = sb.from('rampiq_events').select('*').order('created_at', { ascending: false });
@@ -50,7 +60,7 @@ export async function fetchEvents(filters?: {
     if (error) {
       console.error('[store] fetch error:', error.message);
     } else {
-      return data as RampiqEvent[];
+      return data as SoiEvent[];
     }
   }
   // Fallback
@@ -129,7 +139,7 @@ async function resolveZoneId(submission: EventSubmission): Promise<string | null
   }
 }
 
-export async function postEvent(submission: EventSubmission): Promise<RampiqEvent> {
+export async function postEvent(submission: EventSubmission): Promise<SoiEvent> {
   const sb = getSupabase();
 
   // Derive replay-compatible fields
@@ -157,11 +167,11 @@ export async function postEvent(submission: EventSubmission): Promise<RampiqEven
       console.error('[store] insert error:', error.message);
       throw new Error(`Event save failed: ${error.message}`);
     }
-    return data as RampiqEvent;
+    return data as SoiEvent;
   }
 
   // localStorage fallback
-  const full: RampiqEvent = {
+  const full: SoiEvent = {
     id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
     offline_created_at: submission.offline_created_at || null,
@@ -206,7 +216,7 @@ export async function updateEventStatus(
   eventId: string,
   status: OperationalStatus,
   resolvedBy?: string,
-): Promise<RampiqEvent | null> {
+): Promise<SoiEvent | null> {
   const sb = getSupabase();
 
   // Fetch current state for state_before tracking
@@ -242,7 +252,7 @@ export async function updateEventStatus(
       console.error('[store] update error:', error.message);
       return null;
     }
-    return data as RampiqEvent;
+    return data as SoiEvent;
   }
 
   // localStorage fallback
@@ -251,7 +261,7 @@ export async function updateEventStatus(
   if (idx === -1) return null;
   // Capture state_before from localStorage
   updates.state_before = events[idx].operational_status;
-  events[idx] = { ...events[idx], ...updates } as RampiqEvent;
+  events[idx] = { ...events[idx], ...updates } as SoiEvent;
   if (status === 'RESOLVED') {
     const created = new Date(events[idx].created_at).getTime();
     const resolved = new Date(updates.resolved_at as string).getTime();
@@ -274,7 +284,8 @@ export async function resetEvents(): Promise<void> {
 // QR TARGETS
 // ============================================================
 
-const LS_QR_TARGETS = 'rampiq_qr_targets';
+// Storage key migrated: rampiq_qr_targets → soi_qr_targets
+const LS_QR_TARGETS = 'soi_qr_targets';
 
 // Fallback QR targets for localStorage mode
 const FALLBACK_QR_TARGETS: QrTarget[] = [
@@ -406,12 +417,12 @@ export async function fetchUsers(): Promise<UserLite[]> {
 // ============================================================
 
 export function useLiveEvents(intervalMs = 3000): {
-  events: RampiqEvent[];
+  events: SoiEvent[];
   loading: boolean;
   lastUpdated: Date | null;
   refresh: () => void;
 } {
-  const [events, setEvents] = useState<RampiqEvent[]>([]);
+  const [events, setEvents] = useState<SoiEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const mountedRef = useRef(true);
@@ -453,7 +464,7 @@ export function useLiveEvents(intervalMs = 3000): {
 
     if (sb) {
       channel = sb
-        .channel('rampiq_events_live')
+        .channel('soi_events_live')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rampiq_events' }, () => {
           fetchEvents().then(data => {
             if (mountedRef.current) { setEvents(data); setLastUpdated(new Date()); }
@@ -540,7 +551,7 @@ export function useRealtimeIncidents(station = 'LAX'): {
 
     if (sb) {
       channel = sb
-        .channel('rampiq_incidents_sync')
+        .channel('soi_incidents_sync')
         .on('postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'rampiq_events' },
           (payload) => {
@@ -620,7 +631,7 @@ export function useRecoveryActions(incidentId: string | null): {
 
     if (sb) {
       channel = sb
-        .channel('rampiq_recovery_sync')
+        .channel('soi_recovery_sync')
         .on('postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'rampiq_events' },
           (payload) => {
@@ -754,7 +765,7 @@ import type {
   CertCategory,
   ShiftWindow,
   RoleType,
-} from './rampiq-types';
+} from '@/lib/soi-types';
 
 // ---- Fallback data ----
 
@@ -1029,7 +1040,7 @@ export async function fetchAgentProfile(userId: string): Promise<AgentProfile | 
 
 export async function computeOperationalMetrics(userId: string): Promise<OperationalMetrics> {
   const sb = getSupabase();
-  let events: RampiqEvent[] = [];
+  let events: SoiEvent[] = [];
 
   if (sb) {
     const { data, error } = await sb
@@ -1037,7 +1048,7 @@ export async function computeOperationalMetrics(userId: string): Promise<Operati
       .select('*')
       .eq('reported_by', userId)
       .order('created_at', { ascending: false });
-    if (!error && data) events = data as RampiqEvent[];
+    if (!error && data) events = data as SoiEvent[];
   } else {
     const all = lsRead();
     events = all.filter(e => e.reported_by === userId);
@@ -1201,7 +1212,7 @@ export function useOperationalReadiness(station: string, shift: ShiftWindow): Op
 // FLIGHTS
 // ============================================================
 
-import type { Flight } from './rampiq-types';
+import type { Flight } from '@/lib/soi-types';
 
 function makeFallbackFlights(): Flight[] {
   const now = Date.now();
@@ -1322,7 +1333,7 @@ export async function fetchAgentTasks(userId: string): Promise<CrewAssignment[]>
 // LT DISPATCH — find active dispatch for a user (no matching arrival yet)
 // ============================================================
 
-export async function fetchActiveDispatch(userId: string): Promise<RampiqEvent | null> {
+export async function fetchActiveDispatch(userId: string): Promise<SoiEvent | null> {
   const sb = getSupabase();
   if (sb) {
     // Find most recent LT_DISPATCH by this user
@@ -1335,7 +1346,7 @@ export async function fetchActiveDispatch(userId: string): Promise<RampiqEvent |
       .limit(1);
 
     if (!dispatches || dispatches.length === 0) return null;
-    const dispatch = dispatches[0] as RampiqEvent;
+    const dispatch = dispatches[0] as SoiEvent;
 
     // Check if there's a matching LT_ARRIVAL
     const { data: arrivals } = await sb
@@ -1360,7 +1371,7 @@ import type {
   CrewAssignment,
   AssignmentOutcome,
   AssignmentStatus,
-} from './rampiq-types';
+} from '@/lib/soi-types';
 
 const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
   {
@@ -1487,7 +1498,7 @@ export async function cancelCrewAssignment(id: string): Promise<CrewAssignment |
 
 export async function computeAssignmentOutcome(assignment: CrewAssignment): Promise<AssignmentOutcome> {
   const sb = getSupabase();
-  let events: RampiqEvent[] = [];
+  let events: SoiEvent[] = [];
 
   if (sb) {
     // Find events overlapping with this assignment's time window and gates
@@ -1497,7 +1508,7 @@ export async function computeAssignmentOutcome(assignment: CrewAssignment): Prom
     const { data } = await query;
     if (data) {
       // Filter to events matching this assignment's gates or zone
-      events = (data as RampiqEvent[]).filter(e =>
+      events = (data as SoiEvent[]).filter(e =>
         (e.gate_id && assignment.gate_ids.includes(e.gate_id)) ||
         (e.equipment_id && assignment.equipment_ids.includes(e.equipment_id))
       );
@@ -1525,12 +1536,12 @@ import type {
   OperationalSuggestion,
   AssignmentTransition,
   TransitionType,
-} from './rampiq-types';
-import { eventAge } from './rampiq-types';
+} from '@/lib/soi-types';
+import { eventAge } from '@/lib/soi-types';
 
 export function computeAssignmentPressure(
   assignment: CrewAssignment,
-  events: RampiqEvent[],
+  events: SoiEvent[],
 ): AssignmentPressure {
   const zoneEvents = events.filter(e => {
     const isOpen = e.operational_status !== 'RESOLVED' && e.operational_status !== 'CANCELLED';
@@ -1558,7 +1569,7 @@ export function computeAssignmentPressure(
 export async function computeSuggestion(
   zoneId: string,
   shift: ShiftWindow,
-  liveEvents: RampiqEvent[],
+  liveEvents: SoiEvent[],
 ): Promise<OperationalSuggestion | null> {
   const [teams, allShifts, zones] = await Promise.all([
     fetchTeams(),
