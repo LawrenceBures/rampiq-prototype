@@ -31,6 +31,28 @@
   --rq-accent: #c9ff3a;
 }
 
+/* ---- Light theme ---- */
+[data-theme="light"] {
+  --rq-bg: #f5f6f8;
+  --rq-bg-1: #ffffff;
+  --rq-bg-2: #ebedf1;
+  --rq-bg-3: #dfe2e8;
+  --rq-line: #d4d8e0;
+  --rq-line-2: #c4c9d4;
+  --rq-ink: #1a1f2b;
+  --rq-ink-2: #3d4555;
+  --rq-ink-3: #6b7585;
+  --rq-ink-4: #9aa3b0;
+  --rq-green: #1a8a5a;
+  --rq-green-dim: #d0f0e0;
+  --rq-amber: #b07a18;
+  --rq-amber-dim: #fce8c4;
+  --rq-red: #cc3333;
+  --rq-red-dim: #fce0e0;
+  --rq-blue: #2a7acc;
+  --rq-accent: #4a7a00;
+}
+
 /* ================================================
    PROTOTYPE SHELL
    ================================================ */

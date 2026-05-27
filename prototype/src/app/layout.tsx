@@ -49,14 +49,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-theme="dark"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              window.__RAMPIQ_INLINE_SCRIPT_LOADED = true;
-              window.__RAMPIQ_SCRIPT_TIME = new Date().toISOString();
+              window.__SOI_INLINE_SCRIPT_LOADED = true;
+              window.__SOI_SCRIPT_TIME = new Date().toISOString();
+              try {
+                var t = localStorage.getItem('soi_theme');
+                if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+              } catch (e) {}
             `,
           }}
         />
