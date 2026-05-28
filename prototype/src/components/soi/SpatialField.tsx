@@ -263,7 +263,10 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
           }
 
           return (
-            <g key={`tw-${i}`}>
+            <g key={`tw-${i}`} style={{
+              opacity: selectedGateId && from !== selectedGateId && to !== selectedGateId ? 0.3 : 1,
+              transition: 'opacity .4s cubic-bezier(.23,1,.32,1)',
+            }}>
               <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                 stroke={cascadeActive ? pColor(Math.max(za1?.pressure??0, za2?.pressure??0)) : 'rgba(255,255,255,.05)'}
                 strokeWidth={cascadeActive ? 1.5 : 0.7}
@@ -317,7 +320,12 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
           const strokeW = isFocused ? 3 : isActive || isStalled ? 2.5 : 1.5;
 
           return (
-            <g key={gateId} onClick={() => onGateClick?.(gateId)} style={{ cursor: 'pointer' }}>
+            <g key={gateId} onClick={() => onGateClick?.(gateId)}
+              style={{
+                cursor: 'pointer',
+                opacity: selectedGateId && selectedGateId !== gateId ? 0.4 : 1,
+                transition: 'opacity .4s cubic-bezier(.23,1,.32,1)',
+              }}>
               {/* Selected gate focus ring */}
               {isFocused && (
                 <circle cx={pos.x} cy={pos.y} r={30} fill="none" stroke={nodeColor} strokeWidth="1"
