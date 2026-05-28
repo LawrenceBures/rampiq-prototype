@@ -1,21 +1,23 @@
 'use client';
 
 /**
- * SOI Spatial Operations Field v3
+ * SOI Spatial Operations Field v4 — Operational World Layer
  *
- * Per-gate operational fidelity:
- * - Per-gate pressure derived from incidents
- * - Directional cascade flow with arrowheads
- * - Gate-specific incident markers
- * - Aircraft/turnaround occupancy
- * - Resource movement traces from active recovery
- * - Selected gate focus
+ * Living operational environment with:
+ * - Per-gate pressure + turnaround state
+ * - Aircraft presence and state
+ * - Equipment glyphs and failures
+ * - Workforce presence indicators
+ * - Operational flow traces
+ * - Gate hover context cards
  */
 
+import { useState } from 'react';
 import type { OperationalAssessment, ZoneAssessment } from '@/lib/soi-intelligence/operational-reasoning';
 import type { LiveExecutionState } from '@/lib/soi-execution/live-execution-engine';
 import type { ExecutionPlan } from '@/lib/soi-agentic/execution-planner';
 import type { Incident } from '@/lib/lifecycle-types';
+import type { RecoveryAction } from '@/lib/lifecycle-types';
 import type { SoiEvent } from '@/lib/soi-types';
 
 // ============================================================
@@ -26,6 +28,7 @@ interface Props {
   assessment: OperationalAssessment;
   gates: string[];
   incidents: readonly Incident[];
+  recoveryActions?: readonly RecoveryAction[];
   events: readonly SoiEvent[];
   selectedZoneId?: string | null;
   selectedGateId?: string | null;
@@ -34,14 +37,20 @@ interface Props {
   onGateClick?: (gateId: string) => void;
 }
 
-interface GateState {
+type TurnState = 'empty' | 'inbound' | 'active_turn' | 'boarding' | 'delayed' | 'push_ready' | 'departed' | 'recovery';
+
+interface GateWorld {
   gateId: string;
   pressure: number;
   incidents: number;
   criticalCount: number;
   highCount: number;
-  occupied: boolean;
-  hasEquipmentIssue: boolean;
+  turnState: TurnState;
+  hasAircraft: boolean;
+  equipmentIds: string[];
+  hasEquipmentFailure: boolean;
+  staffingLevel: number; // 0-3: none, light, normal, heavy
+  activeRecoveries: number;
   oldestIncidentMin: number;
 }
 
@@ -92,62 +101,74 @@ function pColor(p: number): string {
   return '#2a9d6a';
 }
 
+const TURN_LABEL: Record<TurnState, string> = {
+  empty: 'EMPTY', inbound: 'INBOUND', active_turn: 'TURN', boarding: 'BOARD',
+  delayed: 'DELAY', push_ready: 'PUSH', departed: 'DEPT', recovery: 'RCVRY',
+};
+
+const TURN_COLOR: Record<TurnState, string> = {
+  empty: '#2a3442', inbound: '#5aa9ff', active_turn: '#3ed598', boarding: '#3ed598',
+  delayed: '#f5b13d', push_ready: '#c9ff3a', departed: '#2a3442', recovery: '#ff5c5c',
+};
+
 // ============================================================
-// PER-GATE PRESSURE COMPUTATION
+// WORLD STATE COMPUTATION
 // ============================================================
 
-function computeGateStates(
+function computeGateWorld(
   gates: string[],
   incidents: readonly Incident[],
+  recoveryActions: readonly RecoveryAction[],
   events: readonly SoiEvent[],
   assessment: OperationalAssessment,
-): Map<string, GateState> {
-  const map = new Map<string, GateState>();
+): Map<string, GateWorld> {
+  const map = new Map<string, GateWorld>();
   const now = Date.now();
 
   for (const gateId of gates) {
-    const gateIncidents = incidents.filter(i =>
-      i.gate_id === gateId && i.status !== 'RESOLVED' && i.status !== 'CLOSED'
-    );
-    const gateEvents = events.filter(e => e.gate_id === gateId);
+    const gi = incidents.filter(i => i.gate_id === gateId && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+    const ge = events.filter(e => e.gate_id === gateId);
+    const gr = recoveryActions.filter(ra => (ra.gate_id === gateId || ra.zone_id === gateZone(gateId)) && ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN' && ra.status !== 'ESCALATED');
     const zoneId = gateZone(gateId);
     const za = zoneId ? assessment.zoneAssessments.find(z => z.zoneId === zoneId) : null;
 
-    // Per-gate pressure: derived from incidents at this gate + zone baseline
-    const incidentPressure = gateIncidents.reduce((s, i) => s + (SEV_W[i.severity] ?? 1) * 12, 0);
-    const agePressure = gateIncidents.reduce((s, i) => {
-      const age = (now - new Date(i.opened_at).getTime()) / 60000;
-      return s + Math.min(age / 3, 15);
-    }, 0);
-    const zoneBaseline = za ? za.pressure * 0.2 : 0; // 20% zone influence
-    const rawPressure = incidentPressure + agePressure + zoneBaseline;
-    const pressure = Math.max(0, Math.min(100, Math.round(rawPressure)));
+    const incPressure = gi.reduce((s, i) => s + (SEV_W[i.severity] ?? 1) * 12, 0);
+    const agePressure = gi.reduce((s, i) => s + Math.min((now - new Date(i.opened_at).getTime()) / 180000, 15), 0);
+    const pressure = Math.max(0, Math.min(100, Math.round(incPressure + agePressure + (za ? za.pressure * 0.2 : 0))));
 
-    const occupied = gateEvents.some(e =>
-      (e.event_type === 'service.started' || e.event_type === 'service.confirmed') &&
-      e.operational_status !== 'RESOLVED'
-    ) || gateIncidents.length > 0;
+    // Turnaround state derivation
+    const hasService = ge.some(e => (e.event_type === 'service.started' || e.event_type === 'service.confirmed') && e.operational_status !== 'RESOLVED');
+    const hasScan = ge.some(e => e.event_type === 'gate.scanned');
+    const hasRecovery = gr.length > 0;
+    let turnState: TurnState = 'empty';
+    if (hasRecovery && gi.length > 0) turnState = 'recovery';
+    else if (gi.some(i => i.severity === 'CRITICAL' || i.severity === 'HIGH')) turnState = 'delayed';
+    else if (hasService) turnState = 'active_turn';
+    else if (hasScan) turnState = 'inbound';
+    else if (gi.length > 0) turnState = 'delayed';
 
-    const hasEquipment = gateEvents.some(e =>
-      e.equipment_id && e.operational_status !== 'RESOLVED'
-    );
+    // Equipment
+    const equipIds = [...new Set(ge.filter(e => e.equipment_id && e.operational_status !== 'RESOLVED').map(e => e.equipment_id!))];
+    const equipFail = ge.some(e => e.equipment_id && e.severity !== 'LOW' && e.operational_status !== 'RESOLVED');
 
-    const oldest = gateIncidents.length > 0
-      ? Math.max(...gateIncidents.map(i => (now - new Date(i.opened_at).getTime()) / 60000))
-      : 0;
+    // Staffing: count unique reporters at this gate as proxy
+    const reporters = new Set(ge.filter(e => e.operational_status !== 'RESOLVED').map(e => e.reported_by));
+    const staffing = reporters.size >= 3 ? 3 : reporters.size >= 2 ? 2 : reporters.size >= 1 ? 1 : 0;
 
     map.set(gateId, {
-      gateId,
-      pressure,
-      incidents: gateIncidents.length,
-      criticalCount: gateIncidents.filter(i => i.severity === 'CRITICAL').length,
-      highCount: gateIncidents.filter(i => i.severity === 'HIGH').length,
-      occupied,
-      hasEquipmentIssue: hasEquipment,
-      oldestIncidentMin: Math.round(oldest),
+      gateId, pressure,
+      incidents: gi.length,
+      criticalCount: gi.filter(i => i.severity === 'CRITICAL').length,
+      highCount: gi.filter(i => i.severity === 'HIGH').length,
+      turnState,
+      hasAircraft: turnState !== 'empty' && (turnState as string) !== 'departed',
+      equipmentIds: equipIds,
+      hasEquipmentFailure: equipFail,
+      staffingLevel: staffing,
+      activeRecoveries: gr.length,
+      oldestIncidentMin: gi.length > 0 ? Math.round(Math.max(...gi.map(i => (now - new Date(i.opened_at).getTime()) / 60000))) : 0,
     });
   }
-
   return map;
 }
 
@@ -155,25 +176,27 @@ function computeGateStates(
 // COMPONENT
 // ============================================================
 
-export function SpatialField({ assessment, gates, incidents, events, selectedZoneId, selectedGateId, liveExec, activePlan, onGateClick }: Props) {
+export function SpatialField({ assessment, gates, incidents, recoveryActions, events, selectedZoneId, selectedGateId, liveExec, activePlan, onGateClick }: Props) {
+  const [hoveredGate, setHoveredGate] = useState<string | null>(null);
   const zoneMap = new Map<string, ZoneAssessment>();
   for (const za of assessment.zoneAssessments) zoneMap.set(za.zoneId, za);
 
-  const gateStates = computeGateStates(gates, incidents, events, assessment);
+  const gateWorld = computeGateWorld(gates, incidents, recoveryActions ?? [], events, assessment);
 
   // Recovery targets
   const activeTargets = new Set<string>();
   const completedTargets = new Set<string>();
-  const stalledTargets = new Set<string>();
   if (liveExec && activePlan) {
     for (let i = 0; i < activePlan.steps.length; i++) {
       const t = activePlan.steps[i].target;
       const ph = liveExec.steps[i]?.phase;
       if (ph === 'active' || ph === 'dispatched' || ph === 'acknowledged') activeTargets.add(t);
       else if (ph === 'completed') completedTargets.add(t);
-      else if (ph === 'stalled') stalledTargets.add(t);
     }
   }
+
+  const hovered = hoveredGate ? gateWorld.get(hoveredGate) : null;
+  const hoveredPos = hoveredGate ? GATE_POS[hoveredGate] : null;
 
   return (
     <div className="mc-spatial">
@@ -187,38 +210,36 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
             <stop offset="0%" stopColor="transparent" />
             <stop offset="100%" stopColor="#000" stopOpacity="0.4" />
           </radialGradient>
-          {/* Cascade arrowhead */}
-          <marker id="arrow-amber" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+          <marker id="arr-a" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
             <path d="M0,0 L8,3 L0,6 Z" fill="#f5b13d" opacity="0.5" />
           </marker>
-          <marker id="arrow-red" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+          <marker id="arr-r" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="8" markerHeight="6" orient="auto">
             <path d="M0,0 L8,3 L0,6 Z" fill="#ff5c5c" opacity="0.5" />
           </marker>
+          {/* Aircraft silhouette */}
+          <symbol id="aircraft" viewBox="0 0 20 20">
+            <path d="M10,2 L12,8 L18,10 L12,12 L10,18 L8,12 L2,10 L8,8 Z" fill="currentColor" />
+          </symbol>
         </defs>
 
-        {/* Vignette */}
         <rect width="1000" height="600" fill="url(#vig)" />
 
-        {/* Tactical grid */}
-        <g opacity="0.025" stroke="#8899aa" strokeWidth="0.5">
+        {/* Grid */}
+        <g opacity="0.02" stroke="#8899aa" strokeWidth="0.5">
           {[80,160,240,320,400,480,560].map(y => <line key={`h${y}`} x1="40" y1={y} x2="960" y2={y} />)}
           {[80,160,240,320,400,480,560,640,720,800,880,960].map(x => <line key={`v${x}`} x1={x} y1="40" x2={x} y2="560" />)}
         </g>
 
-        {/* Per-gate pressure heat fields */}
+        {/* Per-gate heat */}
         {gates.map(gateId => {
-          const gs = gateStates.get(gateId);
+          const gw = gateWorld.get(gateId);
           const pos = GATE_POS[gateId];
-          if (!gs || !pos || gs.pressure < 10) return null;
-          const r = 20 + (gs.pressure / 100) * 50;
-          const op = gs.pressure >= 80 ? 0.16 : gs.pressure >= 55 ? 0.10 : gs.pressure >= 30 ? 0.05 : 0.02;
+          if (!gw || !pos || gw.pressure < 10) return null;
+          const r = 20 + (gw.pressure / 100) * 50;
+          const op = gw.pressure >= 80 ? 0.14 : gw.pressure >= 55 ? 0.08 : gw.pressure >= 30 ? 0.04 : 0.02;
           return (
-            <circle key={`heat-${gateId}`} cx={pos.x} cy={pos.y} r={r}
-              fill={pColor(gs.pressure)} fillOpacity={op} filter={gs.pressure >= 40 ? 'url(#ng)' : undefined}>
-              {gs.pressure >= 60 && (
-                <animate attributeName="r" values={`${r-5};${r+5};${r-5}`}
-                  dur={gs.pressure >= 80 ? '2.5s' : '4s'} repeatCount="indefinite" />
-              )}
+            <circle key={`ht-${gateId}`} cx={pos.x} cy={pos.y} r={r} fill={pColor(gw.pressure)} fillOpacity={op} filter={gw.pressure >= 40 ? 'url(#ng)' : undefined}>
+              {gw.pressure >= 60 && <animate attributeName="r" values={`${r-4};${r+4};${r-4}`} dur={gw.pressure >= 80 ? '2.5s' : '4s'} repeatCount="indefinite" />}
             </circle>
           );
         })}
@@ -227,56 +248,34 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
         {Object.entries(ZONE_GATES).map(([zoneId, zg]) => {
           const positions = zg.map(g => GATE_POS[g]).filter(Boolean);
           if (positions.length < 2) return null;
-          const minX = Math.min(...positions.map(p => p.x)) - 55;
-          const maxX = Math.max(...positions.map(p => p.x)) + 55;
+          const pad = 55;
+          const minX = Math.min(...positions.map(p => p.x)) - pad;
+          const maxX = Math.max(...positions.map(p => p.x)) + pad;
           const minY = Math.min(...positions.map(p => p.y)) - 45;
-          const maxY = Math.max(...positions.map(p => p.y)) + 45;
+          const maxY = Math.max(...positions.map(p => p.y)) + 50;
           const isSel = selectedZoneId === zoneId;
           const za = zoneMap.get(zoneId);
           const c = za ? pColor(za.pressure) : '#1f2733';
-          return (
-            <rect key={`zb-${zoneId}`} x={minX} y={minY} width={maxX-minX} height={maxY-minY}
-              rx="3" fill="none" stroke={isSel ? c : 'rgba(255,255,255,.03)'}
-              strokeWidth={isSel ? 1.5 : 0.5} strokeDasharray={isSel ? 'none' : '8 6'}
-              opacity={isSel ? 0.7 : 0.3} />
-          );
+          return <rect key={`zb-${zoneId}`} x={minX} y={minY} width={maxX-minX} height={maxY-minY} rx="3" fill="none" stroke={isSel ? c : 'rgba(255,255,255,.025)'} strokeWidth={isSel ? 1.5 : 0.5} strokeDasharray={isSel ? 'none' : '8 6'} opacity={isSel ? 0.7 : 0.25} />;
         })}
 
-        {/* Taxiways + directional cascade */}
+        {/* Taxiways + cascade */}
         {TAXIWAYS.map(({ from, to }, i) => {
-          const p1 = GATE_POS[from];
-          const p2 = GATE_POS[to];
+          const p1 = GATE_POS[from], p2 = GATE_POS[to];
           if (!p1 || !p2) return null;
-          const z1 = gateZone(from);
-          const z2 = gateZone(to);
+          const z1 = gateZone(from), z2 = gateZone(to);
           const isCross = z1 !== z2;
-          const za1 = z1 ? zoneMap.get(z1) : null;
-          const za2 = z2 ? zoneMap.get(z2) : null;
-          const cascadeActive = isCross && za1 && za2 && za1.pressure >= 50 && za2.pressure >= 50;
-
-          // Directional: flow from higher pressure to lower
-          let flowFrom = p1, flowTo = p2;
-          let arrowMarker = 'url(#arrow-amber)';
-          if (cascadeActive && za1 && za2) {
-            if (za2.pressure > za1.pressure) { flowFrom = p2; flowTo = p1; }
-            if (Math.max(za1.pressure, za2.pressure) >= 80) arrowMarker = 'url(#arrow-red)';
-          }
-
+          const za1 = z1 ? zoneMap.get(z1) : null, za2 = z2 ? zoneMap.get(z2) : null;
+          const cascade = isCross && za1 && za2 && za1.pressure >= 50 && za2.pressure >= 50;
+          let fFrom = p1, fTo = p2;
+          if (cascade && za1 && za2 && za2.pressure > za1.pressure) { fFrom = p2; fTo = p1; }
+          const maxP = Math.max(za1?.pressure ?? 0, za2?.pressure ?? 0);
           return (
-            <g key={`tw-${i}`} style={{
-              opacity: selectedGateId && from !== selectedGateId && to !== selectedGateId ? 0.3 : 1,
-              transition: 'opacity .4s cubic-bezier(.23,1,.32,1)',
-            }}>
-              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                stroke={cascadeActive ? pColor(Math.max(za1?.pressure??0, za2?.pressure??0)) : 'rgba(255,255,255,.05)'}
-                strokeWidth={cascadeActive ? 1.5 : 0.7}
-                strokeDasharray={isCross ? '8 5' : 'none'}
-                opacity={cascadeActive ? 0.35 : 0.25}
-                markerEnd={cascadeActive ? arrowMarker : undefined} />
-              {cascadeActive && (
-                <circle r="2.5" fill={pColor(Math.max(za1?.pressure??0, za2?.pressure??0))} opacity="0.5">
-                  <animateMotion dur="3s" repeatCount="indefinite"
-                    path={`M${flowFrom.x},${flowFrom.y} L${flowTo.x},${flowTo.y}`} />
+            <g key={`tw-${i}`} style={{ opacity: selectedGateId && from !== selectedGateId && to !== selectedGateId ? 0.2 : 1, transition: 'opacity .4s cubic-bezier(.23,1,.32,1)' }}>
+              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={cascade ? pColor(maxP) : 'rgba(255,255,255,.04)'} strokeWidth={cascade ? 1.5 : 0.6} strokeDasharray={isCross ? '8 5' : 'none'} opacity={cascade ? 0.3 : 0.2} markerEnd={cascade ? (maxP >= 80 ? 'url(#arr-r)' : 'url(#arr-a)') : undefined} />
+              {cascade && (
+                <circle r="2.5" fill={pColor(maxP)} opacity="0.5">
+                  <animateMotion dur="3s" repeatCount="indefinite" path={`M${fFrom.x},${fFrom.y} L${fTo.x},${fTo.y}`} />
                   <animate attributeName="opacity" values="0.15;0.6;0.15" dur="3s" repeatCount="indefinite" />
                 </circle>
               )}
@@ -284,114 +283,98 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
           );
         })}
 
-        {/* Resource movement traces (active recovery steps) */}
+        {/* Resource traces */}
         {activePlan && liveExec && activePlan.steps.map((step, i) => {
           const ls = liveExec.steps[i];
-          if (!ls || (ls.phase !== 'active' && ls.phase !== 'dispatched' && ls.phase !== 'acknowledged')) return null;
-          const targetPos = GATE_POS[step.target];
-          if (!targetPos) return null;
-          // Trace from center-bottom toward target gate
-          const srcX = 500;
-          const srcY = 580;
+          if (!ls || !['active','dispatched','acknowledged'].includes(ls.phase)) return null;
+          const tp = GATE_POS[step.target];
+          if (!tp) return null;
           return (
-            <g key={`res-${i}`} opacity="0.4">
-              <line x1={srcX} y1={srcY} x2={targetPos.x} y2={targetPos.y}
-                stroke="#5aa9ff" strokeWidth="1" strokeDasharray="4 6" />
-              <circle r="3" fill="#5aa9ff" opacity="0.7">
-                <animateMotion dur="2s" repeatCount="indefinite"
-                  path={`M${srcX},${srcY} L${targetPos.x},${targetPos.y}`} />
-              </circle>
+            <g key={`res-${i}`} opacity="0.35">
+              <line x1={500} y1={580} x2={tp.x} y2={tp.y} stroke="#5aa9ff" strokeWidth="1" strokeDasharray="4 6" />
+              <circle r="3" fill="#5aa9ff" opacity="0.7"><animateMotion dur="2s" repeatCount="indefinite" path={`M500,580 L${tp.x},${tp.y}`} /></circle>
             </g>
           );
         })}
 
-        {/* Gate nodes */}
+        {/* Gate nodes with world layer */}
         {gates.map(gateId => {
           const pos = GATE_POS[gateId];
           if (!pos) return null;
-          const gs = gateStates.get(gateId);
-          const pressure = gs?.pressure ?? 0;
+          const gw = gateWorld.get(gateId);
+          if (!gw) return null;
           const zoneId = gateZone(gateId);
           const isActive = activeTargets.has(gateId) || activeTargets.has(zoneId ?? '');
           const isDone = completedTargets.has(gateId) || completedTargets.has(zoneId ?? '');
-          const isStalled = stalledTargets.has(gateId) || stalledTargets.has(zoneId ?? '');
           const isFocused = selectedGateId === gateId;
-          const nodeColor = isActive ? '#5aa9ff' : isStalled ? '#f5b13d' : isDone ? '#3ed598' : pColor(pressure);
-          const strokeW = isFocused ? 3 : isActive || isStalled ? 2.5 : 1.5;
+          const nodeColor = isActive ? '#5aa9ff' : isDone ? '#3ed598' : pColor(gw.pressure);
+          const turnColor = TURN_COLOR[gw.turnState];
 
           return (
-            <g key={gateId} onClick={() => onGateClick?.(gateId)}
-              style={{
-                cursor: 'pointer',
-                opacity: selectedGateId && selectedGateId !== gateId ? 0.4 : 1,
-                transition: 'opacity .4s cubic-bezier(.23,1,.32,1)',
-              }}>
-              {/* Selected gate focus ring */}
+            <g key={gateId}
+              onClick={() => onGateClick?.(gateId)}
+              onMouseEnter={() => setHoveredGate(gateId)}
+              onMouseLeave={() => setHoveredGate(null)}
+              style={{ cursor: 'pointer', opacity: selectedGateId && selectedGateId !== gateId ? 0.35 : 1, transition: 'opacity .4s cubic-bezier(.23,1,.32,1)' }}>
+
+              {/* Focus ring */}
               {isFocused && (
-                <circle cx={pos.x} cy={pos.y} r={30} fill="none" stroke={nodeColor} strokeWidth="1"
-                  strokeDasharray="3 3" opacity="0.6">
-                  <animateTransform attributeName="transform" type="rotate"
-                    from={`0 ${pos.x} ${pos.y}`} to={`360 ${pos.x} ${pos.y}`} dur="12s" repeatCount="indefinite" />
+                <circle cx={pos.x} cy={pos.y} r={32} fill="none" stroke={nodeColor} strokeWidth="1" strokeDasharray="3 3" opacity="0.5">
+                  <animateTransform attributeName="transform" type="rotate" from={`0 ${pos.x} ${pos.y}`} to={`360 ${pos.x} ${pos.y}`} dur="12s" repeatCount="indefinite" />
                 </circle>
               )}
-
-              {/* Recovery ring */}
               {isActive && (
-                <circle cx={pos.x} cy={pos.y} r={27} fill="none" stroke="#5aa9ff" strokeWidth="1"
-                  strokeDasharray="4 4" opacity="0.5">
-                  <animateTransform attributeName="transform" type="rotate"
-                    from={`0 ${pos.x} ${pos.y}`} to={`360 ${pos.x} ${pos.y}`} dur="8s" repeatCount="indefinite" />
+                <circle cx={pos.x} cy={pos.y} r={28} fill="none" stroke="#5aa9ff" strokeWidth="1" strokeDasharray="4 4" opacity="0.4">
+                  <animateTransform attributeName="transform" type="rotate" from={`0 ${pos.x} ${pos.y}`} to={`360 ${pos.x} ${pos.y}`} dur="8s" repeatCount="indefinite" />
                 </circle>
               )}
 
               {/* Gate circle */}
-              <circle cx={pos.x} cy={pos.y} r={21} fill="#0a0d12" stroke={nodeColor} strokeWidth={strokeW} />
+              <circle cx={pos.x} cy={pos.y} r={22} fill="#080c14" stroke={nodeColor} strokeWidth={isFocused ? 2.5 : 1.5} />
 
-              {/* Occupancy marker (small aircraft glyph) */}
-              {gs?.occupied && (
-                <text x={pos.x - 18} y={pos.y - 18} fill={nodeColor} fontSize="8" opacity="0.5"
-                  fontFamily="'JetBrains Mono', monospace">✈</text>
+              {/* Turnaround state ring (outer) */}
+              {gw.turnState !== 'empty' && (
+                <circle cx={pos.x} cy={pos.y} r={22} fill="none" stroke={turnColor} strokeWidth="2" strokeDasharray={`${Math.PI * 44 * 0.75} ${Math.PI * 44 * 0.25}`} strokeDashoffset={Math.PI * 44 * 0.125} opacity="0.3" />
               )}
 
-              {/* Equipment issue marker */}
-              {gs?.hasEquipmentIssue && (
-                <text x={pos.x + 14} y={pos.y + 18} fill="#f5b13d" fontSize="7" opacity="0.6"
-                  fontFamily="'JetBrains Mono', monospace">⚠</text>
+              {/* Aircraft marker */}
+              {gw.hasAircraft && (
+                <use href="#aircraft" x={pos.x - 6} y={pos.y - 30} width="12" height="12" color={turnColor} opacity="0.5" />
               )}
 
               {/* Gate letter */}
-              <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
-                fill={nodeColor} fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
-                {gateId.replace('52', '')}
-              </text>
+              <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle" fill={nodeColor} fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace">{gateId.replace('52', '')}</text>
 
-              {/* NATO label */}
-              <text x={pos.x} y={pos.y + 34} textAnchor="middle"
-                fill="#3a4454" fontSize="7" letterSpacing="0.12em" fontFamily="'JetBrains Mono', monospace">
-                {GATE_LABELS[gateId]?.toUpperCase()}
-              </text>
+              {/* Turn state label */}
+              <text x={pos.x} y={pos.y + 34} textAnchor="middle" fill={turnColor} fontSize="6" letterSpacing="0.14em" fontFamily="'JetBrains Mono', monospace" opacity="0.6">{TURN_LABEL[gw.turnState]}</text>
 
-              {/* Per-gate pressure */}
-              {pressure > 0 && (
-                <text x={pos.x} y={pos.y + 46} textAnchor="middle"
-                  fill={nodeColor} fontSize="9" fontWeight="600" fontFamily="'JetBrains Mono', monospace" opacity="0.7">
-                  {pressure}
-                </text>
+              {/* Pressure */}
+              {gw.pressure > 0 && <text x={pos.x} y={pos.y + 44} textAnchor="middle" fill={nodeColor} fontSize="9" fontWeight="600" fontFamily="'JetBrains Mono', monospace" opacity="0.6">{gw.pressure}</text>}
+
+              {/* Staffing dots */}
+              {gw.staffingLevel > 0 && (
+                <g>
+                  {Array.from({ length: gw.staffingLevel }).map((_, si) => (
+                    <circle key={si} cx={pos.x - 8 + si * 6} cy={pos.y + 52} r={2} fill="#5aa9ff" opacity="0.4" />
+                  ))}
+                </g>
               )}
 
-              {/* Incident count badge */}
-              {(gs?.incidents ?? 0) > 0 && (
+              {/* Equipment failure */}
+              {gw.hasEquipmentFailure && (
                 <g>
-                  <circle cx={pos.x + 18} cy={pos.y - 18} r={9}
-                    fill={gs!.criticalCount > 0 ? '#ff5c5c' : gs!.highCount > 0 ? '#f5b13d' : '#5aa9ff'} fillOpacity={0.85}>
-                    {gs!.criticalCount > 0 && (
-                      <animate attributeName="r" values="9;11;9" dur="2s" repeatCount="indefinite" />
-                    )}
+                  <rect x={pos.x + 16} y={pos.y + 8} width={12} height={12} rx={1} fill="#f5b13d" fillOpacity="0.15" stroke="#f5b13d" strokeWidth="0.5" opacity="0.7" />
+                  <text x={pos.x + 22} y={pos.y + 16} textAnchor="middle" dominantBaseline="middle" fill="#f5b13d" fontSize="8" fontFamily="'JetBrains Mono', monospace">⚡</text>
+                </g>
+              )}
+
+              {/* Incident badge */}
+              {gw.incidents > 0 && (
+                <g>
+                  <circle cx={pos.x + 20} cy={pos.y - 18} r={9} fill={gw.criticalCount > 0 ? '#ff5c5c' : gw.highCount > 0 ? '#f5b13d' : '#5aa9ff'} fillOpacity={0.85}>
+                    {gw.criticalCount > 0 && <animate attributeName="r" values="9;11;9" dur="2s" repeatCount="indefinite" />}
                   </circle>
-                  <text x={pos.x + 18} y={pos.y - 18} textAnchor="middle" dominantBaseline="central"
-                    fill="#fff" fontSize="8" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
-                    {gs!.incidents}
-                  </text>
+                  <text x={pos.x + 20} y={pos.y - 18} textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="8" fontWeight="700" fontFamily="'JetBrains Mono', monospace">{gw.incidents}</text>
                 </g>
               )}
             </g>
@@ -405,12 +388,7 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
           const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
           const minY = Math.min(...positions.map(p => p.y));
           const za = zoneMap.get(zoneId);
-          return (
-            <text key={`lbl-${zoneId}`} x={cx} y={minY - 38} textAnchor="middle"
-              fill="#3a4454" fontSize="8" letterSpacing="0.16em" fontFamily="'JetBrains Mono', monospace">
-              {za?.zoneLabel?.toUpperCase() ?? zoneId}
-            </text>
-          );
+          return <text key={`lbl-${zoneId}`} x={cx} y={minY - 38} textAnchor="middle" fill="#303848" fontSize="8" letterSpacing="0.16em" fontFamily="'JetBrains Mono', monospace">{za?.zoneLabel?.toUpperCase() ?? zoneId}</text>;
         })}
 
         {/* Worst zone badge */}
@@ -426,22 +404,35 @@ export function SpatialField({ assessment, gates, incidents, events, selectedZon
           return (
             <g>
               <rect x={maxX+35} y={minY-12} width={84} height={24} rx={2} fill={c} fillOpacity={0.1} stroke={c} strokeWidth={0.8} />
-              <text x={maxX+77} y={minY+2} textAnchor="middle" dominantBaseline="middle"
-                fill={c} fontSize="8" fontWeight="700" letterSpacing="0.12em" fontFamily="'JetBrains Mono', monospace">
-                {worst.stability.toUpperCase()}
-              </text>
-              {worst.pressure >= 80 && (
-                <rect x={maxX+35} y={minY-12} width={84} height={24} rx={2} fill="none" stroke={c} strokeWidth={0.5}>
-                  <animate attributeName="opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite" />
-                </rect>
-              )}
+              <text x={maxX+77} y={minY+2} textAnchor="middle" dominantBaseline="middle" fill={c} fontSize="8" fontWeight="700" letterSpacing="0.12em" fontFamily="'JetBrains Mono', monospace">{worst.stability.toUpperCase()}</text>
+              {worst.pressure >= 80 && <rect x={maxX+35} y={minY-12} width={84} height={24} rx={2} fill="none" stroke={c} strokeWidth={0.5}><animate attributeName="opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite" /></rect>}
             </g>
           );
         })()}
 
-        {/* Coordinate markers */}
-        <text x="30" y="582" fill="#222838" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">LAX T5 RAMP</text>
-        <text x="970" y="582" fill="#222838" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em" textAnchor="end">52A–I</text>
+        {/* Hover context card */}
+        {hovered && hoveredPos && (
+          <g style={{ pointerEvents: 'none' }}>
+            <rect x={hoveredPos.x + 30} y={hoveredPos.y - 50} width={140} height={80} rx={3} fill="#0c1018" fillOpacity="0.95" stroke="rgba(255,255,255,.08)" strokeWidth="1" />
+            <text x={hoveredPos.x + 38} y={hoveredPos.y - 34} fill={pColor(hovered.pressure)} fontSize="10" fontWeight="700" fontFamily="'JetBrains Mono', monospace">Gate {hovered.gateId}</text>
+            <text x={hoveredPos.x + 38} y={hoveredPos.y - 20} fill="#6b7585" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">{TURN_LABEL[hovered.turnState]} · P{hovered.pressure}</text>
+            <text x={hoveredPos.x + 38} y={hoveredPos.y - 6} fill="rgba(255,255,255,.3)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+              {hovered.incidents > 0 ? `${hovered.incidents} incident${hovered.incidents > 1 ? 's' : ''}` : 'No incidents'}
+              {hovered.activeRecoveries > 0 ? ` · ${hovered.activeRecoveries} recovery` : ''}
+            </text>
+            <text x={hoveredPos.x + 38} y={hoveredPos.y + 8} fill="rgba(255,255,255,.25)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+              {hovered.hasEquipmentFailure ? 'Equipment issue' : hovered.equipmentIds.length > 0 ? `${hovered.equipmentIds.length} equip` : ''}
+              {hovered.staffingLevel > 0 ? ` · ${hovered.staffingLevel} crew` : ' · No crew'}
+            </text>
+            {hovered.oldestIncidentMin > 0 && (
+              <text x={hoveredPos.x + 38} y={hoveredPos.y + 20} fill="rgba(255,255,255,.2)" fontSize="7" fontFamily="'JetBrains Mono', monospace">Oldest: {hovered.oldestIncidentMin}m</text>
+            )}
+          </g>
+        )}
+
+        {/* Coordinates */}
+        <text x="30" y="582" fill="#1c2230" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">LAX T5 RAMP</text>
+        <text x="970" y="582" fill="#1c2230" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em" textAnchor="end">52A–I</text>
       </svg>
     </div>
   );

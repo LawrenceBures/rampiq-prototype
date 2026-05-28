@@ -2077,6 +2077,7 @@ export default function ManagerDashboard() {
               assessment={operationalAssessment}
               gates={ALL_GATES}
               incidents={temporalIncidents}
+              recoveryActions={temporalRecoveryActions}
               events={temporalEvents}
               selectedZoneId={selectedZoneId}
               selectedGateId={selectedGateId}
