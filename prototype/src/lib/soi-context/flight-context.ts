@@ -73,12 +73,14 @@ export function computeFlightWorld(
     const hasRecovery = gr.length > 0;
     const hasCritical = gi.some(i => i.severity === 'CRITICAL' || i.severity === 'HIGH');
 
-    let turnPhase: TurnPhase = 'pre_arrival';
+    // Default: aircraft at gate (servicing) — every gate has an assigned flight
+    let turnPhase: TurnPhase = 'servicing';
     if (hasRecovery && gi.length > 0) turnPhase = 'recovery';
     else if (hasCritical) turnPhase = 'delayed';
     else if (minutesToDep <= 5 && minutesToDep > 0 && !hasCritical) turnPhase = 'push_ready';
     else if (hasService) turnPhase = 'servicing';
     else if (hasScan) turnPhase = 'arrival';
+    else if (gi.length > 0) turnPhase = 'delayed';
 
     // Equipment blocked
     const equipBlocked = ge.some(e => e.equipment_id && e.severity !== 'LOW' && e.operational_status !== 'RESOLVED');

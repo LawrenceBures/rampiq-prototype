@@ -1334,7 +1334,7 @@ export default function ManagerDashboard() {
       const used = await speakWithOpenAI(text);
       if (used) return;
     }
-    soiSpeak(text);
+    speakDirect(text);
   }
 
   useEffect(() => {
