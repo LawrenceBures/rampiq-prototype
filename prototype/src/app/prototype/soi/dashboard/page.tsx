@@ -2496,8 +2496,65 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      <div className="env">
-        {/* ═══ HEADER ═══ */}
+      <div className={`env${crisisMode ? ' crisis' : ''}${editMode ? ' editing' : ''}`}>
+
+        {/* ═══ EDIT MODE BANNER (replaces header) ═══ */}
+        {editMode ? (
+          <header className="edit-banner">
+            <div className="edit-tag"><span className="pip" /><span className="t">Edit Layout</span></div>
+            <span className="hint">Rearrange modules · <b>Recommendation</b> and <b>Command Dock</b> are locked anchors</span>
+            <div className="edit-spacer" />
+            {isModified && <div className="modified-pill"><span className="d" /><span className="t">Modified</span></div>}
+            <button className="btn-banner danger" onClick={resetLayout}>Reset to Default</button>
+            <button className="btn-banner ghost" onClick={() => { setLayoutSlots(savedSlots); setEditMode(false); }}>Cancel</button>
+            <button className="btn-banner primary" onClick={() => { saveCurrentLayout(); setEditMode(false); }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="#03222a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Save Layout
+            </button>
+          </header>
+        ) : (
+
+        /* ═══ CRISIS STRIP ═══ */
+        crisisMode ? (
+          <>
+            <header className="header">
+              <div className="brand">
+                <div className="brand-mark">
+                  <svg viewBox="0 0 30 30" fill="none">
+                    <circle cx="15" cy="15" r="13.5" stroke="#ff7d4d" strokeOpacity=".5"/>
+                    <circle cx="15" cy="15" r="4" fill="#ff7d4d" fillOpacity=".18" stroke="#ff7d4d"/>
+                    <path d="M15 1.5V6M15 24v4.5M1.5 15H6M24 15h4.5" stroke="#ff7d4d" strokeOpacity=".7" strokeWidth="1.2"/>
+                  </svg>
+                </div>
+                <div className="brand-txt"><span className="name">SOI</span><span className="sub">Crisis Mode</span></div>
+              </div>
+              <div className="hdr-div" />
+              <div className="station"><span className="code" style={{ color: 'var(--orange)' }}>{operator.station} · EAGLE</span><span className="mode">Gates 52A–I</span></div>
+              <div className="hdr-spacer" />
+              <div className="hdr-stat"><span className="v">{liveTime}</span><span className="k">Local</span></div>
+              <div className="hdr-div" />
+              <div className="soi-status">
+                <div className="ai-orb" style={{ background: 'radial-gradient(circle at 38% 34%, #ffb89a 0%, #ff7d4d 32%, #8a3a1d 78%, #421a0a 100%)', boxShadow: '0 0 0 1px rgba(255,125,77,.4), 0 0 18px var(--glow-orange)' }} />
+                <div className="lbl"><span className="a">Crisis Active</span><span className="b" style={{ color: 'var(--orange)' }}>Elevated pressure</span></div>
+              </div>
+              <button className="cta cta-ghost" style={{ padding: '8px 14px', fontSize: 11, borderRadius: 8 }} onClick={toggleCrisis}>Exit Crisis</button>
+              <div className="op-avatar">{operator.displayName.split(' ').map(n => n[0]).join('')}</div>
+            </header>
+            <div className="crisis-strip">
+              <div className="crisis-id">
+                <span className="label">Active Incident</span>
+                <span className="title">{soiRecommendations[0]?.title ?? `${operator.station} operational pressure elevated`}</span>
+              </div>
+              <div className="crisis-meta">
+                <div className="cm-stat"><span className="k">Pressure</span><span className="v crit">{operationalAssessment.globalPressure}</span></div>
+                <div className="cm-stat"><span className="k">Incidents</span><span className="v">{temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length}</span></div>
+                <div className="cm-stat"><span className="k">Recovery</span><span className="v">{recoveryProgress.pct}%</span></div>
+              </div>
+            </div>
+          </>
+        ) : (
+
+        /* ═══ DEFAULT HEADER ═══ */
         <header className="header">
           <div className="brand">
             <div className="brand-mark">
@@ -2531,8 +2588,9 @@ export default function ManagerDashboard() {
               <span className="b">Monitoring · {operationalAssessment.zoneAssessments.length} zones</span>
             </div>
           </div>
-          <div className="op-avatar">{operator.displayName.split(' ').map(n => n[0]).join('')}</div>
+          <div className="op-avatar" onClick={() => { clearIdentity(); setShowAccessPrompt(true); }} style={{ cursor: 'pointer' }} title="Switch operator">{operator.displayName.split(' ').map(n => n[0]).join('')}</div>
         </header>
+        ))}
 
         {/* ═══ BODY ═══ */}
         <div className="body">
@@ -2635,7 +2693,7 @@ export default function ManagerDashboard() {
 
             <div className="stage-inner">
               <div className="spatial-cap">
-                <span className="ttl">Terminal 5 · Pressure Field</span>
+                <span className="ttl">{operator.station} · Pressure Field</span>
                 <span className="pill">Spatial Mode</span>
                 <div className="legend-inline">
                   <div className="li"><span className="d" style={{ background: 'var(--red)', boxShadow: '0 0 8px var(--glow-red)' }} />Critical</div>
@@ -2754,6 +2812,13 @@ export default function ManagerDashboard() {
                       <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#03222a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
                   </div>
+                  {crisisMode && (
+                    <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
+                      <button className="dock-chip info" onClick={() => handleCommand('brief me')}>Brief Team</button>
+                      <button className="dock-chip warn" onClick={() => handleCommand('stabilize worst zone')}>Hold Position</button>
+                      <button className="dock-chip danger" onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
