@@ -94,6 +94,15 @@ import {
   type NarrativeFeed,
 } from '@/lib/soi-narrative';
 import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
+import {
+  isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
+  routeVoiceCommand,
+  isTTSAvailable, speak, speakCritical, stopSpeaking, toggleTTS, isTTSEnabled,
+  toggleAmbient, isAmbientEnabled, playAmbientCue,
+  shouldSpeak, getSpokenPriority, condenseForSpeech,
+  generateSpokenBriefing,
+  type VoiceInputState,
+} from '@/lib/soi-voice';
 
 // ============================================================
 // TYPES
@@ -142,6 +151,10 @@ export default function ManagerDashboard() {
   const [narrativeFeed, setNarrativeFeed] = useState<NarrativeFeed>(createNarrativeFeed());
   const liveExecTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStepPhasesRef = useRef<string[]>([]);
+  const [voiceState, setVoiceState] = useState<VoiceInputState>('idle');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [ttsOn, setTtsOn] = useState(false);
+  const [ambientOn, setAmbientOn] = useState(false);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
@@ -824,6 +837,61 @@ export default function ManagerDashboard() {
   useEffect(() => {
     return () => { if (liveExecTickRef.current) clearInterval(liveExecTickRef.current); };
   }, []);
+
+  // ── Voice input setup ──
+  useEffect(() => {
+    onVoiceStateChange(setVoiceState);
+    onVoiceResult(result => {
+      if (!result.isFinal) {
+        setInterimTranscript(result.transcript);
+        return;
+      }
+      setInterimTranscript('');
+      const cmd = routeVoiceCommand(result.transcript);
+      if (cmd.type === 'approval' && cmdMemory.activePlan && !liveExec) {
+        handleApprovePlan();
+        if (ttsOn) speak('Recovery chain approved and execution initiated.', 'normal', 'briefing');
+      } else if (cmd.type === 'cancellation') {
+        if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+        setLiveExec(null);
+        setAdaptiveRecs([]);
+        setCmdMemory(clearCommandMemory(cmdMemory));
+        if (ttsOn) speak('Execution cancelled.', 'normal', 'briefing');
+      } else {
+        // Route through existing command handler
+        setCommandInput(cmd.text);
+        handleCommand(cmd.text);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmdMemory.activePlan, liveExec, ttsOn]);
+
+  // ── Speak narratives that qualify ──
+  useEffect(() => {
+    if (!ttsOn) return;
+    const visible = getVisibleNarratives(narrativeFeed, 1);
+    if (visible.length === 0) return;
+    const latest = visible[0];
+    if (shouldSpeak(latest.category)) {
+      const text = condenseForSpeech(latest.narrative);
+      const priority = getSpokenPriority(latest.category);
+      if (priority === 'critical') {
+        speakCritical(text, latest.category);
+      } else {
+        speak(text, priority, latest.category);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrativeFeed.entries.length]);
+
+  // ── Ambient cues on execution state changes ──
+  useEffect(() => {
+    if (!ambientOn || !liveExec) return;
+    if (liveExec.phase === 'completed') playAmbientCue('chain_complete');
+    else if (liveExec.phase === 'failed') playAmbientCue('chain_failed');
+    else if (liveExec.phase === 'blocked') playAmbientCue('stalled');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveExec?.phase, ambientOn]);
 
   // EventCard — extracted to components/soi/EventCard.tsx
 
@@ -1989,6 +2057,84 @@ export default function ManagerDashboard() {
             {view === 'incidents' && renderIncidents()}
             {view === 'patterns' && renderPatterns()}
             {view === 'intelligence' && renderIntelligence()}
+
+            {/* SOI Voice Control */}
+            <div style={{
+              margin: '4px 16px 0', display: 'flex', alignItems: 'center', gap: 6,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              {/* Push-to-talk */}
+              {isVoiceInputAvailable() && (
+                <button
+                  type="button"
+                  onMouseDown={() => startListening()}
+                  onMouseUp={() => stopListening()}
+                  onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
+                  style={{
+                    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: voiceState === 'listening' ? 'rgba(255,92,92,.15)' : 'var(--rq-bg-1)',
+                    border: `1px solid ${voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-line)'}`,
+                    color: voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-ink-3)',
+                    cursor: 'pointer', fontSize: 14, flexShrink: 0,
+                    transition: 'all .15s',
+                  }}
+                  title="Push to talk (hold)"
+                >
+                  {voiceState === 'listening' ? '●' : '🎙'}
+                </button>
+              )}
+
+              {/* Interim transcript */}
+              {interimTranscript && (
+                <span style={{ fontSize: 9, color: 'var(--rq-ink-3)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {interimTranscript}
+                </span>
+              )}
+
+              {/* Voice state indicator */}
+              {voiceState !== 'idle' && !interimTranscript && (
+                <span style={{
+                  fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
+                  color: voiceState === 'listening' ? 'var(--rq-red)' : voiceState === 'processing' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
+                }}>
+                  {voiceState}
+                </span>
+              )}
+
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                {/* TTS toggle */}
+                {isTTSAvailable() && (
+                  <button type="button" onClick={() => { const on = toggleTTS(); setTtsOn(on); if (!on) stopSpeaking(); }}
+                    style={{
+                      padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
+                      fontFamily: 'inherit',
+                      background: ttsOn ? 'rgba(90,169,255,.08)' : 'none',
+                      border: `1px solid ${ttsOn ? 'var(--rq-blue)' : 'var(--rq-line)'}`,
+                      color: ttsOn ? 'var(--rq-blue)' : 'var(--rq-ink-4)',
+                      cursor: 'pointer',
+                    }}
+                    title="Toggle spoken responses"
+                  >
+                    {ttsOn ? 'Voice On' : 'Voice'}
+                  </button>
+                )}
+
+                {/* Ambient toggle */}
+                <button type="button" onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}
+                  style={{
+                    padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
+                    fontFamily: 'inherit',
+                    background: ambientOn ? 'rgba(201,255,58,.06)' : 'none',
+                    border: `1px solid ${ambientOn ? 'var(--rq-accent)' : 'var(--rq-line)'}`,
+                    color: ambientOn ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
+                    cursor: 'pointer',
+                  }}
+                  title="Toggle ambient operational cues"
+                >
+                  {ambientOn ? 'Ambient On' : 'Ambient'}
+                </button>
+              </div>
+            </div>
 
             {/* SOI Command Input */}
             <div style={{
