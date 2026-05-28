@@ -683,7 +683,7 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
-        // D. Copilot fallback: route through context-aware operational reasoning
+        // D. Copilot deterministic answer first
         setCommandResponse(null);
         const opCtx = {
           assessment: operationalAssessment,
@@ -697,8 +697,23 @@ export default function ManagerDashboard() {
         setConversationMemory(result.updatedMemory);
         setLastInferredFrom(result.inferredFrom);
 
+        // E. If copilot returned "unknown" intent, try LLM intent interpreter
+        const isUnknown = result.answer.title === 'Unable to interpret';
+        if (isUnknown) {
+          fetch('/api/soi/llm-intent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: raw }),
+          }).then(r => r.json()).then(data => {
+            if (!data.intent || data.intent.intent === 'unknown') return;
+            const li = data.intent;
+            // Route the LLM-interpreted intent into existing SOI engines
+            routeLLMIntent(li, raw);
+          }).catch(() => { /* keep deterministic answer */ });
+        }
+
         // Async LLM voice rewrite (non-blocking, upgrades answer when ready)
-        if (isVoiceAvailable()) {
+        if (!isUnknown && isVoiceAvailable()) {
           const isBriefing = /brief|situation|status|summarize|overview/i.test(raw);
           const grounded: GroundedData = {
             answer: {
@@ -934,6 +949,81 @@ export default function ManagerDashboard() {
     else if (liveExec.phase === 'blocked') playAmbientCue('stalled');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveExec?.phase, ambientOn]);
+
+  // ── Route LLM-interpreted intents into SOI engines ──
+  function routeLLMIntent(li: { intent: string; gate?: string; zone?: string; resource?: string; confidence: number; reasoning: string }, _raw: string) {
+    // Resolve gate → zone
+    let targetZone = li.zone ? resolveZonePattern(li.zone, zones) ?? undefined : undefined;
+    const targetGate = li.gate?.toUpperCase();
+    if (!targetZone && targetGate) {
+      targetZone = resolveZonePattern(targetGate, zones) ?? undefined;
+    }
+
+    switch (li.intent) {
+      case 'focus_gate': {
+        if (targetGate) {
+          if (targetZone) setSelectedZoneId(targetZone);
+          setCommandResponse([`Focused on gate ${targetGate}${targetZone ? ` (${zones.find(z => z.id === targetZone)?.label ?? targetZone})` : ''}.`]);
+          setCopilotAnswer(null);
+        }
+        break;
+      }
+      case 'focus_zone': {
+        if (targetZone) {
+          setSelectedZoneId(targetZone);
+          setCommandResponse([`Focused on zone: ${zones.find(z => z.id === targetZone)?.label ?? targetZone}`]);
+          setCopilotAnswer(null);
+        }
+        break;
+      }
+      case 'explain_gate':
+      case 'explain_zone': {
+        const zoneId = targetZone ?? (targetGate ? resolveZonePattern(targetGate, zones) ?? undefined : undefined);
+        if (zoneId) {
+          const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
+          setCommandResponse(lines);
+          setCopilotAnswer(null);
+        }
+        break;
+      }
+      case 'stabilize_zone':
+      case 'stabilize_worst': {
+        // Re-route through agentic handler
+        const syntheticCommand = targetGate ? `stabilize ${targetGate}` : targetZone ? `stabilize zone` : 'stabilize worst zone';
+        handleCommand(syntheticCommand);
+        break;
+      }
+      case 'recovery_plan': {
+        handleCommand('what should we do');
+        break;
+      }
+      case 'risk_assessment': {
+        handleCommand('what is our biggest risk');
+        break;
+      }
+      case 'approval_dispatch': {
+        handleCommand('approve');
+        break;
+      }
+      case 'cancel_action': {
+        handleCommand('cancel');
+        break;
+      }
+      case 'briefing': {
+        handleCommand('summarize');
+        break;
+      }
+      case 'plan_status': {
+        handleCommand('show plan status');
+        break;
+      }
+      default: {
+        // LLM couldn't resolve either — show reasoning
+        setCommandResponse([`SOI: ${li.reasoning ?? 'Unable to interpret this command.'}`]);
+        setCopilotAnswer(null);
+      }
+    }
+  }
 
   // EventCard — extracted to components/soi/EventCard.tsx
 
