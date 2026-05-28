@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOI — Systems Operational Intelligence</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --void:#05070a;
+  --bg:#080b10;
+  --bg-2:#0b0f15;
+  --elev:rgba(255,255,255,.022);
+  --elev-2:rgba(255,255,255,.04);
+  --line:rgba(150,170,190,.08);
+  --line-2:rgba(150,170,190,.14);
+  --ink:#eef3f8;
+  --ink-2:#97a4b2;
+  --ink-3:#5c6772;
+  --ink-4:#3c454e;
+
+  --cyan:#52d6e6;
+  --cyan-dim:rgba(82,214,230,.14);
+  --blue:#5a93ff;
+  --green:#3fd489;
+  --amber:#f3b13c;
+  --orange:#ff7d4d;
+  --red:#ff5564;
+
+  --glow-cyan:rgba(82,214,230,.35);
+  --glow-amber:rgba(243,177,60,.3);
+  --glow-orange:rgba(255,125,77,.3);
+  --glow-red:rgba(255,85,100,.32);
+
+  --mono:'Spline Sans Mono',monospace;
+  --sans:'Sora',sans-serif;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  background:var(--void);
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+
+/* tactical label helper */
+.tac{
+  font-family:var(--mono);
+  font-size:9.5px;
+  font-weight:500;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+  color:var(--ink-3);
+}
+.num{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+/* ============================================================
+   ENVIRONMENT
+   ============================================================ */
+.env{
+  position:relative;
+  height:100vh;
+  width:100vw;
+  background:
+    radial-gradient(1400px 700px at 50% -8%, #0e151d 0%, transparent 55%),
+    radial-gradient(1000px 900px at 88% 120%, #0a1016 0%, transparent 60%),
+    linear-gradient(180deg, #070a0e 0%, #05070a 100%);
+  display:flex;
+  flex-direction:column;
+}
+/* fine grain overlay */
+.env::before{
+  content:"";
+  position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  opacity:.025; mix-blend-mode:overlay;
+}
+/* soft top reflection sweep */
+.env::after{
+  content:""; position:absolute; top:0; left:0; right:0; height:280px; z-index:0; pointer-events:none;
+  background:linear-gradient(180deg, rgba(82,214,230,.04), transparent 80%);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.header{
+  position:relative; z-index:5;
+  height:62px; flex-shrink:0;
+  display:flex; align-items:center;
+  padding:0 26px;
+  border-bottom:1px solid var(--line);
+  gap:22px;
+}
+.brand{ display:flex; align-items:center; gap:13px; }
+.brand-mark{
+  width:30px; height:30px; position:relative; flex-shrink:0;
+}
+.brand-mark svg{ width:100%; height:100%; display:block; }
+.brand-txt{ display:flex; flex-direction:column; line-height:1; gap:3px; }
+.brand-txt .name{ font-size:14px; font-weight:600; letter-spacing:.14em; color:var(--ink); }
+.brand-txt .sub{ font-family:var(--mono); font-size:8px; letter-spacing:.28em; color:var(--ink-3); text-transform:uppercase; }
+
+.hdr-div{ width:1px; height:26px; background:var(--line-2); }
+
+.station{ display:flex; flex-direction:column; gap:4px; }
+.station .code{ font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.1em; color:var(--cyan); }
+.station .mode{ font-family:var(--mono); font-size:8px; letter-spacing:.2em; color:var(--ink-3); text-transform:uppercase; }
+
+.hdr-spacer{ flex:1; }
+
+.hdr-stat{ display:flex; flex-direction:column; gap:4px; align-items:flex-end; }
+.hdr-stat .v{ font-family:var(--mono); font-size:12px; font-weight:500; color:var(--ink); letter-spacing:.04em; }
+.hdr-stat .k{ font-family:var(--mono); font-size:7.5px; letter-spacing:.2em; color:var(--ink-4); text-transform:uppercase; }
+
+/* SOI status / AI presence */
+.soi-status{ display:flex; align-items:center; gap:10px; padding-left:6px; }
+.ai-orb{
+  width:26px; height:26px; border-radius:50%; position:relative; flex-shrink:0;
+  background:radial-gradient(circle at 38% 34%, #b9f4fb 0%, var(--cyan) 32%, #1d7d8a 78%, #0a3a42 100%);
+  box-shadow:0 0 0 1px rgba(82,214,230,.35), 0 0 18px var(--glow-cyan);
+}
+.ai-orb::after{
+  content:""; position:absolute; inset:-6px; border-radius:50%;
+  border:1px solid rgba(82,214,230,.3); animation:breathe 3.4s ease-in-out infinite;
+}
+@keyframes breathe{ 0%,100%{ transform:scale(1); opacity:.7; } 50%{ transform:scale(1.18); opacity:0; } }
+.soi-status .lbl{ display:flex; flex-direction:column; gap:3px; }
+.soi-status .lbl .a{ font-size:11px; font-weight:500; color:var(--ink); letter-spacing:.02em; }
+.soi-status .lbl .b{ font-family:var(--mono); font-size:8px; letter-spacing:.18em; color:var(--green); text-transform:uppercase; }
+
+.op-avatar{
+  width:34px; height:34px; border-radius:9px; flex-shrink:0;
+  background:linear-gradient(145deg,#1b2530,#0d141b);
+  border:1px solid var(--line-2);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:12px; font-weight:600; color:var(--cyan); letter-spacing:.04em;
+}
+
+/* ============================================================
+   BODY GRID
+   ============================================================ */
+.body{
+  position:relative; z-index:4;
+  flex:1; min-height:0;
+  display:grid;
+  grid-template-columns:268px 1fr 320px;
+}
+
+/* shared rail rhythm */
+.rail{ padding:24px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:26px; }
+.rail.left{ border-right:1px solid var(--line); }
+.rail.right{ border-left:1px solid var(--line); }
+.rail::-webkit-scrollbar{ width:0; }
+
+.block{ display:flex; flex-direction:column; gap:13px; }
+.block-head{ display:flex; align-items:center; justify-content:space-between; }
+.block-head .tac{ color:var(--ink-3); }
+.block-head .meta{ font-family:var(--mono); font-size:9px; color:var(--ink-4); letter-spacing:.1em; }
+
+/* ---- LEFT: operational snapshot ---- */
+.snapshot{ display:flex; flex-direction:column; gap:3px; }
+.snapshot .big{
+  font-family:var(--mono); font-size:40px; font-weight:300; line-height:1; color:var(--ink);
+  letter-spacing:-.01em; display:flex; align-items:baseline; gap:8px;
+}
+.snapshot .big .unit{ font-size:13px; color:var(--ink-3); font-weight:400; letter-spacing:.05em; }
+.snapshot .cap{ font-size:12px; color:var(--ink-2); margin-top:3px; }
+.trend{ display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10px; color:var(--amber); margin-top:6px; }
+.trend .arrow{ font-size:11px; }
+
+/* zone health bars */
+.zone-row{ display:flex; flex-direction:column; gap:7px; }
+.zone-item{ display:flex; flex-direction:column; gap:6px; }
+.zone-item .zl{ display:flex; align-items:center; justify-content:space-between; }
+.zone-item .zl .nm{ font-family:var(--mono); font-size:10px; color:var(--ink-2); letter-spacing:.08em; }
+.zone-item .zl .vl{ font-family:var(--mono); font-size:10px; letter-spacing:.06em; }
+.bar{ height:3px; border-radius:2px; background:rgba(255,255,255,.05); overflow:hidden; position:relative; }
+.bar i{ position:absolute; left:0; top:0; bottom:0; border-radius:2px; }
+.bar i.red{ background:linear-gradient(90deg,#a8323c,var(--red)); box-shadow:0 0 10px var(--glow-red); }
+.bar i.orange{ background:linear-gradient(90deg,#a8522e,var(--orange)); box-shadow:0 0 10px var(--glow-orange); }
+.bar i.amber{ background:linear-gradient(90deg,#9a7220,var(--amber)); box-shadow:0 0 10px var(--glow-amber); }
+.bar i.cyan{ background:linear-gradient(90deg,#1d7d8a,var(--cyan)); box-shadow:0 0 10px var(--glow-cyan); }
+.c-red{ color:var(--red); } .c-orange{ color:var(--orange); } .c-amber{ color:var(--amber); } .c-cyan{ color:var(--cyan); } .c-green{ color:var(--green); }
+
+/* staffing summary */
+.staff{ display:flex; align-items:flex-end; justify-content:space-between; }
+.staff .grp{ display:flex; flex-direction:column; gap:4px; }
+.staff .grp .n{ font-family:var(--mono); font-size:22px; font-weight:400; color:var(--ink); line-height:1; }
+.staff .grp .l{ font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; color:var(--ink-4); text-transform:uppercase; }
+.staff-bar{ display:flex; gap:2px; margin-top:2px; }
+.staff-bar span{ flex:1; height:24px; border-radius:2px; background:rgba(255,255,255,.045); }
+.staff-bar span.on{ background:linear-gradient(180deg,rgba(82,214,230,.5),rgba(82,214,230,.12)); }
+
+/* recovery status timeline */
+.recov{ display:flex; flex-direction:column; gap:0; }
+.recov .step{ display:flex; gap:11px; position:relative; padding-bottom:15px; }
+.recov .step:last-child{ padding-bottom:0; }
+.recov .step::before{ content:""; position:absolute; left:5px; top:13px; bottom:0; width:1px; background:var(--line-2); }
+.recov .step:last-child::before{ display:none; }
+.recov .marker{ width:11px; height:11px; border-radius:50%; flex-shrink:0; margin-top:2px; border:2px solid var(--bg); }
+.recov .marker.done{ background:var(--green); box-shadow:0 0 8px rgba(63,212,137,.4); }
+.recov .marker.active{ background:var(--cyan); box-shadow:0 0 10px var(--glow-cyan); }
+.recov .marker.wait{ background:var(--ink-4); }
+.recov .txt{ display:flex; flex-direction:column; gap:2px; }
+.recov .txt .t{ font-size:11.5px; color:var(--ink); }
+.recov .txt .s{ font-family:var(--mono); font-size:8.5px; letter-spacing:.12em; color:var(--ink-4); text-transform:uppercase; }
+
+/* ============================================================
+   CENTER STAGE
+   ============================================================ */
+.stage{ position:relative; display:flex; flex-direction:column; min-height:0; padding:0; }
+
+/* ambient map backdrop */
+.map-amb{ position:absolute; inset:0; z-index:0; overflow:hidden; }
+.map-amb svg{ width:100%; height:100%; }
+.bloom{ position:absolute; border-radius:50%; filter:blur(46px); opacity:.5; }
+.bloom.r{ width:340px; height:300px; left:14%; top:8%; background:radial-gradient(circle,var(--red),transparent 68%); }
+.bloom.o{ width:300px; height:280px; left:44%; top:26%; background:radial-gradient(circle,var(--orange),transparent 68%); opacity:.4; }
+.bloom.a{ width:280px; height:260px; left:64%; top:14%; background:radial-gradient(circle,var(--amber),transparent 68%); opacity:.32; }
+
+.stage-inner{ position:relative; z-index:2; flex:1; display:flex; flex-direction:column; padding:22px 30px 0; min-height:0; }
+
+/* spatial caption row sitting over map */
+.spatial-cap{ display:flex; align-items:center; gap:14px; margin-bottom:auto; }
+.spatial-cap .ttl{ font-family:var(--mono); font-size:11px; letter-spacing:.16em; color:var(--ink-2); text-transform:uppercase; }
+.spatial-cap .pill{
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--cyan); border:1px solid rgba(82,214,230,.25); background:var(--cyan-dim);
+  padding:4px 9px; border-radius:20px;
+}
+.legend-inline{ margin-left:auto; display:flex; gap:16px; }
+.legend-inline .li{ display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; letter-spacing:.1em; color:var(--ink-3); text-transform:uppercase; }
+.legend-inline .d{ width:6px; height:6px; border-radius:50%; }
+
+/* ---- ACTIVE RECOMMENDATION (focal heart) ---- */
+.rec{
+  position:relative; z-index:3;
+  margin:0 0 22px;
+  background:linear-gradient(180deg, rgba(13,18,24,.72), rgba(9,12,16,.82));
+  border:1px solid var(--line-2);
+  border-radius:18px;
+  padding:24px 26px 22px;
+  backdrop-filter:blur(14px);
+  box-shadow:0 24px 60px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.rec::before{ /* top accent hairline glow */
+  content:""; position:absolute; left:26px; right:26px; top:0; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(82,214,230,.5),transparent);
+}
+.rec-top{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:18px; }
+.rec-id{ display:flex; flex-direction:column; gap:7px; }
+.rec-id .tac{ color:var(--cyan); letter-spacing:.24em; }
+.rec-id .title{ font-size:23px; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
+.rec-id .desc{ font-size:13px; color:var(--ink-2); max-width:440px; line-height:1.5; }
+.rec-conf{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0; }
+.conf-ring{ position:relative; width:78px; height:78px; }
+.conf-ring svg{ transform:rotate(-90deg); }
+.conf-ring .val{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+}
+.conf-ring .val .p{ font-family:var(--mono); font-size:21px; font-weight:500; color:var(--cyan); line-height:1; }
+.conf-ring .val .l{ font-family:var(--mono); font-size:7px; letter-spacing:.2em; color:var(--ink-4); text-transform:uppercase; }
+
+.rec-body{ display:grid; grid-template-columns:1.1fr 1fr; gap:30px; padding-top:18px; border-top:1px solid var(--line); }
+.proj{ display:flex; flex-direction:column; gap:12px; }
+.proj .tac{ margin-bottom:1px; }
+.proj-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; }
+.proj-item .pv{ font-family:var(--mono); font-size:19px; font-weight:400; line-height:1; }
+.proj-item .pl{ font-size:11px; color:var(--ink-3); margin-top:5px; }
+
+.trade{ display:flex; flex-direction:column; gap:12px; }
+.trade .tac{ margin-bottom:1px; }
+.trade-list{ display:flex; flex-direction:column; gap:9px; }
+.trade-row{ display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink-2); }
+.trade-row .d{ width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+
+.rec-actions{ display:flex; gap:12px; margin-top:20px; }
+.cta{
+  font-family:var(--sans); font-size:13px; font-weight:600; letter-spacing:.02em;
+  padding:13px 22px; border-radius:11px; cursor:pointer; border:1px solid transparent;
+  transition:.18s; display:inline-flex; align-items:center; gap:9px;
+}
+.cta-primary{
+  background:linear-gradient(180deg,#5fe0ef,#2bb6c8); color:#03222a;
+  box-shadow:0 8px 28px rgba(82,214,230,.28), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.cta-primary:hover{ filter:brightness(1.06); box-shadow:0 10px 34px rgba(82,214,230,.42); }
+.cta-ghost{ background:rgba(255,255,255,.03); border-color:var(--line-2); color:var(--ink-2); }
+.cta-ghost:hover{ border-color:var(--ink-3); color:var(--ink); }
+.cta .dotk{ font-family:var(--mono); font-size:9px; opacity:.6; border:1px solid currentColor; border-radius:4px; padding:1px 5px; letter-spacing:.05em; }
+
+/* ============================================================
+   COMMAND DOCK
+   ============================================================ */
+.dock-wrap{ position:relative; z-index:6; padding:0 30px 26px; }
+.dock{
+  position:relative;
+  display:flex; align-items:center; gap:16px;
+  padding:14px 16px 14px 18px;
+  border-radius:22px;
+  background:linear-gradient(180deg, rgba(16,22,29,.85), rgba(9,13,17,.92));
+  border:1px solid var(--line-2);
+  box-shadow:0 20px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter:blur(16px);
+}
+.dock::before{ /* ambient glow ring */
+  content:""; position:absolute; inset:-1px; border-radius:22px; padding:1px; pointer-events:none;
+  background:linear-gradient(120deg, rgba(82,214,230,.35), transparent 30%, transparent 70%, rgba(90,147,255,.25));
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+}
+.dock-orb{
+  width:42px; height:42px; border-radius:50%; flex-shrink:0; position:relative;
+  background:radial-gradient(circle at 36% 32%, #c8f6fb 0%, var(--cyan) 30%, #1a7280 74%, #08323a 100%);
+  box-shadow:0 0 0 1px rgba(82,214,230,.4), 0 0 24px var(--glow-cyan);
+}
+.dock-orb::after{
+  content:""; position:absolute; inset:-7px; border-radius:50%; border:1px solid rgba(82,214,230,.3);
+  animation:breathe 3.4s ease-in-out infinite;
+}
+.dock-orb::before{
+  content:""; position:absolute; inset:8px; border-radius:50%;
+  background:radial-gradient(circle at 40% 36%, rgba(255,255,255,.7), transparent 55%);
+}
+
+/* waveform */
+.wave{ display:flex; align-items:center; gap:3px; height:30px; flex-shrink:0; padding:0 4px; }
+.wave span{
+  width:3px; border-radius:2px; background:linear-gradient(180deg,var(--cyan),rgba(82,214,230,.25));
+  box-shadow:0 0 6px var(--glow-cyan);
+  animation:wv 1.1s ease-in-out infinite;
+}
+@keyframes wv{ 0%,100%{ height:6px; opacity:.55; } 50%{ height:24px; opacity:1; } }
+.wave span:nth-child(1){ animation-delay:0s; }
+.wave span:nth-child(2){ animation-delay:.12s; }
+.wave span:nth-child(3){ animation-delay:.24s; }
+.wave span:nth-child(4){ animation-delay:.36s; }
+.wave span:nth-child(5){ animation-delay:.18s; }
+.wave span:nth-child(6){ animation-delay:.3s; }
+.wave span:nth-child(7){ animation-delay:.06s; }
+
+.dock-input{ flex:1; display:flex; flex-direction:column; gap:3px; }
+.dock-input .ph{ font-size:15px; color:var(--ink-2); font-weight:300; letter-spacing:.01em; }
+.dock-input .hint{ font-family:var(--mono); font-size:9px; letter-spacing:.16em; color:var(--ink-4); text-transform:uppercase; }
+
+.dock-meta{ display:flex; align-items:center; gap:14px; flex-shrink:0; padding-right:4px; }
+.listening{ display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:9px; letter-spacing:.16em; color:var(--cyan); text-transform:uppercase; }
+.listening .ld{ width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--glow-cyan); animation:blink 1.6s ease-in-out infinite; }
+@keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+.dock-send{
+  width:42px; height:42px; border-radius:13px; flex-shrink:0; cursor:pointer;
+  background:linear-gradient(180deg,#5fe0ef,#2bb6c8); border:none;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 6px 20px rgba(82,214,230,.3);
+  transition:.16s;
+}
+.dock-send:hover{ filter:brightness(1.08); }
+.dock-send svg{ width:18px; height:18px; }
+
+/* ---- RIGHT: ambient intelligence ---- */
+.intel-item{ display:flex; flex-direction:column; gap:7px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+.intel-item:last-child{ border-bottom:none; padding-bottom:0; }
+.intel-row{ display:flex; align-items:flex-start; gap:11px; }
+.intel-glyph{ width:7px; height:7px; border-radius:50%; margin-top:5px; flex-shrink:0; }
+.intel-txt{ display:flex; flex-direction:column; gap:4px; }
+.intel-txt .it{ font-size:13px; color:var(--ink); line-height:1.4; }
+.intel-txt .is{ font-size:11.5px; color:var(--ink-3); line-height:1.45; }
+.intel-tag{ display:inline-flex; align-items:center; gap:6px; align-self:flex-start; margin-top:2px;
+  font-family:var(--mono); font-size:8px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3);
+  border:1px solid var(--line-2); border-radius:20px; padding:3px 9px; }
+
+/* predictive confidence mini */
+.predict{ display:flex; flex-direction:column; gap:10px; }
+.predict .pr{ display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--ink-2); }
+.predict .pr .num{ font-size:11px; }
+.spark{ height:34px; display:flex; align-items:flex-end; gap:3px; }
+.spark span{ flex:1; border-radius:2px 2px 0 0; background:linear-gradient(180deg,rgba(82,214,230,.6),rgba(82,214,230,.08)); }
+
+/* recommended micro-action */
+.micro{ display:flex; align-items:center; gap:10px; padding:11px 13px; border-radius:12px;
+  background:var(--elev); border:1px solid var(--line); cursor:pointer; transition:.16s; }
+.micro:hover{ border-color:var(--line-2); background:var(--elev-2); }
+.micro .mi{ font-size:12.5px; color:var(--ink); flex:1; }
+.micro .ma{ font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; color:var(--cyan); text-transform:uppercase; }
+</style>
+</head>
+<body>
+<div class="env">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 30 30" fill="none">
+          <circle cx="15" cy="15" r="13.5" stroke="#52d6e6" stroke-opacity=".5"/>
+          <circle cx="15" cy="15" r="4" fill="#52d6e6" fill-opacity=".18" stroke="#52d6e6"/>
+          <path d="M15 1.5V6M15 24v4.5M1.5 15H6M24 15h4.5" stroke="#52d6e6" stroke-opacity=".7" stroke-width="1.2"/>
+        </svg>
+      </div>
+      <div class="brand-txt">
+        <span class="name">SOI</span>
+        <span class="sub">Operational Intelligence</span>
+      </div>
+    </div>
+
+    <div class="hdr-div"></div>
+    <div class="station">
+      <span class="code">LAX · EAGLE</span>
+      <span class="mode">Gates 52A–I · Spatial</span>
+    </div>
+
+    <div class="hdr-spacer"></div>
+
+    <div class="hdr-stat"><span class="v">19:42 PST</span><span class="k">Local</span></div>
+    <div class="hdr-div"></div>
+    <div class="hdr-stat"><span class="v c-cyan">11°C · Clear</span><span class="k">Conditions</span></div>
+    <div class="hdr-div"></div>
+    <div class="hdr-stat"><span class="v">Swing · 14:00–22:00</span><span class="k">Shift</span></div>
+    <div class="hdr-div"></div>
+
+    <div class="soi-status">
+      <div class="ai-orb"></div>
+      <div class="lbl">
+        <span class="a">SOI Active</span>
+        <span class="b">Monitoring · 8 zones</span>
+      </div>
+    </div>
+
+    <div class="op-avatar">CV</div>
+  </header>
+
+  <!-- ===================== BODY ===================== -->
+  <div class="body">
+
+    <!-- ---------- LEFT RAIL ---------- -->
+    <aside class="rail left">
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Operational Snapshot</span></div>
+        <div class="snapshot">
+          <div class="big"><span class="num">76</span><span class="unit">/ 100 PSI</span></div>
+          <div class="cap">System pressure index — elevated</div>
+          <div class="trend"><span class="arrow">▲</span> +14 over last 20 min</div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Zone Health</span><span class="meta">8 ACTIVE</span></div>
+        <div class="zone-row">
+          <div class="zone-item">
+            <div class="zl"><span class="nm">52A–C</span><span class="vl c-red">CRITICAL · 100</span></div>
+            <div class="bar"><i class="red" style="width:100%"></i></div>
+          </div>
+          <div class="zone-item">
+            <div class="zl"><span class="nm">52D–F</span><span class="vl c-orange">HIGH · 72</span></div>
+            <div class="bar"><i class="orange" style="width:72%"></i></div>
+          </div>
+          <div class="zone-item">
+            <div class="zl"><span class="nm">52G–I</span><span class="vl c-amber">ELEVATED · 58</span></div>
+            <div class="bar"><i class="amber" style="width:58%"></i></div>
+          </div>
+          <div class="zone-item">
+            <div class="zl"><span class="nm">Concourse</span><span class="vl c-cyan">STABLE · 22</span></div>
+            <div class="bar"><i class="cyan" style="width:22%"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Staffing</span><span class="meta">RAMP</span></div>
+        <div class="staff">
+          <div class="grp"><span class="n num">34</span><span class="l">Deployed</span></div>
+          <div class="grp"><span class="n num c-cyan">9</span><span class="l">Available</span></div>
+          <div class="grp"><span class="n num c-amber">3</span><span class="l">Enroute</span></div>
+        </div>
+        <div class="staff-bar">
+          <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+          <span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span>
+          <span class="on"></span><span class="on"></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Recovery Status</span><span class="meta">52C</span></div>
+        <div class="recov">
+          <div class="step"><span class="marker done"></span><div class="txt"><span class="t">Source isolated · BL-042</span><span class="s">Complete · 19:38</span></div></div>
+          <div class="step"><span class="marker active"></span><div class="txt"><span class="t">Temporary bypass deploying</span><span class="s">In progress</span></div></div>
+          <div class="step"><span class="marker wait"></span><div class="txt"><span class="t">Pressure rebalance</span><span class="s">Queued</span></div></div>
+          <div class="step"><span class="marker wait"></span><div class="txt"><span class="t">Return to normal ops</span><span class="s">Est. 18–24 min</span></div></div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ---------- CENTER STAGE ---------- -->
+    <main class="stage">
+      <div class="map-amb">
+        <div class="bloom r"></div>
+        <div class="bloom o"></div>
+        <div class="bloom a"></div>
+        <svg viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <radialGradient id="vg" cx="50%" cy="38%" r="70%">
+              <stop offset="0" stop-color="#0c1119" stop-opacity="0"/>
+              <stop offset="1" stop-color="#05070a" stop-opacity=".9"/>
+            </radialGradient>
+            <filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter>
+          </defs>
+          <!-- faint isometric apron grid -->
+          <g stroke="rgba(120,150,170,.07)" stroke-width="1">
+            <path d="M120 250 L780 130"/><path d="M120 300 L780 180"/>
+            <path d="M120 350 L780 230"/><path d="M120 400 L780 280"/>
+            <path d="M120 450 L780 330"/>
+            <path d="M200 470 L300 110"/><path d="M340 460 L420 110"/>
+            <path d="M480 450 L540 120"/><path d="M620 430 L660 130"/>
+          </g>
+          <!-- simplified runway/pier ribbons -->
+          <g opacity=".5" filter="url(#soft)">
+            <path d="M150 260 L300 215 L335 320 L185 365 Z" fill="rgba(255,85,100,.1)" stroke="rgba(255,85,100,.4)"/>
+            <path d="M370 235 L520 195 L560 360 L410 400 Z" fill="rgba(255,125,77,.08)" stroke="rgba(255,125,77,.35)"/>
+            <path d="M590 215 L690 185 L725 340 L625 370 Z" fill="rgba(243,177,60,.07)" stroke="rgba(243,177,60,.3)"/>
+          </g>
+          <!-- cascade hairline -->
+          <path d="M280 300 C 330 350 380 330 420 305" fill="none" stroke="rgba(255,125,77,.45)" stroke-width="1.5" stroke-dasharray="2 6"/>
+          <path d="M560 320 C 600 320 620 312 660 300" fill="none" stroke="rgba(243,177,60,.4)" stroke-width="1.5" stroke-dasharray="2 6"/>
+          <!-- nodes -->
+          <g>
+            <circle cx="255" cy="290" r="3.5" fill="#ff5564"/>
+            <circle cx="225" cy="265" r="3" fill="#ff5564"/>
+            <circle cx="470" cy="300" r="3.5" fill="#ff7d4d"/>
+            <circle cx="430" cy="280" r="3" fill="#ff7d4d"/>
+            <circle cx="660" cy="300" r="3" fill="#f3b13c"/>
+            <circle cx="690" cy="280" r="3" fill="#f3b13c"/>
+          </g>
+          <rect width="900" height="600" fill="url(#vg)"/>
+        </svg>
+      </div>
+
+      <div class="stage-inner">
+        <div class="spatial-cap">
+          <span class="ttl">Terminal 5 · Pressure Field</span>
+          <span class="pill">Spatial Mode</span>
+          <div class="legend-inline">
+            <div class="li"><span class="d" style="background:var(--red);box-shadow:0 0 8px var(--glow-red)"></span>Critical</div>
+            <div class="li"><span class="d" style="background:var(--orange);box-shadow:0 0 8px var(--glow-orange)"></span>High</div>
+            <div class="li"><span class="d" style="background:var(--amber);box-shadow:0 0 8px var(--glow-amber)"></span>Elevated</div>
+            <div class="li"><span class="d" style="background:var(--cyan);box-shadow:0 0 8px var(--glow-cyan)"></span>Stable</div>
+          </div>
+        </div>
+
+        <!-- ACTIVE RECOMMENDATION -->
+        <section class="rec">
+          <div class="rec-top">
+            <div class="rec-id">
+              <span class="tac">Active Recommendation · 19:42</span>
+              <span class="title">Stabilize Gates 52C</span>
+              <span class="desc">Remove the pressure source at BL-042 and deploy a temporary bypass before the cascade reaches the adjacent high-pressure pier.</span>
+            </div>
+            <div class="rec-conf">
+              <div class="conf-ring">
+                <svg width="78" height="78" viewBox="0 0 78 78">
+                  <circle cx="39" cy="39" r="33" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
+                  <circle cx="39" cy="39" r="33" fill="none" stroke="#52d6e6" stroke-width="4" stroke-linecap="round"
+                          stroke-dasharray="207.3" stroke-dashoffset="10.4" style="filter:drop-shadow(0 0 6px rgba(82,214,230,.5))"/>
+                </svg>
+                <div class="val"><span class="p num">95</span><span class="l">Confidence</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rec-body">
+            <div class="proj">
+              <span class="tac">Projected Outcome</span>
+              <div class="proj-grid">
+                <div class="proj-item"><div class="pv c-cyan num">−42%</div><div class="pl">Pressure reduction</div></div>
+                <div class="proj-item"><div class="pv c-green num">−78%</div><div class="pl">Cascade risk</div></div>
+                <div class="proj-item"><div class="pv num">18–24<span style="font-size:12px;color:var(--ink-3)"> min</span></div><div class="pl">Recovery window</div></div>
+                <div class="proj-item"><div class="pv num">3</div><div class="pl">Zones stabilized</div></div>
+              </div>
+            </div>
+            <div class="trade">
+              <span class="tac">Tradeoffs</span>
+              <div class="trade-list">
+                <div class="trade-row"><span class="d" style="background:var(--orange);box-shadow:0 0 6px var(--glow-orange)"></span>18 min gate impact at 52C</div>
+                <div class="trade-row"><span class="d" style="background:var(--amber);box-shadow:0 0 6px var(--glow-amber)"></span>1 ground unit offline during bypass</div>
+                <div class="trade-row"><span class="d" style="background:var(--green);box-shadow:0 0 6px rgba(63,212,137,.4)"></span>Low operational risk · reversible</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rec-actions">
+            <button class="cta cta-primary">Approve &amp; Execute <span class="dotk">↵</span></button>
+            <button class="cta cta-ghost">Simulate Plan</button>
+            <button class="cta cta-ghost">Modify</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- COMMAND DOCK -->
+      <div class="dock-wrap">
+        <div class="dock">
+          <div class="dock-orb"></div>
+          <div class="wave">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="dock-input">
+            <span class="ph">Ask SOI, or issue a command…</span>
+            <span class="hint">Voice ready · "Show cascade forecast for 52F"</span>
+          </div>
+          <div class="dock-meta">
+            <div class="listening"><span class="ld"></span>Listening</div>
+            <button class="dock-send">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#03222a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ---------- RIGHT RAIL ---------- -->
+    <aside class="rail right">
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Operational Intelligence</span></div>
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div class="intel-item">
+            <div class="intel-row">
+              <span class="intel-glyph" style="background:var(--red);box-shadow:0 0 8px var(--glow-red)"></span>
+              <div class="intel-txt">
+                <span class="it">Cascade approaching 52F threshold</span>
+                <span class="is">Pressure differential between 52C and 52F is closing. Containment window narrows in ~6 min without intervention.</span>
+                <span class="intel-tag">Active Risk</span>
+              </div>
+            </div>
+          </div>
+          <div class="intel-item">
+            <div class="intel-row">
+              <span class="intel-glyph" style="background:var(--amber);box-shadow:0 0 8px var(--glow-amber)"></span>
+              <div class="intel-txt">
+                <span class="it">52G–I likely to elevate by 20:10</span>
+                <span class="is">Predicted from current flow rate and inbound aircraft schedule. Confidence 81%.</span>
+                <span class="intel-tag">Predictive</span>
+              </div>
+            </div>
+          </div>
+          <div class="intel-item">
+            <div class="intel-row">
+              <span class="intel-glyph" style="background:var(--green);box-shadow:0 0 8px rgba(63,212,137,.4)"></span>
+              <div class="intel-txt">
+                <span class="it">Concourse holding stable</span>
+                <span class="is">No anomalies across 4 monitored segments in the last 40 min.</span>
+                <span class="intel-tag">Summary</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Recovery Confidence</span><span class="meta">FORECAST</span></div>
+        <div class="predict">
+          <div class="spark">
+            <span style="height:40%"></span><span style="height:46%"></span><span style="height:52%"></span>
+            <span style="height:58%"></span><span style="height:64%"></span><span style="height:73%"></span>
+            <span style="height:81%"></span><span style="height:88%"></span><span style="height:95%"></span>
+          </div>
+          <div class="pr"><span>If plan executes now</span><span class="num c-cyan">95%</span></div>
+          <div class="pr"><span>If delayed 10 min</span><span class="num c-amber">67%</span></div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-head"><span class="tac">Recommended Next</span></div>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <div class="micro"><span class="mi">Pre-stage bypass unit at 52F</span><span class="ma">Queue</span></div>
+          <div class="micro"><span class="mi">Brief crew chief · East pier</span><span class="ma">Notify</span></div>
+          <div class="micro"><span class="mi">Open cascade forecast view</span><span class="ma">View</span></div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+</div>
+</body>
+</html>

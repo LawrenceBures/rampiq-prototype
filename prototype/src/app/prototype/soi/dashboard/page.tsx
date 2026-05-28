@@ -107,7 +107,7 @@ import { ModuleFrame } from '@/components/soi-surface/ModuleFrame';
 import { type LayoutState, type RoleId, type SlotId, type LayoutName, LEFT_SLOTS, RIGHT_SLOTS, UTILITY_SLOTS, MODULE_REGISTRY, getModuleDef, loadLayout, saveLayout, getLastUsedLayoutName, setLastUsedLayoutName } from '@/lib/soi-surface';
 import { getRolePreset, getCrisisPreset, createDefaultLayout, ROLE_LABELS } from '@/lib/soi-surface';
 import dynamic from 'next/dynamic';
-import './surface.css';
+import './command.css';
 
 // Lazy load 3D component (Three.js is heavy)
 const SpatialField3D = dynamic(() => import('@/components/soi/SpatialField3D').then(m => ({ default: m.SpatialField3D })), { ssr: false });
@@ -2477,210 +2477,137 @@ export default function ManagerDashboard() {
   }
 
 
+
   return (
     <>
       {/* Access code prompt */}
       {showAccessPrompt && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: 380, padding: '40px 32px', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', fontFamily: 'var(--sf-sans)' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--sf-cyan,#52d6e6)', letterSpacing: '.06em', marginBottom: 4 }}>SOI</div>
-            <div style={{ fontSize: 7, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-3)', marginBottom: 24 }}>Operational Intelligence Mission Control</div>
+          <div style={{ width: 380, padding: '40px 32px', background: '#080b10', border: '1px solid rgba(150,170,190,.08)', fontFamily: 'var(--sans)', borderRadius: 14 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#52d6e6', letterSpacing: '.06em', marginBottom: 4 }}>SOI</div>
+            <div style={{ fontSize: 7, letterSpacing: '.2em', textTransform: 'uppercase', color: '#5c6772', marginBottom: 24 }}>Operational Intelligence</div>
             <input type="text" value={accessCode} onChange={e => setAccessCode(e.target.value.toUpperCase())}
               onKeyDown={e => { if (e.key === 'Enter') handleAccessCode(); }} placeholder="ACCESS CODE" autoFocus
-              style={{ width: '100%', padding: '10px 14px', marginBottom: 10, background: 'var(--sf-void,#05070a)', border: '1px solid var(--sf-line)', color: 'var(--sf-ink)', fontFamily: 'inherit', fontSize: 15, letterSpacing: '.12em', textAlign: 'center' }} />
-            {accessError && <div style={{ fontSize: 9, color: 'var(--sf-red)', marginBottom: 8, textAlign: 'center' }}>{accessError}</div>}
-            <button onClick={handleAccessCode} style={{ width: '100%', padding: '8px', fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', fontFamily: 'inherit', background: 'none', border: '1px solid var(--sf-cyan)', color: 'var(--sf-cyan)', cursor: 'pointer', borderRadius: 6 }}>Authenticate</button>
-            <div style={{ fontSize: 8, color: 'var(--sf-ink-4)', textAlign: 'center', marginTop: 12 }}>Demo codes: CHIEF52 · MGRLAX · OPSDIR · AGENT14</div>
+              style={{ width: '100%', padding: '10px 14px', marginBottom: 10, background: '#05070a', border: '1px solid rgba(150,170,190,.08)', color: '#eef3f8', fontFamily: 'inherit', fontSize: 15, letterSpacing: '.12em', textAlign: 'center', borderRadius: 8 }} />
+            {accessError && <div style={{ fontSize: 9, color: '#ff5564', marginBottom: 8, textAlign: 'center' }}>{accessError}</div>}
+            <button onClick={handleAccessCode} style={{ width: '100%', padding: '8px', fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', fontFamily: 'inherit', background: 'none', border: '1px solid #52d6e6', color: '#52d6e6', cursor: 'pointer', borderRadius: 8 }}>Authenticate</button>
+            <div style={{ fontSize: 8, color: '#3c454e', textAlign: 'center', marginTop: 12 }}>Demo: CHIEF52 · MGRLAX · OPSDIR · AGENT14</div>
           </div>
         </div>
       )}
 
-      {/* ═══ SURFACE SHELL ═══ */}
-      <div className={`sf-shell${crisisMode ? ' crisis' : ''}`}>
-
-        {/* ── A1: HEADER ── */}
-        <header className="sf-header">
-          <div className="sf-brand">
-            <div>
-              <div className="sf-brand-name">SOI</div>
-              <div className="sf-brand-sub">Operational Intelligence</div>
+      <div className="env">
+        {/* ═══ HEADER ═══ */}
+        <header className="header">
+          <div className="brand">
+            <div className="brand-mark">
+              <svg viewBox="0 0 30 30" fill="none">
+                <circle cx="15" cy="15" r="13.5" stroke="#52d6e6" strokeOpacity=".5"/>
+                <circle cx="15" cy="15" r="4" fill="#52d6e6" fillOpacity=".18" stroke="#52d6e6"/>
+                <path d="M15 1.5V6M15 24v4.5M1.5 15H6M24 15h4.5" stroke="#52d6e6" strokeOpacity=".7" strokeWidth="1.2"/>
+              </svg>
+            </div>
+            <div className="brand-txt">
+              <span className="name">SOI</span>
+              <span className="sub">Operational Intelligence</span>
             </div>
           </div>
-          <div className="sf-hdr-div" />
-          <div>
-            <div className="sf-station-code">{operator.station}</div>
-            <div className="sf-station-mode">Eagle Operations</div>
+          <div className="hdr-div" />
+          <div className="station">
+            <span className="code">{operator.station} · EAGLE</span>
+            <span className="mode">Gates 52A–I · Spatial</span>
           </div>
-          <div className="sf-hdr-spacer" />
-
-          {/* Greeting */}
-          {greeting && <div style={{ fontSize: 11, color: 'var(--sf-cyan)', opacity: .7 }}>{greeting}</div>}
-
-          {/* Role selector */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => { setShowRoleDropdown(!showRoleDropdown); setShowLayoutDropdown(false); }}
-              style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 10px', fontFamily: 'var(--sf-mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-ink-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {ROLE_LABELS[activeRole]} <span style={{ fontSize: 7, color: 'var(--sf-ink-4)' }}>▾</span>
-            </button>
-            {showRoleDropdown && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, padding: '4px 0', zIndex: 50, minWidth: 140 }}>
-                {(['crew_chief', 'ramp_manager', 'dispatcher', 'executive'] as RoleId[]).map(r => (
-                  <div key={r} onClick={() => switchRole(r)}
-                    style={{ padding: '7px 14px', fontSize: 10, color: r === activeRole ? 'var(--sf-cyan)' : 'var(--sf-ink-2)', cursor: 'pointer', fontFamily: 'var(--sf-sans)', transition: '.1s' }}>
-                    {ROLE_LABELS[r]}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Layout selector */}
-          <div style={{ position: 'relative' }}>
-            <div className="sf-layout-pill" onClick={() => { setShowLayoutDropdown(!showLayoutDropdown); setShowRoleDropdown(false); }}>
-              <div className="sf-layout-pip" style={crisisMode ? { background: 'var(--sf-orange,#ff7d4d)', boxShadow: '0 0 9px rgba(255,125,77,.3)' } : undefined} />
-              <div className="sf-layout-label" style={crisisMode ? { color: 'var(--sf-orange,#ff7d4d)' } : undefined}>{activeLayoutName}</div>
-            </div>
-            {showLayoutDropdown && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, padding: '4px 0', zIndex: 50, minWidth: 160 }}>
-                {ALL_LAYOUT_NAMES.map(name => (
-                  <div key={name} onClick={() => switchLayout(name)}
-                    style={{ padding: '7px 14px', fontSize: 10, color: name === activeLayoutName ? 'var(--sf-cyan)' : 'var(--sf-ink-2)', cursor: 'pointer', fontFamily: 'var(--sf-sans)', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <span>{name}</span>
-                    {name === activeLayoutName && <span style={{ fontSize: 8, color: 'var(--sf-cyan)' }}>●</span>}
-                  </div>
-                ))}
-                <div style={{ borderTop: '1px solid var(--sf-line)', margin: '4px 0' }} />
-                {activeLayoutName !== 'Default' && (
-                  <div onClick={() => { saveAsLayout(activeLayoutName); setShowLayoutDropdown(false); }}
-                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-cyan)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
-                    Save Current
-                  </div>
-                )}
-                {activeLayoutName === 'Default' && (
-                  <div onClick={() => { saveAsLayout('Operational'); setShowLayoutDropdown(false); }}
-                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
-                    Save as Operational
-                  </div>
-                )}
-                {activeLayoutName !== 'Default' && (
-                  <div onClick={() => { deleteLayout(activeLayoutName); setShowLayoutDropdown(false); }}
-                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-red,#ff5564)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
-                    Delete {activeLayoutName}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Modified indicator with popover */}
-          {isModified && (
-            <div style={{ position: 'relative' }}>
-              <div onClick={() => setShowDiffPopover(!showDiffPopover)} style={{ padding: '3px 8px', background: 'rgba(243,177,60,.06)', border: '1px solid rgba(243,177,60,.15)', borderRadius: 5, fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-amber,#f3b13c)', cursor: 'pointer' }}>
-                Modified
-              </div>
-              {showDiffPopover && (
-                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: '10px 14px', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, zIndex: 50, minWidth: 220, maxWidth: 320, fontFamily: 'var(--sf-mono)', boxShadow: '0 4px 16px rgba(0,0,0,.4)' }}>
-                  <div style={{ fontSize: 7, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-4)', marginBottom: 8 }}>Layout Changes</div>
-                  {(() => {
-                    const allSlots = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...UTILITY_SLOTS] as SlotId[];
-                    const changes: string[] = [];
-                    for (const s of allSlots) {
-                      const curr = layoutSlots[s];
-                      const saved = savedSlots[s];
-                      if (!curr && saved) changes.push(`${s}: ${getModuleDef(saved.moduleId)?.name ?? saved.moduleId} removed`);
-                      else if (curr && !saved) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? curr.moduleId} added`);
-                      else if (curr && saved && curr.moduleId !== saved.moduleId) changes.push(`${s}: ${getModuleDef(saved.moduleId)?.name ?? ''} → ${getModuleDef(curr.moduleId)?.name ?? ''}`);
-                      else if (curr && saved && curr.size !== saved.size) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? ''} ${saved.size}→${curr.size}`);
-                    }
-                    return changes.length > 0 ? changes.slice(0, 6).map((c, i) => (
-                      <div key={i} style={{ fontSize: 9, color: 'var(--sf-ink-2)', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,.02)' }}>· {c}</div>
-                    )) : <div style={{ fontSize: 9, color: 'var(--sf-ink-3)' }}>No changes detected</div>;
-                  })()}
-                  <button onClick={() => setShowDiffPopover(false)} style={{ marginTop: 8, width: '100%', padding: '4px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>Close</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Edit / Crisis toggles */}
-          <button onClick={() => setEditMode(!editMode)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '4px 10px', fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.14em', textTransform: 'uppercase', color: editMode ? 'var(--sf-cyan)' : 'var(--sf-ink-4)', cursor: 'pointer' }}>
-            {editMode ? 'Exit Edit' : 'Edit'}
-          </button>
-
-          <div className="sf-conditions">{liveTime}</div>
-          <div className="sf-hdr-div" />
-          <div className="sf-operator">
-            <div className="sf-op-avatar">{operator.displayName.charAt(0)}</div>
-            <div>
-              <div className="sf-op-name">{operator.displayName}</div>
-              <div className="sf-op-role">{getRoleLabel(operator)}</div>
+          <div className="hdr-spacer" />
+          <div className="hdr-stat"><span className="v">{liveTime}</span><span className="k">Local</span></div>
+          <div className="hdr-div" />
+          <div className="hdr-stat"><span className="v c-cyan">{liveWeatherText?.split('.')[0] ?? 'Loading...'}</span><span className="k">Conditions</span></div>
+          <div className="hdr-div" />
+          <div className="hdr-stat"><span className="v">{operator.shiftWindow} Shift</span><span className="k">Shift</span></div>
+          <div className="hdr-div" />
+          <div className="soi-status">
+            <div className="ai-orb" />
+            <div className="lbl">
+              <span className="a">SOI Active</span>
+              <span className="b">Monitoring · {operationalAssessment.zoneAssessments.length} zones</span>
             </div>
           </div>
+          <div className="op-avatar">{operator.displayName.split(' ').map(n => n[0]).join('')}</div>
         </header>
 
-        {/* Edit mode banner */}
-        {editMode && (
-          <div className="sf-edit-banner">
-            <div className="sf-edit-pill"><div className="dot" /><div className="label">Edit Layout</div></div>
-            <span style={{ flex: 1 }} />
-            <button onClick={resetLayout} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
-            <button onClick={() => { setLayoutSlots(savedSlots); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
-            <button onClick={() => { navigator.clipboard.writeText(exportLayout()); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Export</button>
-            <button onClick={() => { const json = prompt('Paste layout JSON:'); if (json && !importLayout(json)) alert('Invalid layout'); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Import</button>
-            {activeLayoutName !== 'Default' ? (
-              <button onClick={saveCurrentLayout} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
-            ) : (
-              <button onClick={() => saveAsLayout('Operational')} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save as Operational</button>
-            )}
-          </div>
-        )}
+        {/* ═══ BODY ═══ */}
+        <div className="body">
 
-        {/* Crisis strip */}
-        {crisisMode && (
-          <div className="sf-crisis-strip">
-            <div>
-              <div className="sf-crisis-label">Active Crisis</div>
-              <div className="sf-crisis-title">{soiRecommendations[0]?.title ?? 'Operational instability'}</div>
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, alignItems: 'center' }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.2em', color: 'var(--sf-ink-4)', textTransform: 'uppercase' }}>Pressure</div>
-                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 16, fontWeight: 500, color: 'var(--sf-orange,#ff7d4d)' }}>{operationalAssessment.globalPressure}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.2em', color: 'var(--sf-ink-4)', textTransform: 'uppercase' }}>Incidents</div>
-                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 16, fontWeight: 500, color: 'var(--sf-ink)' }}>{temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length}</div>
+          {/* ─── LEFT RAIL ─── */}
+          <aside className="rail left">
+            <div className="block">
+              <div className="block-head"><span className="tac">Operational Snapshot</span></div>
+              <div className="snapshot">
+                <div className="big"><span className="num">{operationalAssessment.globalPressure}</span><span className="unit">/ 100 PSI</span></div>
+                <div className="cap">System pressure index — {operationalAssessment.globalStability}</div>
+                {forecast && forecast.globalTrend !== 'stable' && (
+                  <div className="trend"><span className="arrow">{forecast.globalTrend === 'rising' ? '▲' : '▼'}</span> {forecast.globalTrend} trend</div>
+                )}
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Replay timeline */}
-        <ReplayTimeline active={replayMode} playing={replayPlaying} currentTimestamp={replayTimestamp}
-          startTimestamp={new Date(Math.min(...events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0), Date.now() - 7200000))}
-          endTimestamp={new Date()}
-          eventTimestamps={events.filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action').map(e => new Date(e.created_at).getTime()).filter(t => t > 0)}
-          onScrub={ts => setReplayTimestamp(ts)} onTogglePlay={togglePlayback} onStep={stepReplay} onExit={exitReplay} />
+            <div className="block">
+              <div className="block-head"><span className="tac">Zone Health</span><span className="meta">{operationalAssessment.zoneAssessments.length} ACTIVE</span></div>
+              <div className="zone-row">
+                {operationalAssessment.zoneAssessments.map(za => {
+                  const barClass = za.pressure >= 80 ? 'red' : za.pressure >= 60 ? 'orange' : za.pressure >= 40 ? 'amber' : 'cyan';
+                  const colorClass = za.pressure >= 80 ? 'c-red' : za.pressure >= 60 ? 'c-orange' : za.pressure >= 40 ? 'c-amber' : 'c-cyan';
+                  const label = za.pressure >= 80 ? 'CRITICAL' : za.pressure >= 60 ? 'HIGH' : za.pressure >= 40 ? 'ELEVATED' : 'STABLE';
+                  return (
+                    <div key={za.zoneId} className="zone-item">
+                      <div className="zl"><span className="nm">{za.zoneLabel}</span><span className={`vl ${colorClass}`}>{label} · {za.pressure}</span></div>
+                      <div className="bar"><i className={barClass} style={{ width: `${za.pressure}%` }} /></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* ── BODY: 3-column grid ── */}
-        <div className="sf-body">
+            <div className="block">
+              <div className="block-head"><span className="tac">Staffing</span><span className="meta">RAMP</span></div>
+              <div className="staff">
+                <div className="grp"><span className="n num">{workforceState.assigned.length + workforceState.recovering.length}</span><span className="l">Deployed</span></div>
+                <div className="grp"><span className="n num c-cyan">{workforceState.available.length}</span><span className="l">Available</span></div>
+                <div className="grp"><span className="n num c-amber">{workforceState.recovering.length}</span><span className="l">Recovery</span></div>
+              </div>
+            </div>
 
-          {/* LEFT RAIL */}
-          <div className="sf-rail left">
-            {LEFT_SLOTS.map(s => renderSlot(s))}
+            <div className="block">
+              <div className="block-head"><span className="tac">Recovery Status</span></div>
+              <div className="recov">
+                {soiRecommendations.length > 0 && soiRecommendations[0].recommendedActions.slice(0, 4).map((a, i) => (
+                  <div key={i} className="step">
+                    <span className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
+                    <div className="txt">
+                      <span className="t">{a.label}</span>
+                      <span className="s">{i === 0 ? 'Complete' : i === 1 ? 'In progress' : `Est. ${a.expectedImpact?.slice(0, 30) ?? 'Queued'}`}</span>
+                    </div>
+                  </div>
+                ))}
+                {soiRecommendations.length === 0 && (
+                  <div className="step"><span className="marker done" /><div className="txt"><span className="t">No active recovery</span><span className="s">Operations nominal</span></div></div>
+                )}
+              </div>
+            </div>
+
             {/* Dev controls */}
-            <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
-              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
-              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={refresh}>Refresh</button>
-              {!replayMode && <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={startReplay}>Replay</button>}
+            <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', paddingTop: 12 }}>
+              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
+              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
+              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={refresh}>Refresh</button>
             </div>
-          </div>
+          </aside>
 
-          {/* CENTER STAGE */}
-          <div className="sf-stage">
-            {/* M1: Map anchor */}
-            <div className="sf-map">
+          {/* ─── CENTER STAGE ─── */}
+          <main className="stage">
+            <div className="map-amb">
+              <div className="bloom r" />
+              <div className="bloom o" />
+              <div className="bloom a" />
               <SpatialField
                 assessment={operationalAssessment}
                 gates={ALL_GATES}
@@ -2700,203 +2627,189 @@ export default function ManagerDashboard() {
               />
             </div>
 
-            {/* A2: Active Recommendation anchor */}
-            {soiRecommendations.length > 0 && (() => {
-              const rec = soiRecommendations[0];
-              const sevColor = rec.severity === 'critical' ? 'var(--sf-red)' : rec.severity === 'high' ? 'var(--sf-amber)' : 'var(--sf-cyan)';
-              return (
-                <div className="sf-rec" style={crisisMode ? { flex: 1, minHeight: 200 } : undefined}>
-                  <div>
-                    <div className="sf-rec-label">Active Recommendation</div>
-                    <div className="sf-rec-title">{rec.title}</div>
-                    <div className="sf-rec-body">{rec.summary}</div>
-                  </div>
-                  <div className="sf-rec-metrics">
-                    <div><div className="sf-rec-metric-k">Confidence</div><div className="sf-rec-metric-v" style={{ color: rec.confidence.score >= 70 ? 'var(--sf-green)' : 'var(--sf-amber)' }}>{rec.confidence.score}%</div></div>
-                    <div><div className="sf-rec-metric-k">Stabilization</div><div className="sf-rec-metric-v">~{rec.estimatedStabilizationMinutes}m</div></div>
-                    <div><div className="sf-rec-metric-k">Pressure</div><div className="sf-rec-metric-v"><span style={{ color: 'var(--sf-red)' }}>{rec.preview.beforePressure}</span> → <span style={{ color: 'var(--sf-green)' }}>{rec.preview.afterPressure}</span></div></div>
-                  </div>
-                  <div className="sf-rec-plan">
-                    <div className="sf-rec-label">Modeled Recovery</div>
-                    {rec.recommendedActions.slice(0, 4).map((a, i) => (
-                      <div key={i} className="sf-rec-step">
-                        <div className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
-                        <span>{a.label}</span>
+            <div className="stage-inner">
+              <div className="spatial-cap">
+                <span className="ttl">Terminal 5 · Pressure Field</span>
+                <span className="pill">Spatial Mode</span>
+                <div className="legend-inline">
+                  <div className="li"><span className="d" style={{ background: 'var(--red)', boxShadow: '0 0 8px var(--glow-red)' }} />Critical</div>
+                  <div className="li"><span className="d" style={{ background: 'var(--orange)', boxShadow: '0 0 8px var(--glow-orange)' }} />High</div>
+                  <div className="li"><span className="d" style={{ background: 'var(--amber)', boxShadow: '0 0 8px var(--glow-amber)' }} />Elevated</div>
+                  <div className="li"><span className="d" style={{ background: 'var(--cyan)', boxShadow: '0 0 8px var(--glow-cyan)' }} />Stable</div>
+                </div>
+              </div>
+
+              {/* ACTIVE RECOMMENDATION */}
+              {soiRecommendations.length > 0 && (() => {
+                const rec = soiRecommendations[0];
+                const confPct = rec.confidence.score;
+                const circumference = 2 * Math.PI * 33;
+                const offset = circumference * (1 - confPct / 100);
+                return (
+                  <section className="rec">
+                    <div className="rec-top">
+                      <div className="rec-id">
+                        <span className="tac">Active Recommendation · {liveTime}</span>
+                        <span className="title">{rec.title}</span>
+                        <span className="desc">{rec.summary}</span>
                       </div>
-                    ))}
-                    <button className="sf-rec-btn" onClick={() => handleCommand(`stabilize ${rec.affectedGate ?? rec.affectedZone}`)}>
-                      {rec.title}
+                      <div className="rec-conf">
+                        <div className="conf-ring">
+                          <svg width="78" height="78" viewBox="0 0 78 78">
+                            <circle cx="39" cy="39" r="33" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="4" />
+                            <circle cx="39" cy="39" r="33" fill="none" stroke="#52d6e6" strokeWidth="4" strokeLinecap="round"
+                              strokeDasharray={circumference} strokeDashoffset={offset} style={{ filter: 'drop-shadow(0 0 6px rgba(82,214,230,.5))', transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
+                          </svg>
+                          <div className="val"><span className="p num">{confPct}</span><span className="l">Confidence</span></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rec-body">
+                      <div className="proj">
+                        <span className="tac">Projected Outcome</span>
+                        <div className="proj-grid">
+                          <div className="proj-item"><div className="pv c-cyan num">−{rec.preview.riskReducedBy}%</div><div className="pl">Pressure reduction</div></div>
+                          <div className="proj-item"><div className="pv c-green num">−{Math.round(rec.preview.riskReducedBy * 1.5)}%</div><div className="pl">Cascade risk</div></div>
+                          <div className="proj-item"><div className="pv num">{rec.estimatedStabilizationMinutes}<span style={{ fontSize: 12, color: 'var(--ink-3)' }}> min</span></div><div className="pl">Recovery window</div></div>
+                          <div className="proj-item"><div className="pv num">{operationalAssessment.zoneAssessments.filter(z => z.stability !== 'stable').length}</div><div className="pl">Zones affected</div></div>
+                        </div>
+                      </div>
+                      <div className="trade">
+                        <span className="tac">Tradeoffs</span>
+                        <div className="trade-list">
+                          {rec.preview.possibleTradeoffs.filter(t => t !== 'No significant tradeoffs identified').slice(0, 3).map((t, i) => (
+                            <div key={i} className="trade-row"><span className="d" style={{ background: i === 0 ? 'var(--orange)' : 'var(--amber)', boxShadow: `0 0 6px ${i === 0 ? 'var(--glow-orange)' : 'var(--glow-amber)'}` }} />{t}</div>
+                          ))}
+                          {rec.preview.possibleTradeoffs.filter(t => t !== 'No significant tradeoffs identified').length === 0 && (
+                            <div className="trade-row"><span className="d" style={{ background: 'var(--green)', boxShadow: '0 0 6px rgba(63,212,137,.4)' }} />Low operational risk</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rec-actions">
+                      <button className="cta cta-primary" onClick={() => handleCommand(`stabilize ${rec.affectedGate ?? rec.affectedZone}`)}>
+                        Approve &amp; Execute <span className="dotk">↵</span>
+                      </button>
+                      <button className="cta cta-ghost" onClick={() => handleCommand('compare recovery options')}>Simulate Plan</button>
+                      <button className="cta cta-ghost" onClick={() => handleCommand('brief me')}>Brief</button>
+                    </div>
+                  </section>
+                );
+              })()}
+
+              {/* Response panels */}
+              {commandResponse && (
+                <div style={{ margin: '12px 0', padding: '14px 18px', background: 'rgba(255,255,255,.022)', border: '1px solid rgba(150,170,190,.08)', borderRadius: 12, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-2)' }}>
+                  {commandResponse.map((line, i) => <div key={i} style={{ padding: '1px 0', color: i === 0 ? 'var(--ink)' : undefined }}>{line}</div>)}
+                  <button onClick={() => setCommandResponse(null)} style={{ marginTop: 6, padding: '3px 8px', background: 'none', border: '1px solid rgba(150,170,190,.08)', borderRadius: 6, color: 'var(--ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+                </div>
+              )}
+              {copilotAnswer && copilotAnswer.title !== 'Processing' && (
+                <div style={{ margin: '12px 0', padding: '14px 18px', background: 'rgba(255,255,255,.022)', border: '1px solid rgba(150,170,190,.08)', borderRadius: 12, fontFamily: 'var(--mono)' }}>
+                  <div style={{ fontSize: 8, letterSpacing: '.2em', textTransform: 'uppercase', color: '#52d6e6', marginBottom: 6 }}>SOI</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>{copilotAnswer.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-2)', lineHeight: 1.5, marginBottom: 6 }}>{copilotAnswer.answer}</div>
+                  {copilotAnswer.bullets.slice(0, 4).map((b, i) => (
+                    <div key={i} style={{ fontSize: 10, color: 'var(--ink-3)', padding: '1px 0' }}>· {b}</div>
+                  ))}
+                  {copilotAnswer.recommendedNextAction && <div style={{ fontSize: 10, color: '#52d6e6', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>}
+                  <button onClick={() => setCopilotAnswer(null)} style={{ marginTop: 6, padding: '3px 8px', background: 'none', border: '1px solid rgba(150,170,190,.08)', borderRadius: 6, color: 'var(--ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+                </div>
+              )}
+
+              {/* COMMAND DOCK */}
+              <div className="dock-wrap">
+                <div className="dock">
+                  <div className="dock-orb" />
+                  <div className="wave">
+                    <span /><span /><span /><span /><span /><span /><span />
+                  </div>
+                  <div className="dock-input" onClick={() => {
+                    const el = document.getElementById('soi-cmd-input');
+                    if (el) el.focus();
+                  }}>
+                    <input id="soi-cmd-input" type="text" value={commandInput} onChange={e => setCommandInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+                      placeholder="Ask SOI, or issue a command…"
+                      style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--ink-2)', fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 300, width: '100%' }} />
+                    <span className="hint">Voice ready · type or hold mic</span>
+                  </div>
+                  <div className="dock-meta">
+                    {isVoiceInputAvailable() && (
+                      <div style={{ cursor: 'pointer' }} onMouseDown={() => startListening()} onMouseUp={() => stopListening()} onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}>
+                        {voiceState === 'listening' ? (
+                          <div className="listening"><span className="ld" />Listening</div>
+                        ) : (
+                          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.16em', color: 'var(--ink-4)', textTransform: 'uppercase', cursor: 'pointer' }}>🎙 Hold</div>
+                        )}
+                      </div>
+                    )}
+                    <button className="dock-send" onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}>
+                      <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#03222a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
                   </div>
                 </div>
-              );
-            })()}
-
-            {/* Response panels */}
-            {commandResponse && (
-              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-blue,#5a93ff)', borderRadius: 8, fontSize: 10, fontFamily: 'var(--sf-mono)', color: 'var(--sf-ink-2)' }}>
-                {commandResponse.map((line, i) => <div key={i} style={{ padding: '1px 0', color: i === 0 ? 'var(--sf-ink)' : undefined }}>{line}</div>)}
-                <button onClick={() => setCommandResponse(null)} style={{ marginTop: 4, padding: '2px 6px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
               </div>
-            )}
-            {copilotAnswer && copilotAnswer.title !== 'Processing' && (
-              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-blue,#5a93ff)', borderRadius: 8, fontFamily: 'var(--sf-mono)' }}>
-                <div style={{ fontSize: 7, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--sf-blue,#5a93ff)', marginBottom: 4 }}>SOI</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sf-ink)', marginBottom: 4 }}>{copilotAnswer.title}</div>
-                <div style={{ fontSize: 10, color: 'var(--sf-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>{copilotAnswer.answer}</div>
-                {copilotAnswer.bullets.length > 0 && copilotAnswer.bullets.slice(0, 4).map((b, i) => (
-                  <div key={i} style={{ fontSize: 9, color: 'var(--sf-ink-3)', padding: '1px 0' }}>· {b}</div>
-                ))}
-                {copilotAnswer.recommendedNextAction && <div style={{ fontSize: 9, color: 'var(--sf-cyan)', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>}
-                <button onClick={() => setCopilotAnswer(null)} style={{ marginTop: 6, padding: '2px 6px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
-              </div>
-            )}
+            </div>
+          </main>
 
-            {/* Execution plan */}
-            {cmdMemory.activePlan && (
-              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-cyan)', borderRadius: 8, fontFamily: 'var(--sf-mono)' }}>
-                <div style={{ fontSize: 7, color: 'var(--sf-cyan)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
-                  {liveExec && isExecutionActive(liveExec) ? 'Recovery Active' : 'SOI Objective'}
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sf-ink)', marginBottom: 4 }}>{cmdMemory.activePlan.objective.operationalGoal}</div>
-                {cmdMemory.activePlan.steps.map((step, i) => {
-                  const ls = liveExec?.steps[i];
-                  const sc = ls?.phase === 'completed' ? 'var(--sf-green)' : ls?.phase === 'failed' ? 'var(--sf-red)' : ls?.phase === 'stalled' ? 'var(--sf-amber)' : (ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged') ? 'var(--sf-blue)' : 'var(--sf-ink-4)';
+          {/* ─── RIGHT RAIL ─── */}
+          <aside className="rail right">
+            <div className="block">
+              <div className="block-head"><span className="tac">Operational Intelligence</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {soiRecommendations.slice(0, 3).map((rec, i) => {
+                  const sevColor = rec.severity === 'critical' ? 'var(--red)' : rec.severity === 'high' ? 'var(--orange)' : 'var(--amber)';
+                  const glowColor = rec.severity === 'critical' ? 'var(--glow-red)' : rec.severity === 'high' ? 'var(--glow-orange)' : 'var(--glow-amber)';
                   return (
-                    <div key={step.stepId} style={{ padding: '3px 8px', marginBottom: 2, background: 'var(--sf-elev)', borderLeft: `2px solid ${sc}`, borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
-                      <span style={{ color: sc, fontWeight: 700, width: 12 }}>{ls?.phase === 'completed' ? '✓' : ls?.phase === 'failed' ? '✗' : step.sequence}</span>
-                      <span style={{ color: 'var(--sf-ink-2)', flex: 1 }}>{step.title}</span>
+                    <div key={rec.id} className="intel-item">
+                      <div className="intel-row">
+                        <span className="intel-glyph" style={{ background: sevColor, boxShadow: `0 0 8px ${glowColor}` }} />
+                        <div className="intel-txt">
+                          <span className="it">{rec.title}</span>
+                          <span className="is">{rec.summary.slice(0, 120)}</span>
+                          <span className="intel-tag">{rec.severity === 'critical' ? 'Active Risk' : rec.severity === 'high' ? 'Elevated' : 'Advisory'}</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
-                {!replayMode && !liveExec && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                    <button className="sf-dock-btn primary" style={{ flex: 2 }} onClick={handleApprovePlan}>Approve</button>
-                    <button className="sf-dock-btn" style={{ flex: 1 }} onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}>Cancel</button>
-                  </div>
+                {soiRecommendations.length === 0 && (
+                  <div className="intel-item"><div className="intel-row"><span className="intel-glyph" style={{ background: 'var(--cyan)', boxShadow: '0 0 8px var(--glow-cyan)' }} /><div className="intel-txt"><span className="it">Operations nominal</span><span className="is">No elevated intelligence signals.</span></div></div></div>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* UTILITY ROW */}
-          <div className="sf-utility">
-            {UTILITY_SLOTS.map(s => renderSlot(s))}
-          </div>
-
-          {/* RIGHT RAIL */}
-          <div className="sf-rail right">
-            {/* Incident detail (when selected) */}
-            {selectedIncident ? (
-              <IncidentDetailPanel
-                incident={selectedIncident} incidentEvents={incidentEvents} recoveryActions={recoveryActions}
-                isTransitioning={incidentTransitioning === selectedIncident.id}
-                onTransition={handleIncidentTransition} onBack={() => setSelectedIncidentId(null)}
-                onCreateRecoveryAction={handleCreateRecoveryAction} onRecoveryTransition={handleRecoveryTransition}
-                raTransitioning={raTransitioning} raSubmitting={raSubmitting}
-                showRecoveryForm={showRecoveryForm} onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
-              />
-            ) : (
-              <>
-                {RIGHT_SLOTS.map(s => renderSlot(s))}
-                {/* Quick incident triage */}
-                {triageIncidents.length > 0 && (
-                  <ModuleFrame moduleId="incidents" name="Priority Incidents" size="normal">
-                    {triageIncidents.slice(0, 4).map(inc => {
-                      const sevC = inc.severity === 'CRITICAL' ? 'var(--sf-red)' : inc.severity === 'HIGH' ? 'var(--sf-amber)' : 'var(--sf-blue)';
-                      return (
-                        <div key={inc.id} onClick={() => setSelectedIncidentId(inc.id)} style={{ padding: '6px 0', borderBottom: '1px solid var(--sf-line)', cursor: 'pointer', fontSize: 10 }}>
-                          <div style={{ color: 'var(--sf-ink)', fontWeight: 500, marginBottom: 2 }}>{inc.title.length > 45 ? inc.title.slice(0, 45) + '...' : inc.title}</div>
-                          <div style={{ fontSize: 8, color: 'var(--sf-ink-3)', display: 'flex', gap: 8 }}>
-                            <span style={{ color: sevC }}>{inc.severity}</span>
-                            <span>{inc.gate_id ?? ''}</span>
-                            <ElapsedTime since={inc.opened_at} format="relative" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </ModuleFrame>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Crisis suggestion prompt */}
-        {crisisSuggested && !crisisMode && (
-          <div style={{ margin: '0 24px 8px', padding: '10px 18px', background: 'rgba(255,125,77,.04)', border: '1px solid rgba(255,125,77,.15)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 14, fontFamily: 'var(--sf-mono)' }}>
-            <span style={{ fontSize: 10, color: 'var(--sf-orange,#ff7d4d)' }}>Pressure crossed threshold — switch to Crisis layout?</span>
-            <span style={{ flex: 1 }} />
-            <button onClick={toggleCrisis} className="sf-dock-btn" style={{ color: 'var(--sf-orange,#ff7d4d)', borderColor: 'rgba(255,125,77,.2)', padding: '5px 12px' }}>Switch</button>
-            <button onClick={() => setCrisisSuggested(false)} className="sf-dock-btn" style={{ padding: '5px 10px' }}>Dismiss</button>
-          </div>
-        )}
-
-        {/* Module gallery overlay */}
-        {showModuleGallery && galleryTarget && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={() => { setShowModuleGallery(false); setGalleryTarget(null); }}>
-            <div style={{ width: 480, maxHeight: '70vh', overflow: 'auto', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 12, padding: '20px 24px', fontFamily: 'var(--sf-sans)' }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-4)', marginBottom: 12 }}>Add Module to {galleryTarget}</div>
-              {(['core', 'dispatch', 'executive', 'utility', 'optional'] as const).map(cat => {
-                const region = galleryTarget.startsWith('L') ? 'L' : galleryTarget.startsWith('R') ? 'R' : 'U';
-                const modules = MODULE_REGISTRY.filter(m => m.category === cat && m.allowedRegions.includes(region as 'L' | 'R' | 'U'));
-                if (modules.length === 0) return null;
-                return (
-                  <div key={cat} style={{ marginBottom: 14 }}>
-                    <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--sf-ink-3)', marginBottom: 6 }}>{cat}</div>
-                    {modules.map(m => (
-                      <div key={m.id} onClick={() => addModuleToSlot(galleryTarget, m.id)}
-                        style={{ padding: '8px 10px', marginBottom: 4, background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderRadius: 8, cursor: 'pointer', transition: '.15s' }}>
-                        <div style={{ fontSize: 11, color: 'var(--sf-ink)', fontWeight: 500 }}>{m.name}</div>
-                        <div style={{ fontSize: 8, color: 'var(--sf-ink-4)', marginTop: 2 }}>{m.defaultSize} · {m.allowedRegions.join(', ')}</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-              <button onClick={() => { setShowModuleGallery(false); setGalleryTarget(null); }} style={{ width: '100%', padding: '8px', marginTop: 8, background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, color: 'var(--sf-ink-3)', fontFamily: 'var(--sf-mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Cancel</button>
             </div>
-          </div>
-        )}
 
-        {/* ── A3: COMMAND DOCK ── */}
-        <div className="sf-dock">
-          <div className="sf-waveform">
-            <div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" />
-          </div>
-          <input className="sf-dock-input" type="text" value={commandInput} onChange={e => setCommandInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-            placeholder="Ask SOI anything... assign a team, show me 52C, what should I worry about?" />
-          <button className="sf-dock-btn primary" onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }} disabled={!commandInput.trim()}>Run</button>
-          {isVoiceInputAvailable() && (
-            <button className="sf-dock-mic" onMouseDown={() => startListening()} onMouseUp={() => stopListening()} onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }} title="Push to talk">
-              {voiceState === 'listening' ? '●' : '🎙'}
-            </button>
-          )}
-          {isTTSAvailable() && <button className={`sf-dock-btn${ttsOn ? ' primary' : ''}`} onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}>{ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}</button>}
-          {crisisMode && (
-            <>
-              <button className="sf-dock-btn" style={{ color: 'var(--sf-amber)' }} onClick={() => handleCommand('brief me')}>Brief Team</button>
-              <button className="sf-dock-btn" style={{ color: 'var(--sf-orange,#ff7d4d)' }} onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
-            </>
-          )}
-          {(voiceState !== 'idle' || ttsState === 'speaking') && (
-            <span style={{ fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', color: ttsState === 'speaking' ? 'var(--sf-blue)' : voiceState === 'listening' ? 'var(--sf-red)' : 'var(--sf-amber)' }}>
-              {ttsState === 'speaking' ? 'speaking' : voiceState}
-            </span>
-          )}
+            <div className="block">
+              <div className="block-head"><span className="tac">Recovery Confidence</span><span className="meta">FORECAST</span></div>
+              <div className="predict">
+                <div className="spark">
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <span key={i} style={{ height: `${Math.min(95, 30 + recoveryConf.score * (i + 1) / 9)}%` }} />
+                  ))}
+                </div>
+                <div className="pr"><span>If plan executes now</span><span className="num c-cyan">{recoveryConf.score}%</span></div>
+                <div className="pr"><span>If delayed 10 min</span><span className="num c-amber">{Math.max(20, recoveryConf.score - 28)}%</span></div>
+              </div>
+            </div>
+
+            <div className="block">
+              <div className="block-head"><span className="tac">Recommended Next</span></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {soiRecommendations.slice(0, 3).map((rec, i) => (
+                  <div key={i} className="micro" onClick={() => handleCommand(rec.recommendedActions[0]?.label ?? rec.title)}>
+                    <span className="mi">{rec.recommendedActions[0]?.label ?? rec.title}</span>
+                    <span className="ma">Execute</span>
+                  </div>
+                ))}
+                {soiRecommendations.length === 0 && (
+                  <div className="micro"><span className="mi">No pending actions</span><span className="ma">—</span></div>
+                )}
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </>
   );
 }
-
-// ============================================================
-// HELPERS
-// ============================================================
-
-// statusBorderColor, sevFg, sevBg removed — replaced by
-// SeverityIndicator and OperationalStatus primitives from
-// @/components/soi which derive colors from operational-states.ts.
