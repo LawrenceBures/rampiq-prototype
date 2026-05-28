@@ -97,6 +97,7 @@ import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm
 import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
 import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
 import { SpatialField } from '@/components/soi/SpatialField';
+import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import './mission-control.css';
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
@@ -1918,7 +1919,7 @@ export default function ManagerDashboard() {
       )}
 
       {/* ── MISSION CONTROL SHELL ── */}
-      <div className="mc-shell">
+      <div className={`mc-shell${replayMode ? ' replay-active' : ''}`}>
 
         {/* ── MISSION HEADER ── */}
         <div className="mc-header">
@@ -1947,6 +1948,24 @@ export default function ManagerDashboard() {
               className="mc-dock-btn" style={{ padding: '4px 8px', fontSize: 7 }}>Out</button>
           </div>
         </div>
+
+        {/* ── REPLAY TIMELINE ── */}
+        <ReplayTimeline
+          active={replayMode}
+          playing={replayPlaying}
+          currentTimestamp={replayTimestamp}
+          startTimestamp={new Date(Math.min(...events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0), Date.now() - 7200000))}
+          endTimestamp={new Date()}
+          eventTimestamps={events
+            .filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action')
+            .map(e => new Date(e.created_at).getTime())
+            .filter(t => t > 0)
+          }
+          onScrub={ts => setReplayTimestamp(ts)}
+          onTogglePlay={togglePlayback}
+          onStep={stepReplay}
+          onExit={exitReplay}
+        />
 
         {/* ── THREE-COLUMN GRID ── */}
         <div className="mc-grid">
@@ -2038,26 +2057,17 @@ export default function ManagerDashboard() {
               <span>—</span>
               <span>Gates 52A–I</span>
               {selectedZone && <span style={{ color: 'var(--rq-accent)' }}>· Focused: {selectedZone.label}</span>}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
                 {replayMode ? (
-                  <>
-                    <span style={{ fontSize: 8, color: 'var(--rq-amber)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Replay</span>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(-15)}>−15m</button>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(-5)}>−5m</button>
-                    <button className={`mc-dock-btn${replayPlaying ? ' active' : ''}`} style={{ padding: '2px 6px', fontSize: 7 }} onClick={togglePlayback}>
-                      {replayPlaying ? '⏸' : '▶'}
-                    </button>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(5)}>+5m</button>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(15)}>+15m</button>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={exitReplay}>Exit</button>
-                    {replayTimestamp && (
-                      <span style={{ fontSize: 8, color: 'var(--rq-ink-3)' }}>
-                        {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                      </span>
-                    )}
-                  </>
+                  <span style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>
+                    Operational Memory
+                  </span>
                 ) : (
-                  <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={startReplay}>Replay</button>
+                  <>
+                    <span className="rq-pulse" />
+                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,.2)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Live</span>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={startReplay}>Replay</button>
+                  </>
                 )}
               </div>
             </div>
@@ -2188,6 +2198,25 @@ export default function ManagerDashboard() {
 
           {/* ── RIGHT RAIL: Intelligence Feed ── */}
           <div className="mc-rail">
+            {/* Replay temporal context */}
+            {replayMode && replayTimestamp && (
+              <div style={{
+                padding: '10px 12px', marginBottom: 12,
+                background: 'rgba(90,169,255,.03)', border: '1px solid rgba(90,169,255,.08)',
+                fontFamily: "'JetBrains Mono', monospace", textAlign: 'center',
+              }}>
+                <div style={{ fontSize: 7, color: 'var(--rq-blue)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Operational State At
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--rq-blue)', textShadow: '0 0 12px rgba(90,169,255,.15)' }}>
+                  {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                </div>
+                <div style={{ fontSize: 8, color: 'rgba(255,255,255,.2)', marginTop: 4 }}>
+                  {temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length} incidents · {temporalRecoveryActions.filter(ra => ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN').length} recoveries
+                </div>
+              </div>
+            )}
+
             {/* Incident detail panel (when selected) */}
             {selectedIncident ? (
               <IncidentDetailPanel
