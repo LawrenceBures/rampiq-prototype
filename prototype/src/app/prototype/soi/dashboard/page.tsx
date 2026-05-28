@@ -96,6 +96,8 @@ import {
 import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
 import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
 import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
+import { SpatialField } from '@/components/soi/SpatialField';
+import './mission-control.css';
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
   routeVoiceCommand,
@@ -139,6 +141,15 @@ export default function ManagerDashboard() {
   const [accessCode, setAccessCode] = useState('');
   const [accessError, setAccessError] = useState('');
   const [greeting, setGreeting] = useState<string | null>(null);
+  const [liveTime, setLiveTime] = useState('');
+
+  // Live clock
+  useEffect(() => {
+    const tick = () => setLiveTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Check identity on mount
   useEffect(() => {
@@ -1814,24 +1825,33 @@ export default function ManagerDashboard() {
     }
   }
 
+  // Derived data for spatial field
+  const ALL_GATES = ['52A', '52B', '52C', '52D', '52E', '52F', '52G', '52H', '52I'];
+  const recoveryProgress = (() => {
+    const active = temporalRecoveryActions.filter(ra => ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN' && ra.status !== 'ESCALATED');
+    const completed = temporalRecoveryActions.filter(ra => ra.status === 'COMPLETE');
+    const total = active.length + completed.length;
+    return { active: active.length, completed: completed.length, total, pct: total > 0 ? Math.round((completed.length / total) * 100) : 0 };
+  })();
+
   return (
     <>
       {/* Access code prompt */}
       {showAccessPrompt && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <div style={{
-            width: 340, padding: '32px 24px',
+            width: 380, padding: '40px 32px',
             background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
             fontFamily: "'JetBrains Mono', monospace",
           }}>
-            <div style={{ fontSize: 8, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 8 }}>
-              SOI Access
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--rq-accent)', letterSpacing: '.02em', marginBottom: 4 }}>
+              SOI
             </div>
-            <div style={{ fontSize: 12, color: 'var(--rq-ink)', marginBottom: 16 }}>
-              Enter your operational access code.
+            <div style={{ fontSize: 7, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--rq-ink-3)', marginBottom: 24 }}>
+              Operational Intelligence Mission Control
             </div>
             <input
               type="text"
@@ -1841,10 +1861,10 @@ export default function ManagerDashboard() {
               placeholder="ACCESS CODE"
               autoFocus
               style={{
-                width: '100%', padding: '8px 12px', marginBottom: 8,
+                width: '100%', padding: '10px 14px', marginBottom: 10,
                 background: 'var(--rq-bg)', border: '1px solid var(--rq-line)',
-                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 14,
-                letterSpacing: '.1em', textAlign: 'center',
+                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 15,
+                letterSpacing: '.12em', textAlign: 'center',
               }}
             />
             {accessError && (
@@ -1867,22 +1887,380 @@ export default function ManagerDashboard() {
         </div>
       )}
 
-      {/* Greeting banner */}
-      {greeting && (
-        <div style={{
-          padding: '8px 16px',
-          background: 'rgba(201,255,58,.04)', borderBottom: '1px solid var(--rq-line)',
-          fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--rq-accent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <span>{greeting}</span>
-          <button onClick={() => setGreeting(null)} style={{
-            background: 'none', border: 'none', color: 'var(--rq-ink-4)', cursor: 'pointer', fontSize: 10,
-          }}>✕</button>
-        </div>
-      )}
+      {/* ── MISSION CONTROL SHELL ── */}
+      <div className="mc-shell">
 
-      {/* ── PERSISTENT SOI COMMAND BAR ── */}
+        {/* ── MISSION HEADER ── */}
+        <div className="mc-header">
+          <div className="mc-brand">
+            <span className="mc-brand-logo">SOI</span>
+            <div>
+              <div className="mc-brand-sub">Operational Intelligence</div>
+              <div className="mc-brand-sub">Mission Control</div>
+            </div>
+          </div>
+
+          {greeting && <div className="mc-greeting">{greeting}</div>}
+
+          <div className="mc-header-meta">
+            <div className="mc-meta-item">{liveTime}</div>
+            <div className="mc-meta-item"><span className="mc-meta-value">{operator.shiftWindow}</span> Shift</div>
+            <div className="mc-meta-item">{operator.station} <span className="rq-pulse" /></div>
+          </div>
+
+          <div className="mc-operator">
+            <div>
+              <div className="mc-operator-name">{operator.displayName}</div>
+              <div className="mc-operator-role">{getRoleLabel(operator)}</div>
+            </div>
+            <button onClick={() => { clearIdentity(); setShowAccessPrompt(true); setOperator(OPERATORS[0]); }}
+              className="mc-dock-btn" style={{ padding: '4px 8px', fontSize: 7 }}>Out</button>
+          </div>
+        </div>
+
+        {/* ── THREE-COLUMN GRID ── */}
+        <div className="mc-grid">
+
+          {/* ── LEFT RAIL: Operations Snapshot ── */}
+          <div className="mc-rail">
+            <div className="mc-rail-title">Operations Snapshot</div>
+
+            {/* Global pressure gauge */}
+            <div className="mc-pressure-gauge">
+              <div className="mc-pressure-value" style={{
+                color: operationalAssessment.globalPressure >= 80 ? 'var(--rq-red)' :
+                  operationalAssessment.globalPressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)',
+              }}>
+                {operationalAssessment.globalPressure}
+              </div>
+              <div className="mc-pressure-label" style={{
+                color: operationalAssessment.globalPressure >= 80 ? 'var(--rq-red)' :
+                  operationalAssessment.globalPressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)',
+              }}>
+                {operationalAssessment.globalStability.toUpperCase()}
+              </div>
+              <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
+                {operationalAssessment.globalPressure} / 100
+              </div>
+            </div>
+
+            {/* Zone cards */}
+            {operationalAssessment.zoneAssessments.map(za => {
+              const pColor = za.pressure >= 80 ? 'var(--rq-red)' : za.pressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)';
+              return (
+                <div key={za.zoneId} className="mc-zone-card" data-stability={za.stability}
+                  onClick={() => setSelectedZoneId(za.zoneId === selectedZoneId ? null : za.zoneId)}>
+                  <div className="mc-zone-name">{za.zoneLabel}</div>
+                  <div className="mc-zone-stats">
+                    <span style={{ color: pColor }}>{za.pressure}</span>
+                    <span>{za.unresolvedCount} incident{za.unresolvedCount !== 1 ? 's' : ''}</span>
+                    <span>{za.activeRecoveryCount} recovery</span>
+                  </div>
+                  <div className="mc-zone-pressure-bar">
+                    <div className="mc-zone-pressure-fill" style={{ width: `${za.pressure}%`, background: pColor }} />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Recovery progress */}
+            <div className="mc-rail-title" style={{ marginTop: 20 }}>Recovery Progress</div>
+            <div className="mc-recovery-card">
+              <div className="mc-recovery-title">
+                {recoveryProgress.completed} / {recoveryProgress.total} actions complete
+              </div>
+              <div className="mc-recovery-bar">
+                <div className="mc-recovery-fill" style={{ width: `${recoveryProgress.pct}%` }} />
+              </div>
+              <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
+                {recoveryProgress.active} active · {recoveryProgress.pct}%
+              </div>
+            </div>
+
+            {/* Dev controls (collapsed) */}
+            <div style={{ marginTop: 16 }}>
+              <div className="mc-rail-title">Controls</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
+                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
+                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { runStressSimulation().then(() => { refresh(); refreshIncidents(); }); }}>Stress</button>
+                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={refresh}>Refresh</button>
+              </div>
+              <select value={operator.userId} onChange={e => {
+                const op = OPERATORS.find(o => o.userId === e.target.value);
+                if (op) { setOperator(op); storeIdentity(op); }
+              }} style={{
+                width: '100%', marginTop: 6, padding: '3px 6px',
+                background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
+                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 8,
+              }}>
+                {OPERATORS.map(op => (
+                  <option key={op.userId} value={op.userId}>{op.displayName} ({op.role})</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* ── CENTER: Spatial Operations Field ── */}
+          <div className="mc-center">
+            <div className="mc-center-header">
+              <b>LAX Eagle</b>
+              <span>—</span>
+              <span>Gates 52A–I</span>
+              {selectedZone && <span style={{ color: 'var(--rq-accent)' }}>· Focused: {selectedZone.label}</span>}
+            </div>
+
+            {/* Spatial gate map */}
+            <SpatialField
+              assessment={operationalAssessment}
+              gates={ALL_GATES}
+              onGateClick={gateId => {
+                const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
+                if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
+              }}
+            />
+
+            {/* View tabs below spatial field */}
+            <div style={{
+              display: 'flex', gap: 0, margin: '0 20px',
+              borderBottom: '1px solid var(--rq-line)',
+            }}>
+              {([
+                { key: 'feed' as const, label: 'Feed', count: zoneSummary.total },
+                { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
+                { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
+                { key: 'patterns' as const, label: 'Patterns', count: null },
+                { key: 'intelligence' as const, label: 'Intelligence', count: soiRecommendations.length > 0 ? soiRecommendations.length : null },
+              ]).map(tab => (
+                <button key={tab.key} type="button" onClick={() => setView(tab.key)}
+                  style={{
+                    padding: '8px 14px', fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
+                    fontFamily: 'inherit',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: view === tab.key ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
+                    borderBottom: view === tab.key ? '2px solid var(--rq-accent)' : '2px solid transparent',
+                    transition: 'all .15s',
+                  }}>
+                  {tab.label}
+                  {tab.count != null && tab.count > 0 && (
+                    <span style={{ marginLeft: 4, fontSize: 8, color: tab.key === 'intelligence' ? 'var(--rq-blue)' : 'var(--rq-red)' }}>{tab.count}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* View content (scrollable) */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+              <div className="rq-ops-board" style={{ maxWidth: 'none' }}>
+                {loading && events.length === 0 && (
+                  <div className="rq-quiet" style={{ padding: '32px 16px' }}>Loading operational state...</div>
+                )}
+                {view === 'feed' && renderFeed()}
+                {view === 'unresolved' && renderUnresolved()}
+                {view === 'incidents' && renderIncidents()}
+                {view === 'patterns' && renderPatterns()}
+                {view === 'intelligence' && renderIntelligence()}
+              </div>
+            </div>
+
+            {/* Response panels */}
+            {commandResponse && (
+              <div className="mc-response">
+                {commandResponse.map((line, i) => (
+                  <div key={i} style={{ color: i === 0 ? 'var(--rq-ink)' : 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4, fontSize: 10 }}>{line}</div>
+                ))}
+                <button type="button" onClick={() => setCommandResponse(null)}
+                  style={{ marginTop: 4, padding: '2px 6px', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+              </div>
+            )}
+
+            {copilotAnswer && (
+              <div className="mc-response">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 7, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--rq-blue)' }}>SOI Copilot</span>
+                  <span style={{
+                    fontSize: 7, padding: '1px 5px',
+                    border: `1px solid ${copilotAnswer.confidence === 'high' ? 'var(--rq-green-dim)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber-dim)' : 'var(--rq-line)'}`,
+                    color: copilotAnswer.confidence === 'high' ? 'var(--rq-green)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
+                    letterSpacing: '.08em', textTransform: 'uppercase',
+                  }}>{copilotAnswer.confidence}</span>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 4 }}>{copilotAnswer.title}</div>
+                <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>{copilotAnswer.answer}</div>
+                {copilotAnswer.bullets.length > 0 && copilotAnswer.bullets.map((b, i) => (
+                  <div key={i} style={{ fontSize: 9, color: 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>· {b}</div>
+                ))}
+                {copilotAnswer.recommendedNextAction && (
+                  <div style={{ fontSize: 9, color: 'var(--rq-blue)', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>
+                )}
+                <button type="button" onClick={() => setCopilotAnswer(null)}
+                  style={{ marginTop: 6, padding: '2px 6px', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+              </div>
+            )}
+
+            {/* Execution plan panel */}
+            {cmdMemory.activePlan && (
+              <div className="mc-response" style={{ borderLeftColor: 'var(--rq-accent)' }}>
+                <div style={{ fontSize: 7, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  {liveExec && isExecutionActive(liveExec) ? 'Recovery Chain Active' : 'SOI Objective'}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>{cmdMemory.activePlan.objective.operationalGoal}</div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 6 }}>{cmdMemory.activePlan.summary}</div>
+                {cmdMemory.activePlan.steps.map((step, i) => {
+                  const ls = liveExec?.steps[i];
+                  const sc = ls?.phase === 'completed' ? 'var(--rq-green)' : ls?.phase === 'failed' ? 'var(--rq-red)' : ls?.phase === 'stalled' ? 'var(--rq-amber)' : (ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged') ? 'var(--rq-blue)' : 'var(--rq-ink-4)';
+                  return (
+                    <div key={step.stepId} style={{ padding: '3px 8px', marginBottom: 2, background: 'var(--rq-bg-2)', borderLeft: `2px solid ${sc}`, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
+                      <span style={{ color: sc, fontWeight: 700, width: 12 }}>{ls?.phase === 'completed' ? '✓' : ls?.phase === 'failed' ? '✗' : step.sequence}</span>
+                      <span style={{ color: 'var(--rq-ink-2)', flex: 1 }}>{step.title}</span>
+                      <span style={{ color: 'var(--rq-ink-4)', fontSize: 8 }}>{step.estimatedDurationMinutes}m</span>
+                    </div>
+                  );
+                })}
+                {!replayMode && !liveExec && (
+                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                    <button className="mc-dock-btn primary" style={{ flex: 2 }} onClick={handleApprovePlan}>Approve Execution</button>
+                    <button className="mc-dock-btn" style={{ flex: 1 }} onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}>Cancel</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── RIGHT RAIL: Intelligence Feed ── */}
+          <div className="mc-rail">
+            <div className="mc-rail-title">Active Incidents</div>
+
+            {triageIncidents.length === 0 && (
+              <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', padding: '8px 0' }}>No active incidents.</div>
+            )}
+
+            {triageIncidents.slice(0, 8).map(inc => {
+              const sevColor = inc.severity === 'CRITICAL' ? 'var(--rq-red)' : inc.severity === 'HIGH' ? 'var(--rq-amber)' : 'var(--rq-blue)';
+              return (
+                <div key={inc.id} onClick={() => setSelectedIncidentId(inc.id === selectedIncidentId ? null : inc.id)}
+                  style={{
+                    padding: '8px 10px', marginBottom: 6,
+                    background: selectedIncidentId === inc.id ? 'var(--rq-bg-2)' : 'var(--rq-bg-1)',
+                    border: `1px solid ${selectedIncidentId === inc.id ? sevColor : 'var(--rq-line)'}`,
+                    borderLeft: `3px solid ${sevColor}`,
+                    cursor: 'pointer', transition: 'all .15s',
+                  }}>
+                  <div style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600, marginBottom: 2 }}>
+                    {inc.title.length > 40 ? inc.title.slice(0, 40) + '...' : inc.title}
+                  </div>
+                  <div style={{ fontSize: 8, color: 'var(--rq-ink-3)', display: 'flex', gap: 8 }}>
+                    <span style={{ color: sevColor }}>{inc.severity}</span>
+                    <span>{inc.gate_id ?? inc.zone_id ?? ''}</span>
+                    <ElapsedTime since={inc.opened_at} format="relative" />
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Recommendations */}
+            {soiRecommendations.length > 0 && (
+              <>
+                <div className="mc-rail-title" style={{ marginTop: 16 }}>SOI Recommendations</div>
+                {soiRecommendations.slice(0, 3).map(rec => (
+                  <div key={rec.id} className="mc-intel-card">
+                    <div className="mc-intel-label">Active Recommendation</div>
+                    <div className="mc-intel-title">{rec.title}</div>
+                    <div className="mc-intel-body">{rec.summary}</div>
+                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
+                      confidence {rec.confidence.score}% · est. {rec.estimatedStabilizationMinutes}m
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Narrative feed */}
+            {(() => {
+              const visible = getVisibleNarratives(narrativeFeed, 4);
+              if (visible.length === 0) return null;
+              return (
+                <>
+                  <div className="mc-rail-title" style={{ marginTop: 16 }}>SOI Feed</div>
+                  {visible.map(entry => {
+                    const bc = entry.severity === 'critical' ? 'var(--rq-red)' : entry.severity === 'warning' ? 'var(--rq-amber)' : entry.severity === 'success' ? 'var(--rq-green)' : 'var(--rq-ink-4)';
+                    return (
+                      <div key={entry.id} style={{
+                        padding: '6px 10px', marginBottom: 4,
+                        background: 'var(--rq-bg-1)', borderLeft: `2px solid ${bc}`,
+                        fontSize: 9, color: 'var(--rq-ink-3)', lineHeight: 1.4,
+                      }}>
+                        {entry.narrative.length > 100 ? entry.narrative.slice(0, 100) + '...' : entry.narrative}
+                      </div>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </div>
+
+        </div>
+
+        {/* ── COMMAND DOCK ── */}
+        <div className="mc-dock">
+          {/* Waveform */}
+          <div className={`mc-waveform${voiceState === 'listening' ? ' active' : ttsState === 'speaking' ? ' speaking' : ''}`}>
+            <div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" />
+          </div>
+
+          {/* Command input */}
+          <input
+            type="text"
+            className="mc-dock-input"
+            value={commandInput}
+            onChange={e => setCommandInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+            placeholder={`Ask SOI anything... e.g., "What's the play?", "Show me 52C", "What should I worry about?"`}
+          />
+
+          {/* Run */}
+          <button className={`mc-dock-btn${commandInput.trim() ? ' primary' : ''}`}
+            onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+            disabled={!commandInput.trim()}>Run</button>
+
+          {/* Mic */}
+          {isVoiceInputAvailable() && (
+            <button className={`mc-dock-mic${voiceState === 'listening' ? ' listening' : ''}`}
+              onMouseDown={() => startListening()}
+              onMouseUp={() => stopListening()}
+              onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
+              title="Push to talk (hold)">
+              {voiceState === 'listening' ? '●' : '🎙'}
+            </button>
+          )}
+
+          {/* Voice controls */}
+          {isTTSAvailable() && ttsOn && (
+            <button className="mc-dock-btn" onClick={() => soiSpeak('Soi voice channel online.')} title="Test voice">Test</button>
+          )}
+          {isTTSAvailable() && (
+            <button className={`mc-dock-btn${ttsOn ? ' active' : ''}`}
+              onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
+              title={`Voice (${ttsMode})`}>
+              {ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}
+            </button>
+          )}
+          <button className={`mc-dock-btn${ambientOn ? ' active' : ''}`}
+            onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}>Ambient</button>
+
+          {/* Status */}
+          {(voiceState !== 'idle' || ttsState === 'speaking') && (
+            <span className="mc-dock-status" style={{
+              color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-amber)',
+            }}>{ttsState === 'speaking' ? 'speaking' : voiceState}</span>
+          )}
+          {interimTranscript && (
+            <span style={{ fontSize: 8, color: 'var(--rq-ink-3)', fontStyle: 'italic', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {interimTranscript}
+            </span>
+          )}
+        </div>
+      </div>
       <div style={{
         position: 'sticky', top: 0, zIndex: 25,
         padding: '6px 16px',
@@ -1988,1150 +2366,6 @@ export default function ManagerDashboard() {
           title="Sign out">Out</button>
       </div>
 
-      {/* Command bar — full width */}
-      <CommandBar
-        station={selectedZone ? `LAX · ${selectedZone.label}` : 'LAX'}
-        role={`${operator.displayName} · ${operator.role.replace(/_/g, ' ')}`}
-        lastEventSync={lastUpdated}
-        lastIncidentSync={incidentLastSync}
-        activeIncidentCount={zoneScopedIncidents.length}
-        openEventCount={zoneSummary.openCount}
-      />
-
-      {/* Stability + shift context + institutional memory */}
-      {(anticipatory.stability.direction !== 'stable' || shiftContext.inheritedIncidentCount > 0 || institutionalMemory.recurringConditions.length > 0) && (
-        <div style={{
-          padding: '2px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
-          borderBottom: '1px solid var(--rq-line)',
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          {/* Stability direction — calm, not alarmist */}
-          {anticipatory.stability.direction !== 'stable' && (
-            <span style={{
-              fontSize: 8, padding: '1px 6px', borderRadius: 2, letterSpacing: '.06em', textTransform: 'uppercase',
-              color: anticipatory.stability.direction === 'acute' ? 'var(--rq-red)' :
-                anticipatory.stability.direction === 'destabilizing' ? 'var(--rq-amber)' : 'var(--rq-green)',
-              background: anticipatory.stability.direction === 'acute' ? 'rgba(255,92,92,.06)' :
-                anticipatory.stability.direction === 'destabilizing' ? 'rgba(232,161,58,.06)' : 'rgba(62,213,152,.06)',
-              border: `1px solid ${anticipatory.stability.direction === 'acute' ? 'rgba(255,92,92,.15)' :
-                anticipatory.stability.direction === 'destabilizing' ? 'rgba(232,161,58,.15)' : 'rgba(62,213,152,.15)'}`,
-            }}>
-              {anticipatory.stability.direction}
-            </span>
-          )}
-          {shiftContext.inheritedIncidentCount > 0 && (
-            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
-              {shiftContext.inheritedIncidentCount} inherited from prior shift
-            </span>
-          )}
-          {institutionalMemory.recurringConditions.filter(c => c.significance === 'systemic').slice(0, 2).map((c, i) => (
-            <span key={i} style={{
-              fontSize: 8, padding: '1px 5px', borderRadius: 2,
-              color: 'var(--rq-amber)', background: 'rgba(232,161,58,.06)',
-              border: '1px solid rgba(232,161,58,.12)',
-            }}>
-              {c.condition}
-            </span>
-          ))}
-          {institutionalMemory.shiftHandoff && institutionalMemory.shiftHandoff.handoffNotes.length > 0 && (
-            <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
-              handoff: {institutionalMemory.shiftHandoff.handoffNotes[0]}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Workforce coordination strip (role-aware) */}
-      {(workforce.escalations.length > 0 || workforce.summary.needsSupportCount > 0 || workforce.ownershipGaps.length > 0) && (
-        <div style={{
-          padding: '3px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
-          borderBottom: '1px solid var(--rq-line)',
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          {/* Escalation signals with action buttons */}
-          {workforce.escalations.filter(e => e.severity === 'critical').slice(0, 2).map((esc, i) => (
-            <span key={i} style={{
-              fontSize: 8, padding: '2px 6px', borderRadius: 2,
-              color: 'var(--rq-red)', background: 'rgba(255,92,92,.08)',
-              border: '1px solid rgba(255,92,92,.2)',
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-            }}>
-              ⚠ {esc.title}
-              {!replayMode && esc.incidentIds[0] && (
-                <>
-                  <button type="button" onClick={async () => {
-                    await emitEscalationAction({ incident_id: esc.incidentIds[0], action: 'escalate_to_manager', actor_id: operator.userId, actor_role: operator.role, reason: esc.title });
-                    refresh();
-                  }} style={{ background: 'none', border: '1px solid rgba(255,92,92,.3)', color: 'var(--rq-red)', cursor: 'pointer', padding: '0 4px', fontSize: 7, fontFamily: 'inherit' }}>
-                    escalate
-                  </button>
-                  <button type="button" onClick={async () => {
-                    await emitEscalationAction({ incident_id: esc.incidentIds[0], action: 'acknowledge_continue', actor_id: operator.userId, actor_role: operator.role });
-                    refresh();
-                  }} style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '0 4px', fontSize: 7, fontFamily: 'inherit' }}>
-                    ack
-                  </button>
-                </>
-              )}
-            </span>
-          ))}
-          {workforce.escalations.filter(e => e.severity === 'alert').slice(0, 2).map((esc, i) => (
-            <span key={`a${i}`} style={{
-              fontSize: 8, padding: '2px 6px', borderRadius: 2,
-              color: 'var(--rq-amber)', background: 'rgba(232,161,58,.08)',
-              border: '1px solid rgba(232,161,58,.2)',
-            }}>
-              {esc.title}
-            </span>
-          ))}
-          {/* Role-aware operator load summary */}
-          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.needsSupportCount > 0 && (
-            <span style={{ fontSize: 8, color: 'var(--rq-red)' }}>
-              {workforce.summary.needsSupportCount} coord. need support
-            </span>
-          )}
-          {operator.viewerRole === 'coordinator' && workforce.operatorLoads.find(o => o.operatorId === operator.userId)?.saturation === 'needs_support' && (
-            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
-              workload elevated — request support
-            </span>
-          )}
-          {(operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director') && workforce.summary.saturatedCount > 0 && (
-            <span style={{ fontSize: 8, color: 'var(--rq-amber)' }}>
-              {workforce.summary.saturatedCount} elevated
-            </span>
-          )}
-          {workforce.ownershipGaps.length > 0 && (
-            <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
-              {workforce.ownershipGaps.length} gap{workforce.ownershipGaps.length !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Replay controls */}
-      {replayMode && replayTimestamp && (
-        <div style={{
-          padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 10,
-          background: 'rgba(90,169,255,.06)', borderBottom: '1px solid rgba(90,169,255,.2)',
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          <span style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>
-            replay
-          </span>
-          <button type="button" onClick={() => stepReplay(-15)}
-            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
-            &laquo; 15m
-          </button>
-          <button type="button" onClick={() => stepReplay(-5)}
-            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
-            &lsaquo; 5m
-          </button>
-          <button type="button" onClick={togglePlayback}
-            style={{ background: replayPlaying ? 'rgba(90,169,255,.15)' : 'none', border: '1px solid var(--rq-blue)', color: 'var(--rq-blue)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
-            {replayPlaying ? '⏸ pause' : '▶ play'}
-          </button>
-          <button type="button" onClick={() => stepReplay(5)}
-            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
-            5m &rsaquo;
-          </button>
-          <button type="button" onClick={() => stepReplay(15)}
-            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 6px', fontSize: 9, fontFamily: 'inherit' }}>
-            15m &raquo;
-          </button>
-          <span style={{ fontSize: 11, color: 'var(--rq-blue)', fontWeight: 600, marginLeft: 4 }}>
-            {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-          </span>
-          <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>
-            {temporalEvents.length} ev · {temporalIncidents.length} inc
-          </span>
-          {/* Scrub bar */}
-          {(() => {
-            const twoH = Date.now() - 2 * 60 * 60_000;
-            const scrubStart = Math.max(twoH, replayTimestamp.getTime() - 2 * 60 * 60_000);
-            const scrubRange = Date.now() - scrubStart;
-            const pctDone = scrubRange > 0 ? ((replayTimestamp.getTime() - scrubStart) / scrubRange) * 100 : 0;
-            return (
-              <div style={{ flex: 1, maxWidth: 200, height: 6, background: 'var(--rq-bg-3)', borderRadius: 3, cursor: 'pointer', position: 'relative' }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const clickPct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  setReplayTimestamp(new Date(scrubStart + clickPct * scrubRange));
-                }}
-              >
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3,
-                  width: `${Math.max(0, Math.min(100, pctDone))}%`,
-                  background: 'var(--rq-blue)', transition: 'width .15s',
-                }} />
-              </div>
-            );
-          })()}
-          <button type="button" onClick={exitReplay}
-            style={{ background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-3)', cursor: 'pointer', padding: '2px 8px', fontSize: 9, fontFamily: 'inherit' }}>
-            exit replay
-          </button>
-        </div>
-      )}
-
-      {/* Three-panel grid */}
-      <div className="rq-console-grid">
-
-        {/* ── LEFT RAIL: Zone overview (interactive territory selector) ── */}
-        <div className="rq-console-rail-left">
-          <div className="rq-rail-header">
-            <span>Zones</span>
-            {selectedZoneId && (
-              <button type="button" onClick={() => setSelectedZoneId(null)}
-                style={{ background: 'none', border: 'none', color: 'var(--rq-accent)',
-                  cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace", fontSize: 9 }}>
-                all
-              </button>
-            )}
-          </div>
-          {zones.length === 0 && (
-            <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No zones loaded</div>
-          )}
-          {zones.map(z => {
-            // Derive zone pressure: open events (weighted by severity) + incidents
-            const zoneEvents = events.filter(e => e.gate_id && z.gate_ids.includes(e.gate_id) && isOpen(e));
-            const sevWeight: Record<string, number> = { CRITICAL: 20, HIGH: 15, MEDIUM: 8, LOW: 4 };
-            const eventPressure = zoneEvents.reduce((sum, e) => sum + (sevWeight[e.severity] ?? 5), 0);
-            const zoneIncs = incidents.filter(i => i.zone_id === z.id);
-            const incPressure = zoneIncs.length * 25;
-            const pressure = Math.min(100, eventPressure + incPressure);
-            const isActive = selectedZoneId === z.id;
-            return (
-              <ZoneTile
-                key={z.id}
-                name={z.label}
-                gateCount={z.gate_ids.length}
-                pressure={pressure}
-                incidentCount={zoneIncs.length}
-                isActive={isActive}
-                onClick={() => setSelectedZoneId(isActive ? null : z.id)}
-              />
-            );
-          })}
-        </div>
-
-        {/* ── CENTER: Main operational surface ── */}
-        <div className="rq-console-center">
-          <div className="rq-ops-board">
-
-            <KpiStrip summary={zoneSummary} />
-
-            {/* Outcome metrics */}
-            {(outcomes.aggregate.avgTotalResolution !== null || recommendations.some(r => r.type === 'zone_pressure_balance')) && (
-              <div style={{
-                margin: '0 16px 2px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                {outcomes.aggregate.avgTotalResolution !== null && (
-                  <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>avg resolution {outcomes.aggregate.avgTotalResolution}m</span>
-                )}
-                {outcomes.aggregate.recoverySuccessRate !== null && (
-                  <span style={{ fontSize: 8, color: outcomes.aggregate.recoverySuccessRate >= 0.6 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
-                    recovery {Math.round(outcomes.aggregate.recoverySuccessRate * 100)}%
-                  </span>
-                )}
-                {recommendations.filter(r => r.type === 'zone_pressure_balance').map(rec => (
-                  <span key={rec.id} style={{ fontSize: 8, padding: '1px 6px', borderRadius: 2,
-                    color: 'var(--rq-blue)', background: 'rgba(90,169,255,.06)', border: '1px solid rgba(90,169,255,.15)' }}>
-                    {rec.title}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Operational trend strip + pattern insights */}
-            {(patternInsights.length > 0 || trends.incidentVolume.some(t => t.count > 0)) && (
-              <div style={{ margin: '0 16px 4px' }}>
-                {/* Trend sparkline + pressure state */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  {/* Sparkline: 15-min buckets, reversed so oldest is left */}
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: 16 }}>
-                    {[...trends.incidentVolume].reverse().map((t, i) => {
-                      const maxScore = trends.peakBucketScore || 1;
-                      const h = Math.max(2, (t.weightedScore / maxScore) * 16);
-                      const barColor = t.weightedScore >= 6 ? 'var(--rq-red)' : t.weightedScore >= 3 ? 'var(--rq-amber)' : 'var(--rq-green)';
-                      return <div key={i} style={{ width: 4, height: h, background: barColor, borderRadius: 1, opacity: t.weightedScore > 0 ? 0.8 : 0.15 }} />;
-                    })}
-                  </div>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 7,
-                    color: 'var(--rq-ink-4)', letterSpacing: '.06em',
-                  }}>
-                    2h
-                  </span>
-
-                  {/* Pressure state label */}
-                  {trends.pressureLabel && (() => {
-                    const stateColors: Record<PressureState, string> = {
-                      rising: 'var(--rq-red)', deteriorating: 'var(--rq-red)', sustained_high: 'var(--rq-red)',
-                      volatile: 'var(--rq-amber)', stabilizing: 'var(--rq-amber)',
-                      falling: 'var(--rq-green)', stable: 'var(--rq-ink-3)',
-                    };
-                    const stateIcons: Record<PressureState, string> = {
-                      rising: '▲', deteriorating: '▲▲', sustained_high: '━',
-                      volatile: '~', stabilizing: '▽', falling: '▼', stable: '',
-                    };
-                    const color = stateColors[trends.pressureState];
-                    return (
-                      <span style={{
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-                        padding: '2px 6px', borderRadius: 2, letterSpacing: '.06em', textTransform: 'uppercase',
-                        color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
-                      }}>
-                        {stateIcons[trends.pressureState]} {trends.pressureLabel}
-                      </span>
-                    );
-                  })()}
-
-                  {/* Recovery rate */}
-                  {trends.recoveryCompletionRate !== null && (
-                    <span style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-                      color: trends.recoveryCompletionRate >= 0.7 ? 'var(--rq-green)' : trends.recoveryCompletionRate >= 0.4 ? 'var(--rq-amber)' : 'var(--rq-red)',
-                    }}>
-                      recovery {Math.round(trends.recoveryCompletionRate * 100)}%
-                    </span>
-                  )}
-                </div>
-
-                {/* Pattern insight pills */}
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {patternInsights.slice(0, 5).map((ins, i) => {
-                    const color = ins.severity === 'alert' ? 'var(--rq-red)' : ins.severity === 'watch' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
-                    const isExpanded = expandedInsight === i;
-                    const categoryLabel: Record<InsightCategory, string> = {
-                      gate_pattern: 'GATE', equipment_risk: 'EQUIP', recovery_friction: 'RECOVERY', zone_instability: 'ZONE',
-                    };
-                    return (
-                      <div key={i}
-                        onClick={() => setExpandedInsight(isExpanded ? null : i)}
-                        style={{
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                          padding: '2px 8px', borderRadius: 2, cursor: 'pointer',
-                          color, background: `color-mix(in srgb, ${color} 8%, transparent)`,
-                          border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
-                        }}>
-                        <span style={{ fontSize: 7, opacity: 0.7, marginRight: 4 }}>{categoryLabel[ins.category]}</span>
-                        {ins.title}
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* Expanded insight explanation */}
-                {expandedInsight !== null && patternInsights[expandedInsight] && (
-                  <div style={{
-                    marginTop: 4, padding: '6px 10px',
-                    background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    color: 'var(--rq-ink-2)', lineHeight: 1.4,
-                  }}>
-                    <div style={{ fontWeight: 600, marginBottom: 3, color: 'var(--rq-ink)' }}>
-                      {patternInsights[expandedInsight].title}
-                    </div>
-                    <div>{patternInsights[expandedInsight].explanation}</div>
-                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
-                      Score: {patternInsights[expandedInsight].score}
-                      {patternInsights[expandedInsight].contributingIncidentIds.length > 0 && (
-                        <> · {patternInsights[expandedInsight].contributingIncidentIds.length} incident{patternInsights[expandedInsight].contributingIncidentIds.length !== 1 ? 's' : ''}</>
-                      )}
-                      {patternInsights[expandedInsight].contributingEventIds.length > 0 && (
-                        <> · {patternInsights[expandedInsight].contributingEventIds.length} event{patternInsights[expandedInsight].contributingEventIds.length !== 1 ? 's' : ''}</>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Compact attention strip — desktop: inline details, mobile: summary */}
-            {zoneAttentionEvents.length > 0 && (
-              <div style={{
-                margin: '0 16px', padding: '5px 10px',
-                border: '1px solid var(--rq-red)', borderLeft: '3px solid var(--rq-red)',
-                background: 'rgba(255,92,92,.04)',
-                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-              }}>
-                <span style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 700,
-                  color: 'var(--rq-red)', letterSpacing: '.08em', textTransform: 'uppercase',
-                }}>
-                  {zoneAttentionEvents.length} attention
-                </span>
-
-                {/* Mobile: compact summary */}
-                <span className="rq-attention-summary" style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--rq-ink-2)',
-                }}>
-                  {zoneAttentionEvents.filter(e => e.severity === 'CRITICAL').length > 0
-                    ? `${zoneAttentionEvents.filter(e => e.severity === 'CRITICAL').length} critical · `
-                    : ''
-                  }
-                  {zoneAttentionEvents.filter(e => e.severity === 'HIGH').length} high requiring action
-                </span>
-
-                {/* Desktop: inline event details with actions */}
-                {zoneAttentionEvents.map(e => (
-                  <span key={e.id} className="rq-attention-detail" style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    color: 'var(--rq-ink-2)',
-                  }}>
-                    <SeverityIndicator severity={e.severity as Severity} variant="dot" />
-                    <span>{e.event_type.replace(/_/g, ' ')}</span>
-                    {e.gate_id && <span style={{ color: 'var(--rq-ink-4)' }}>{e.gate_id}</span>}
-                    <ElapsedTime since={e.created_at} format="relative" />
-                    {e.operational_status === 'OPEN' && (
-                      <button className="rq-qbtn qb-ack" style={{ padding: '1px 6px', fontSize: 8, marginTop: 0 }}
-                        disabled={updatingId === e.id}
-                        onClick={(ev) => { ev.stopPropagation(); handleStatus(e.id, 'ACKNOWLEDGED', ev); }}>
-                        Ack
-                      </button>
-                    )}
-                    <button className="rq-qbtn qb-resolve" style={{ padding: '1px 6px', fontSize: 8, marginTop: 0 }}
-                      disabled={updatingId === e.id}
-                      onClick={(ev) => { ev.stopPropagation(); handleStatus(e.id, 'RESOLVED', ev); }}>
-                      {updatingId === e.id ? '...' : 'Res'}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Tabs */}
-            <div style={{
-              display: 'flex', borderBottom: '1px solid var(--rq-line)',
-              margin: '14px 0 0',
-            }}>
-              {([
-                { key: 'feed' as const, label: 'Live Feed', count: zoneSummary.total },
-                { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
-                { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
-                { key: 'patterns' as const, label: 'Patterns', count: null },
-                { key: 'intelligence' as const, label: 'Intelligence', count: soiRecommendations.length > 0 ? soiRecommendations.length : null },
-              ]).map(tab => (
-                <button
-                  type="button"
-                  key={tab.key}
-                  onClick={() => setView(tab.key)}
-                  style={{
-                    flex: 1, padding: '10px', cursor: 'pointer',
-                    background: 'transparent', border: 'none',
-                    borderBottom: view === tab.key ? '2px solid var(--rq-accent)' : '2px solid transparent',
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    letterSpacing: '.1em', textTransform: 'uppercase' as const,
-                    color: view === tab.key ? 'var(--rq-accent)' : 'var(--rq-ink-3)',
-                    fontWeight: view === tab.key ? 700 : 400,
-                  }}
-                >
-                  {tab.label}
-                  {tab.count != null && tab.count > 0 && (tab.key === 'unresolved' || tab.key === 'incidents') && (
-                    <span style={{
-                      marginLeft: 5, padding: '1px 5px',
-                      background: 'rgba(255,92,92,.12)', color: 'var(--rq-red)',
-                      fontSize: 9,
-                    }}>
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* View content */}
-            {loading && events.length === 0 && (
-              <div className="rq-quiet" style={{ padding: '32px 16px' }}>Loading operational state...</div>
-            )}
-
-            {view === 'feed' && renderFeed()}
-            {view === 'unresolved' && renderUnresolved()}
-            {view === 'incidents' && renderIncidents()}
-            {view === 'patterns' && renderPatterns()}
-            {view === 'intelligence' && renderIntelligence()}
-
-            {/* Voice/Command controls moved to persistent top bar */}
-
-            {/* Command response */}
-            {commandResponse && (
-              <div style={{
-                margin: '4px 16px 0', padding: '8px 10px',
-                background: 'var(--rq-bg-1)', borderLeft: '2px solid var(--rq-accent)',
-                fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-              }}>
-                {commandResponse.map((line, i) => (
-                  <div key={i} style={{ color: i === 0 ? 'var(--rq-ink)' : 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>
-                    {line}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setCommandResponse(null)}
-                  style={{
-                    marginTop: 4, padding: '2px 6px',
-                    background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                    fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
-                  }}
-                >
-                  dismiss
-                </button>
-              </div>
-            )}
-
-            {/* SOI Live Execution Panel */}
-            {(cmdMemory.activePlan || liveExec) && (() => {
-              const plan = cmdMemory.activePlan;
-              const exec = liveExec;
-              const isLive = exec && isExecutionActive(exec);
-              const progress = exec ? executionProgressSummary(exec) : null;
-              const phaseColor = exec?.phase === 'completed' ? 'var(--rq-green)'
-                : exec?.phase === 'failed' ? 'var(--rq-red)'
-                : exec?.phase === 'blocked' ? 'var(--rq-amber)'
-                : isLive ? 'var(--rq-accent)' : 'var(--rq-accent)';
-
-              return (
-                <div style={{
-                  margin: '6px 16px 0', padding: '12px',
-                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-                  borderLeft: `3px solid ${phaseColor}`,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 8, color: phaseColor, letterSpacing: '.14em', textTransform: 'uppercase' }}>
-                      {isLive ? 'Recovery Chain Active' : exec?.phase === 'completed' ? 'Recovery Complete' : exec?.phase === 'failed' ? 'Recovery Failed' : 'SOI Objective'}
-                    </span>
-                    {isLive && <span className="rq-pulse" />}
-                    {progress && isLive && (
-                      <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--rq-ink-3)' }}>
-                        {progress.completed}/{progress.total} steps
-                      </span>
-                    )}
-                  </div>
-
-                  {plan && (
-                    <>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>
-                        {plan.objective.operationalGoal}
-                      </div>
-                      <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 8 }}>
-                        {plan.summary}
-                      </div>
-                    </>
-                  )}
-
-                  {/* Live steps */}
-                  <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4 }}>
-                    {isLive ? 'Live Recovery Chain' : 'Modeled Recovery Plan'}
-                  </div>
-                  {(plan?.steps ?? []).map((step, i) => {
-                    const ls = exec?.steps[i];
-                    const stepColor = ls?.phase === 'completed' ? 'var(--rq-green)'
-                      : ls?.phase === 'failed' ? 'var(--rq-red)'
-                      : ls?.phase === 'stalled' ? 'var(--rq-amber)'
-                      : ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged' ? 'var(--rq-blue)'
-                      : 'var(--rq-ink-4)';
-                    const stepLabel = ls?.phase === 'completed' ? '✓'
-                      : ls?.phase === 'failed' ? '✗'
-                      : ls?.phase === 'stalled' ? '!'
-                      : ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged' ? '▸'
-                      : `${step.sequence}`;
-                    const isActiveStep = ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged';
-
-                    return (
-                      <div key={step.stepId} style={{
-                        padding: '5px 8px', marginBottom: 2,
-                        background: isActiveStep ? 'var(--rq-bg-3)' : 'var(--rq-bg-2)',
-                        borderLeft: `2px solid ${stepColor}`,
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        transition: 'background .3s',
-                      }}>
-                        <span style={{ fontSize: 11, color: stepColor, fontWeight: 700, width: 16, flexShrink: 0, textAlign: 'center' }}>
-                          {stepLabel}
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 10, color: isActiveStep ? 'var(--rq-ink)' : ls?.phase === 'completed' ? 'var(--rq-ink-2)' : 'var(--rq-ink)' }}>
-                            {step.title}
-                          </div>
-                          <div style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
-                            {ls?.phase && ls.phase !== 'queued' ? ls.phase.toUpperCase() : step.estimatedImpact}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedDurationMinutes}m</span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Metrics */}
-                  {plan && (
-                    <div style={{ display: 'flex', gap: 16, margin: '8px 0', fontSize: 9 }}>
-                      <div>
-                        <span style={{ color: 'var(--rq-ink-4)' }}>est. </span>
-                        <span style={{ color: 'var(--rq-ink-2)' }}>{plan.totalEstimatedMinutes}m</span>
-                      </div>
-                      <div>
-                        <span style={{ color: 'var(--rq-ink-4)' }}>confidence </span>
-                        <span style={{ color: plan.confidence >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
-                          {plan.confidence}%
-                        </span>
-                      </div>
-                      {progress && (
-                        <div>
-                          <span style={{ color: 'var(--rq-ink-4)' }}>progress </span>
-                          <span style={{ color: progress.percentage === 100 ? 'var(--rq-green)' : 'var(--rq-ink-2)' }}>
-                            {progress.percentage}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Adaptive recommendations */}
-                  {adaptiveRecs.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 8, color: 'var(--rq-amber)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
-                        Adaptive Warning
-                      </div>
-                      {adaptiveRecs.map(ar => (
-                        <div key={ar.id} style={{
-                          padding: '4px 8px', marginBottom: 2,
-                          background: ar.urgency === 'immediate' ? 'rgba(255,92,92,.04)' : 'rgba(245,177,61,.04)',
-                          borderLeft: `2px solid ${ar.urgency === 'immediate' ? 'var(--rq-red)' : 'var(--rq-amber)'}`,
-                          fontSize: 9, color: 'var(--rq-ink-2)', lineHeight: 1.3,
-                        }}>
-                          <div style={{ fontWeight: 600 }}>{ar.title}</div>
-                          <div style={{ fontSize: 8, color: 'var(--rq-ink-3)' }}>{ar.reason}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Tradeoffs */}
-                  {plan && plan.tradeoffs.length > 0 && !isLive && (
-                    <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 2 }}>Tradeoffs</div>
-                      {plan.tradeoffs.map((t, i) => (
-                        <div key={i} style={{ fontSize: 8, color: 'var(--rq-amber)', lineHeight: 1.3 }}>· {t}</div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Timeline (last 6 entries) */}
-                  {exec && exec.timeline.entries.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
-                        Execution Timeline
-                      </div>
-                      {exec.timeline.entries.slice(-6).map(entry => (
-                        <div key={entry.id} style={{
-                          display: 'flex', gap: 8, padding: '2px 0',
-                          fontSize: 8, color: entry.severity === 'critical' ? 'var(--rq-red)' : entry.severity === 'warning' ? 'var(--rq-amber)' : entry.severity === 'success' ? 'var(--rq-green)' : 'var(--rq-ink-3)',
-                        }}>
-                          <span style={{ color: 'var(--rq-ink-4)', width: 36, flexShrink: 0 }}>
-                            {formatTimelineTime(entry.timestamp, exec.timeline.startedAt)}
-                          </span>
-                          <span>{entry.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Action buttons */}
-                  {!replayMode && (
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      {!exec && plan && (
-                        <button type="button"
-                          onClick={handleApprovePlan}
-                          style={{
-                            flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
-                            textTransform: 'uppercase', fontFamily: 'inherit',
-                            background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
-                            cursor: 'pointer',
-                          }}>
-                          Approve Execution
-                        </button>
-                      )}
-                      <button type="button"
-                        onClick={() => {
-                          if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
-                          setLiveExec(null);
-                          setAdaptiveRecs([]);
-                          setCmdMemory(clearCommandMemory(cmdMemory));
-                        }}
-                        style={{
-                          flex: 1, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
-                          textTransform: 'uppercase', fontFamily: 'inherit',
-                          background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                          cursor: 'pointer',
-                        }}>
-                        {isLive ? 'Abort' : exec ? 'Dismiss' : 'Cancel'}
-                      </button>
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 6, letterSpacing: '.06em' }}>
-                    Deterministic operational model — not guaranteed outcome.
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* SOI Live Narrative Feed */}
-            {(() => {
-              const visible = getVisibleNarratives(narrativeFeed, 5);
-              if (visible.length === 0) return null;
-              return (
-                <div style={{ margin: '4px 16px 0' }}>
-                  {visible.map(entry => {
-                    const borderColor = entry.severity === 'critical' ? 'var(--rq-red)'
-                      : entry.severity === 'warning' ? 'var(--rq-amber)'
-                      : entry.severity === 'success' ? 'var(--rq-green)'
-                      : 'var(--rq-blue)';
-                    const labelColor = entry.severity === 'critical' ? 'var(--rq-red)'
-                      : entry.severity === 'warning' ? 'var(--rq-amber)'
-                      : entry.severity === 'success' ? 'var(--rq-green)'
-                      : 'var(--rq-ink-4)';
-                    const label = entry.pinned
-                      ? (entry.severity === 'critical' ? 'SOI ALERT' : entry.severity === 'warning' ? 'SOI WARNING' : 'SOI UPDATE')
-                      : (entry.severity === 'success' ? 'SOI UPDATE' : 'SOI');
-
-                    return (
-                      <div key={entry.id} style={{
-                        padding: '6px 10px', marginBottom: 3,
-                        background: 'var(--rq-bg-1)', borderLeft: `2px solid ${borderColor}`,
-                        fontFamily: "'JetBrains Mono', monospace",
-                        transition: 'opacity .5s',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                          <span style={{ fontSize: 7, color: labelColor, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700 }}>
-                            {label}
-                          </span>
-                          {entry.pinned && <span style={{ fontSize: 7, color: borderColor }}>●</span>}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5 }}>
-                          {entry.narrative}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* Context indicator */}
-            {(() => {
-              const ctxLabel = contextSummary(conversationMemory);
-              return ctxLabel ? (
-                <div style={{
-                  margin: '4px 16px 0', padding: '3px 10px',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 8,
-                  color: 'var(--rq-ink-4)', letterSpacing: '.06em',
-                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-                }}>
-                  <span style={{ textTransform: 'uppercase', letterSpacing: '.1em' }}>Following</span>
-                  <span style={{ color: 'var(--rq-ink-3)' }}>{ctxLabel}</span>
-                  {lastInferredFrom.length > 0 && (
-                    <span style={{ color: 'var(--rq-blue)', fontSize: 7 }}>
-                      (inferred: {lastInferredFrom.join(', ')})
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setConversationMemory(createEmptyContext()); setLastInferredFrom([]); }}
-                    style={{
-                      marginLeft: 'auto', padding: '1px 4px',
-                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                      fontFamily: 'inherit', fontSize: 7, cursor: 'pointer',
-                    }}
-                  >
-                    reset
-                  </button>
-                </div>
-              ) : null;
-            })()}
-
-            {/* Copilot answer panel */}
-            {copilotAnswer && (
-              <div style={{
-                margin: '4px 16px 0', padding: '10px 12px',
-                background: 'var(--rq-bg-1)', borderLeft: '2px solid var(--rq-blue)',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--rq-blue)' }}>
-                    SOI Copilot
-                  </span>
-                  <span style={{
-                    fontSize: 7, padding: '1px 5px',
-                    border: `1px solid ${copilotAnswer.confidence === 'high' ? 'var(--rq-green-dim)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber-dim)' : 'var(--rq-line)'}`,
-                    color: copilotAnswer.confidence === 'high' ? 'var(--rq-green)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
-                    letterSpacing: '.08em', textTransform: 'uppercase',
-                  }}>
-                    {copilotAnswer.confidence}
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 4 }}>
-                  {copilotAnswer.title}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>
-                  {copilotAnswer.answer}
-                </div>
-                {copilotAnswer.bullets.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    {copilotAnswer.bullets.map((b, i) => (
-                      <div key={i} style={{ fontSize: 9, color: 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>
-                        · {b}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {copilotAnswer.assumptions.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 2 }}>
-                      Assumptions
-                    </div>
-                    {copilotAnswer.assumptions.map((a, i) => (
-                      <div key={i} style={{ fontSize: 8, color: 'var(--rq-ink-4)', padding: '1px 0', lineHeight: 1.3, fontStyle: 'italic' }}>
-                        {a}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {copilotAnswer.recommendedNextAction && (
-                  <div style={{ fontSize: 9, color: 'var(--rq-blue)', marginBottom: 4 }}>
-                    Recommended: {copilotAnswer.recommendedNextAction}
-                  </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 7, color: 'var(--rq-ink-4)' }}>
-                    {copilotAnswer.source.replace(/_/g, ' ')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCopilotAnswer(null)}
-                    style={{
-                      marginLeft: 'auto', padding: '2px 6px',
-                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                      fontFamily: 'inherit', fontSize: 8, cursor: 'pointer',
-                    }}
-                  >
-                    dismiss
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Operator selector + dev controls */}
-            <div style={{ padding: '10px 16px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select value={operator.userId} onChange={e => {
-                const op = OPERATORS.find(o => o.userId === e.target.value);
-                if (op) setOperator(op);
-              }} style={{
-                padding: '4px 8px', background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
-                color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-              }}>
-                {OPERATORS.map(op => (
-                  <option key={op.userId} value={op.userId}>{op.displayName} ({op.role})</option>
-                ))}
-              </select>
-              <button className="rq-btn-secondary" onClick={refresh} style={{ flex: 1 }}>
-                Refresh
-              </button>
-              {!replayMode && (
-                <button className="rq-btn-secondary" onClick={startReplay}
-                  style={{ flex: 1, color: 'var(--rq-blue)', borderColor: 'rgba(90,169,255,.3)' }}>
-                  Replay
-                </button>
-              )}
-              <button className="rq-btn-secondary" onClick={async () => {
-                await seedDemoScenario();
-                refreshIncidents();
-                refresh();
-              }} style={{ flex: 1, color: 'var(--rq-accent)', borderColor: 'rgba(201,255,58,.3)' }}>
-                Seed Demo
-              </button>
-              <button className="rq-btn-secondary" onClick={async () => {
-                await clearStressData();
-                await runStressSimulation();
-                refreshIncidents();
-                refresh();
-              }} style={{ flex: 1, color: 'var(--rq-blue)', borderColor: 'rgba(90,169,255,.3)' }}>
-                Stress Test
-              </button>
-              <button className="rq-btn-secondary" onClick={async () => {
-                await clearDemoData();
-                refreshIncidents();
-                refresh();
-              }} style={{ flex: 1, color: 'var(--rq-red)', borderColor: 'var(--rq-red-dim)' }}>
-                Clear All
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── RIGHT RAIL: Incident triage / detail / event memory ── */}
-        <div className="rq-console-rail-right">
-          {selectedIncident ? (
-            <>
-            <IncidentDetailPanel
-              incident={selectedIncident}
-              incidentEvents={incidentEvents}
-              recoveryActions={recoveryActions}
-              isTransitioning={incidentTransitioning === selectedIncident.id}
-              onTransition={handleIncidentTransition}
-              onBack={() => setSelectedIncidentId(null)}
-              onCreateRecoveryAction={handleCreateRecoveryAction}
-              onRecoveryTransition={handleRecoveryTransition}
-              raTransitioning={raTransitioning}
-              raSubmitting={raSubmitting}
-              showRecoveryForm={showRecoveryForm}
-              onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
-            />
-
-            {/* Recommendations for selected incident */}
-            {recommendations.filter(r => r.incidentId === selectedIncident.id).map(rec => (
-              <div key={rec.id} style={{
-                margin: '4px 12px', padding: '6px 8px',
-                background: 'rgba(90,169,255,.04)', border: '1px solid rgba(90,169,255,.15)',
-                borderLeft: '2px solid var(--rq-blue)',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                <div style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 3 }}>
-                  operational memory suggests
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600, marginBottom: 2 }}>
-                  {rec.title}
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', lineHeight: 1.3, marginBottom: 4 }}>
-                  {rec.explanation}
-                </div>
-                {rec.suggestedActions.length > 0 && (
-                  <div style={{ fontSize: 9, color: 'var(--rq-ink-2)', marginBottom: 4 }}>
-                    {rec.suggestedActions.map((a, i) => (
-                      <div key={i} style={{ padding: '1px 0' }}>· {a}</div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginBottom: 4 }}>
-                  {rec.confidenceNarrative}
-                </div>
-                {!replayMode && (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button type="button" onClick={async () => {
-                      await emitRecommendationOverride({ recommendationId: rec.id, action: 'accepted', actorId: operator.userId, actorRole: operator.role });
-                      refresh();
-                    }} style={{
-                      flex: 1, padding: '3px', fontSize: 8, fontFamily: 'inherit',
-                      background: 'none', border: '1px solid rgba(90,169,255,.3)', color: 'var(--rq-blue)', cursor: 'pointer',
-                    }}>
-                      accept
-                    </button>
-                    <button type="button" onClick={async () => {
-                      await emitRecommendationOverride({ recommendationId: rec.id, action: 'rejected', actorId: operator.userId, actorRole: operator.role });
-                      refresh();
-                    }} style={{
-                      flex: 1, padding: '3px', fontSize: 8, fontFamily: 'inherit',
-                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer',
-                    }}>
-                      dismiss
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-
-          </>
-          ) : triageIncidents.length > 0 ? (
-            /* ── Active incidents triage list ── */
-            <>
-              {/* Operator load indicators (role-aware per AUTHORITY_NOT_SURVEILLANCE) */}
-              {(() => {
-                // Coordinator: see own load only
-                // Manager: see aggregate coordination health
-                // Ops Director: see all operators
-                const myLoad = workforce.operatorLoads.find(o => o.operatorId === operator.userId);
-                const showIndividuals = operator.viewerRole === 'ops_director';
-                const showAggregates = operator.viewerRole === 'manager' || operator.viewerRole === 'ops_director';
-                const elevated = workforce.operatorLoads.filter(o => o.saturation !== 'nominal');
-
-                return (elevated.length > 0 || (myLoad && myLoad.saturation !== 'nominal')) ? (
-                  <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
-                    <div className="rq-rail-header" style={{ padding: '2px 0' }}>
-                      {showAggregates ? 'Coordination Health' : 'My Workload'}
-                    </div>
-                    {/* Coordinator sees own load first */}
-                    {myLoad && myLoad.saturation !== 'nominal' && (
-                      <div style={{
-                        fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                        display: 'flex', justifyContent: 'space-between', padding: '2px 0',
-                        color: 'var(--rq-ink-3)',
-                      }}>
-                        <span style={{ color: 'var(--rq-ink-2)' }}>{operator.displayName}</span>
-                        <span style={{ display: 'flex', gap: 6 }}>
-                          <span>{myLoad.ownedIncidents}inc {myLoad.activeRecoveryActions}ra</span>
-                          <span style={{ color: myLoad.saturation === 'needs_support' ? 'var(--rq-red)' : 'var(--rq-amber)', fontWeight: 600 }}>
-                            {myLoad.saturation === 'needs_support' ? 'need support' : myLoad.saturation}
-                          </span>
-                        </span>
-                      </div>
-                    )}
-                    {/* Manager/Director see aggregates or individuals */}
-                    {showIndividuals && elevated.filter(o => o.operatorId !== operator.userId).slice(0, 4).map(op => {
-                      const color = op.saturation === 'needs_support' ? 'var(--rq-red)' : op.saturation === 'saturated' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
-                      return (
-                        <div key={op.operatorId} style={{
-                          fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                          display: 'flex', justifyContent: 'space-between', padding: '2px 0',
-                          color: 'var(--rq-ink-3)',
-                        }}>
-                          <span>{op.operatorId}</span>
-                          <span style={{ display: 'flex', gap: 6 }}>
-                            <span>{op.ownedIncidents}inc {op.activeRecoveryActions}ra</span>
-                            <span style={{ color, fontWeight: 600 }}>{op.saturation}</span>
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {showAggregates && !showIndividuals && elevated.length > 1 && (
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)', padding: '2px 0' }}>
-                        {elevated.length} coordinators with elevated load
-                      </div>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-
-              <div className="rq-rail-header">
-                <span>Active Incidents</span>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 9, color: 'var(--rq-ink-4)' }}>
-                  {triageIncidents.length}
-                </span>
-              </div>
-              {triageIncidents.map(inc => {
-                const sevColor = inc.severity === 'CRITICAL' || inc.severity === 'HIGH'
-                  ? 'var(--rq-red)' : inc.severity === 'MEDIUM' ? 'var(--rq-amber)' : 'var(--rq-ink-3)';
-                // Count active recovery actions for this incident
-                const incRecoveryActive = events.filter(e =>
-                  e.entity_type === 'recovery_action' && e.correlation_id === inc.correlation_id
-                  && e.state_after && !['COMPLETE', 'WITHDRAWN', 'ESCALATED'].includes(e.state_after)
-                ).length;
-                // Aging classification
-                const ageMin = Math.round((Date.now() - new Date(inc.opened_at).getTime()) / 60_000);
-                const agingClass = ageMin >= 60 ? 'chronic' : ageMin >= 30 ? 'aging' : 'fresh';
-                const agingColor = agingClass === 'chronic' ? 'var(--rq-red)' : agingClass === 'aging' ? 'var(--rq-amber)' : 'var(--rq-green)';
-                return (
-                  <div
-                    key={inc.id}
-                    onClick={() => setSelectedIncidentId(inc.id)}
-                    style={{
-                      padding: '6px 12px', cursor: 'pointer',
-                      borderBottom: '1px solid var(--rq-line)',
-                      borderLeft: `2px solid ${sevColor}`,
-                      transition: 'background .1s',
-                      background: agingClass === 'chronic' ? 'rgba(255,92,92,.02)' : 'transparent',
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--rq-bg-2)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = agingClass === 'chronic' ? 'rgba(255,92,92,.02)' : 'transparent')}
-                  >
-                    <div style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 600,
-                      color: 'var(--rq-ink)', display: 'flex', justifyContent: 'space-between',
-                    }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
-                        {inc.title}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {/* Aging dot */}
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: agingColor, flexShrink: 0 }} />
-                        <ElapsedTime since={inc.opened_at} format="relative" />
-                      </span>
-                    </div>
-                    <div style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                      color: 'var(--rq-ink-4)', marginTop: 2, display: 'flex', gap: 6, alignItems: 'center',
-                    }}>
-                      <span style={{ color: sevColor, fontWeight: 600 }}>{inc.severity}</span>
-                      <span>{inc.status}</span>
-                      {inc.zone_id && <span>{inc.zone_id}</span>}
-                      {inc.gate_id && <span>{inc.gate_id}</span>}
-                      {incRecoveryActive > 0 && (
-                        <span style={{
-                          marginLeft: 'auto', padding: '0 4px',
-                          background: 'rgba(62,213,152,.1)', color: 'var(--rq-green)',
-                          fontSize: 8, fontWeight: 600,
-                        }}>
-                          {incRecoveryActive} action{incRecoveryActive !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Event memory */}
-              <div className="rq-rail-header" style={{ marginTop: 4 }}>Event Memory</div>
-              {eventMemory.slice(0, 8).map(ev => (
-                <div key={ev.id} style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                  color: 'var(--rq-ink-4)', padding: '3px 12px',
-                  borderBottom: '1px solid var(--rq-line)',
-                  display: 'flex', justifyContent: 'space-between',
-                }}>
-                  <span style={{ color: ev.entity_type === 'incident' || ev.entity_type === 'recovery_action' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
-                    {ev.event_type.replace(/_/g, ' ')}
-                  </span>
-                  <ElapsedTime since={ev.created_at} format="relative" />
-                </div>
-              ))}
-            </>
-
-          ) : (
-            /* ── No incidents — show narratives + event memory ── */
-            <>
-              {/* Operational narrative summary */}
-              {narratives.length > 0 && (
-                <div style={{ padding: '4px 12px', borderBottom: '1px solid var(--rq-line)' }}>
-                  <div className="rq-rail-header" style={{ padding: '2px 0' }}>Operational Summary</div>
-                  {narratives.slice(0, 3).map((nar, i) => (
-                    <div key={i} style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 9,
-                      color: 'var(--rq-ink-3)', padding: '3px 0', lineHeight: 1.3,
-                      borderBottom: '1px solid var(--rq-line)',
-                    }}>
-                      {nar.text}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="rq-rail-header">Event Memory</div>
-              {eventMemory.length === 0 && (
-                <div className="rq-quiet" style={{ padding: '12px', fontSize: 11 }}>No events yet</div>
-              )}
-              {eventMemory.slice(0, 15).map(ev => (
-                <div key={ev.id} style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                  color: 'var(--rq-ink-3)', padding: '4px 12px',
-                  borderBottom: '1px solid var(--rq-line)',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: ev.entity_type === 'incident' || ev.entity_type === 'recovery_action' ? 'var(--rq-ink-2)' : 'var(--rq-ink-3)' }}>
-                      {ev.event_type.replace(/_/g, ' ')}
-                    </span>
-                    <ElapsedTime since={ev.created_at} format="relative" />
-                  </div>
-                  {ev.gate_id && <span style={{ fontSize: 9, color: 'var(--rq-ink-4)' }}>{ev.gate_id}</span>}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-      </div>
-
-      <div className="rq-quiet" style={{ padding: '6px 16px' }}>SOI · Operational Memory</div>
     </>
   );
 }
