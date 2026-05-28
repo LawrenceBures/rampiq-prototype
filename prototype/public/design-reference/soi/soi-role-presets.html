@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOI — Role Presets</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --void:#05070a; --bg:#080b10;
+  --line:rgba(150,170,190,.08);
+  --line-2:rgba(150,170,190,.14);
+  --ink:#eef3f8; --ink-2:#97a4b2; --ink-3:#5c6772; --ink-4:#3c454e;
+  --cyan:#52d6e6; --amber:#f3b13c; --orange:#ff7d4d; --red:#ff5564; --green:#3fd489; --blue:#5a93ff; --violet:#a98cf7;
+  --glow-cyan:rgba(82,214,230,.35); --glow-amber:rgba(243,177,60,.3);
+  --glow-orange:rgba(255,125,77,.3); --glow-red:rgba(255,85,100,.32); --glow-green:rgba(63,212,137,.32);
+  --mono:'Spline Sans Mono',monospace; --sans:'Sora',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;}
+body{
+  font-family:var(--sans); color:var(--ink); background:var(--void);
+  -webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(1400px 700px at 50% -8%, #0e151d 0%, transparent 55%),
+    linear-gradient(180deg, #070a0e 0%, #05070a 100%);
+}
+.tac{ font-family:var(--mono); font-size:9px; font-weight:500; letter-spacing:.2em;
+      text-transform:uppercase; color:var(--ink-3); }
+.mono{ font-family:var(--mono); font-variant-numeric:tabular-nums; }
+
+/* ===== PAGE ===== */
+.page{ padding:28px 32px 32px; }
+
+.page-header{
+  display:flex; align-items:flex-end; justify-content:space-between;
+  padding-bottom:18px; margin-bottom:24px;
+  border-bottom:1px solid var(--line);
+}
+.ph-title .t{ font-size:20px; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
+.ph-title .s{ font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--ink-3); text-transform:uppercase; margin-top:4px; }
+.ph-note{ font-size:12.5px; color:var(--ink-2); max-width:430px; text-align:right; line-height:1.5; }
+.ph-note b{ color:var(--cyan); font-weight:500; }
+
+/* ===== GRID OF 4 ROLE PANELS ===== */
+.role-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:24px;
+}
+
+/* ===== ROLE PANEL ===== */
+.role-panel{
+  position:relative;
+  background:rgba(13,18,24,.5);
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  display:flex; flex-direction:column;
+  min-height:560px;
+}
+.role-cap{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px;
+  border-bottom:1px solid var(--line);
+}
+.rc-id{ display:flex; align-items:center; gap:12px; }
+.rc-glyph{
+  width:30px; height:30px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.04em;
+  background:rgba(82,214,230,.08); border:1px solid rgba(82,214,230,.3); color:var(--cyan);
+}
+.rc-tx{ display:flex; flex-direction:column; gap:2px; }
+.rc-tx .r{ font-size:13.5px; font-weight:600; color:var(--ink); letter-spacing:-.005em; }
+.rc-tx .l{ font-family:var(--mono); font-size:9px; letter-spacing:.18em; color:var(--ink-4); text-transform:uppercase; }
+.rc-station{ font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--ink-3); }
+
+/* ===== MINI SURFACE ===== */
+.surface{
+  flex:1; display:grid;
+  grid-template-columns:130px 1fr 152px;
+  grid-template-rows:auto 1fr auto auto;
+  gap:6px;
+  padding:10px;
+  min-height:0;
+}
+.s-head{
+  grid-column:1/-1;
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px;
+  background:rgba(82,214,230,.04);
+  border:1px solid rgba(82,214,230,.18);
+  border-radius:6px;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--cyan); text-transform:uppercase;
+}
+.s-head .pip{ width:5px; height:5px; border-radius:50%; background:var(--cyan); box-shadow:0 0 6px var(--glow-cyan); }
+.s-head .meta{ margin-left:auto; color:var(--ink-4); letter-spacing:.12em; }
+
+.s-left, .s-right{
+  display:flex; flex-direction:column; gap:5px;
+  min-width:0;
+}
+
+.mod{
+  padding:7px 9px;
+  border-radius:6px;
+  background:rgba(255,255,255,.02);
+  border:1px solid var(--line);
+  display:flex; flex-direction:column; gap:3px;
+  min-height:46px;
+}
+.mod .mn{ font-size:10.5px; color:var(--ink); font-weight:500; line-height:1.2; }
+.mod .ml{ font-family:var(--mono); font-size:7.5px; letter-spacing:.14em; color:var(--ink-4); text-transform:uppercase; }
+.mod.emph{ background:rgba(82,214,230,.06); border-color:rgba(82,214,230,.3); }
+.mod.emph .mn{ color:var(--cyan); }
+.mod.compact{ min-height:30px; padding:5px 9px; }
+
+/* mini data hints inside modules */
+.mod .mini-bar{ height:2px; border-radius:1px; background:rgba(255,255,255,.06); overflow:hidden; margin-top:3px; position:relative; }
+.mod .mini-bar i{ position:absolute; inset:0; border-radius:1px; }
+.mod .mini-bar i.r{ background:var(--red); width:100%; box-shadow:0 0 4px var(--glow-red); }
+.mod .mini-bar i.o{ background:var(--orange); width:72%; box-shadow:0 0 4px var(--glow-orange); }
+.mod .mini-bar i.a{ background:var(--amber); width:58%; box-shadow:0 0 4px var(--glow-amber); }
+.mod .mini-bar i.c{ background:var(--cyan); width:38%; box-shadow:0 0 4px var(--glow-cyan); }
+
+.mod .pair{ display:flex; justify-content:space-between; align-items:baseline; }
+.mod .pair .v{ font-family:var(--mono); font-size:13px; font-weight:500; color:var(--ink); }
+.mod .pair .u{ font-family:var(--mono); font-size:8px; letter-spacing:.14em; color:var(--ink-4); }
+
+/* CENTER STAGE */
+.s-center{
+  position:relative;
+  border-radius:8px;
+  background:
+    radial-gradient(160px 100px at 22% 35%, rgba(255,85,100,.18), transparent 70%),
+    radial-gradient(150px 90px at 50% 50%, rgba(255,125,77,.12), transparent 70%),
+    radial-gradient(140px 80px at 78% 40%, rgba(243,177,60,.1), transparent 70%),
+    rgba(8,12,16,.5);
+  border:1px solid var(--line);
+  overflow:hidden;
+  padding:10px;
+  display:flex; flex-direction:column;
+  min-height:120px;
+}
+.s-center .map-tag{
+  font-family:var(--mono); font-size:8px; letter-spacing:.16em; color:var(--ink-4); text-transform:uppercase;
+}
+
+/* Recommendation anchor (always present) */
+.s-rec{
+  grid-column:1/-1;
+  display:flex; align-items:center; gap:12px;
+  padding:11px 13px;
+  border-radius:8px;
+  background:linear-gradient(180deg,rgba(13,18,24,.75),rgba(9,12,16,.85));
+  border:1px solid rgba(82,214,230,.22);
+  box-shadow:0 0 20px rgba(82,214,230,.06), inset 0 1px 0 rgba(255,255,255,.03);
+  position:relative;
+}
+.s-rec::before{
+  content:""; position:absolute; left:13px; right:13px; top:0; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(82,214,230,.4),transparent);
+}
+.rec-tag{
+  font-family:var(--mono); font-size:7.5px; font-weight:600; letter-spacing:.2em; color:var(--cyan); text-transform:uppercase;
+}
+.rec-mid{ flex:1; display:flex; flex-direction:column; gap:2px; }
+.rec-title{ font-size:12.5px; font-weight:600; color:var(--ink); letter-spacing:-.005em; }
+.rec-desc{ font-size:10.5px; color:var(--ink-3); line-height:1.35; }
+.rec-stats{ display:flex; gap:14px; padding-left:8px; border-left:1px solid var(--line); }
+.rec-stat{ display:flex; flex-direction:column; gap:1px; align-items:flex-end; }
+.rec-stat .rs-v{ font-family:var(--mono); font-size:11.5px; font-weight:500; color:var(--cyan); }
+.rec-stat .rs-l{ font-family:var(--mono); font-size:7.5px; letter-spacing:.14em; color:var(--ink-4); text-transform:uppercase; }
+
+/* Dock anchor */
+.s-dock{
+  grid-column:1/-1;
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px;
+  background:rgba(16,22,29,.7);
+  border:1px solid var(--line-2);
+  border-radius:14px;
+}
+.s-dock-orb{
+  width:22px; height:22px; border-radius:50%; flex-shrink:0;
+  background:radial-gradient(circle at 36% 32%, #c8f6fb 0%, var(--cyan) 30%, #1a7280 74%, #08323a 100%);
+  box-shadow:0 0 12px var(--glow-cyan);
+}
+.s-dock-wave{ display:flex; gap:2px; align-items:center; height:18px; flex-shrink:0; }
+.s-dock-wave span{ width:2px; border-radius:1px; background:var(--cyan); box-shadow:0 0 4px var(--glow-cyan); animation:wv 1.1s ease-in-out infinite; }
+.s-dock-wave span:nth-child(1){ height:8px; animation-delay:0s; }
+.s-dock-wave span:nth-child(2){ height:14px; animation-delay:.1s; }
+.s-dock-wave span:nth-child(3){ height:10px; animation-delay:.2s; }
+.s-dock-wave span:nth-child(4){ height:16px; animation-delay:.3s; }
+.s-dock-wave span:nth-child(5){ height:6px; animation-delay:.15s; }
+@keyframes wv{ 0%,100%{ opacity:.4; transform:scaleY(.7); } 50%{ opacity:1; transform:scaleY(1.2); } }
+.s-dock-ph{ font-size:10.5px; color:var(--ink-3); flex:1; }
+.s-dock-list{ font-family:var(--mono); font-size:8px; letter-spacing:.16em; color:var(--cyan); text-transform:uppercase; display:flex; align-items:center; gap:5px; }
+.s-dock-list::before{ content:""; width:4px; height:4px; border-radius:50%; background:var(--cyan); box-shadow:0 0 6px var(--glow-cyan); animation:bl 1.6s ease-in-out infinite; }
+@keyframes bl{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+
+/* footer caption per role */
+.role-foot{
+  padding:14px 18px;
+  border-top:1px solid var(--line);
+  background:rgba(0,0,0,.18);
+  display:flex; flex-direction:column; gap:6px;
+}
+.role-foot .priorities{ display:flex; gap:6px; flex-wrap:wrap; }
+.priority-chip{
+  font-family:var(--mono); font-size:8.5px; font-weight:500; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-2);
+  padding:4px 9px; border-radius:20px;
+  background:rgba(255,255,255,.025); border:1px solid var(--line-2);
+}
+.priority-chip.k{ background:rgba(82,214,230,.08); border-color:rgba(82,214,230,.3); color:var(--cyan); }
+.role-foot .desc{ font-size:11.5px; color:var(--ink-3); line-height:1.4; }
+
+/* ===== ROLE COLOR ACCENTS ===== */
+.role-panel.crew .rc-glyph{ background:rgba(82,214,230,.08); border-color:rgba(82,214,230,.4); color:var(--cyan); }
+.role-panel.ramp .rc-glyph{ background:rgba(63,212,137,.08); border-color:rgba(63,212,137,.4); color:var(--green); }
+.role-panel.disp .rc-glyph{ background:rgba(243,177,60,.08); border-color:rgba(243,177,60,.4); color:var(--amber); }
+.role-panel.exec .rc-glyph{ background:rgba(169,140,247,.08); border-color:rgba(169,140,247,.4); color:var(--violet); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="page-header">
+    <div class="ph-title">
+      <span class="t">SOI Role Presets</span>
+      <span class="s">Same Anchors · Different Operational Surface</span>
+    </div>
+    <div class="ph-note">
+      Header, Map, Recommendation Panel, and Dock are identical across every role. What changes is <b>which modules populate the rails and utility slots</b> — tuned to what each operator needs at a glance.
+    </div>
+  </header>
+
+  <div class="role-grid">
+
+    <!-- ========================== CREW CHIEF ========================== -->
+    <div class="role-panel crew">
+      <div class="role-cap">
+        <div class="rc-id">
+          <div class="rc-glyph">CC</div>
+          <div class="rc-tx">
+            <span class="r">Crew Chief</span>
+            <span class="l">Default Preset</span>
+          </div>
+        </div>
+        <span class="rc-station">LAX · EAGLE · Gates 52A–I</span>
+      </div>
+
+      <div class="surface">
+        <div class="s-head">
+          <span class="pip"></span>SOI · Active
+          <span class="meta">19:42 PST</span>
+        </div>
+
+        <div class="s-left">
+          <div class="mod emph">
+            <span class="ml">L1 · Pressure</span>
+            <div class="pair"><span class="v">76</span><span class="u">/100 PSI</span></div>
+          </div>
+          <div class="mod">
+            <span class="ml">L2 · Zone Health</span>
+            <div class="mini-bar"><i class="r"></i></div>
+            <div class="mini-bar"><i class="o"></i></div>
+            <div class="mini-bar"><i class="a"></i></div>
+          </div>
+          <div class="mod">
+            <span class="ml">L3 · Staffing</span>
+            <div class="pair"><span class="v">34<span style="color:var(--ink-3);font-size:9px"> dep</span></span><span class="u">9 avail</span></div>
+          </div>
+          <div class="mod emph">
+            <span class="ml">L4 · Recovery</span>
+            <span class="mn">52C · bypass deploying</span>
+          </div>
+        </div>
+
+        <div class="s-center">
+          <span class="map-tag">M1 · Pressure Field · Spatial</span>
+        </div>
+
+        <div class="s-right">
+          <div class="mod">
+            <span class="ml">R1 · Active Risk</span>
+            <span class="mn">52F cascade · 6 min</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R2 · Equipment</span>
+            <span class="mn">BL-042 isolated</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">R3 · Crew Assignments</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">R4 · Recommended Next</span>
+          </div>
+        </div>
+
+        <div class="s-rec">
+          <span class="rec-tag">A2 · Recommendation</span>
+          <div class="rec-mid">
+            <span class="rec-title">Stabilize Gates 52C</span>
+            <span class="rec-desc">Deploy temporary bypass · prevent cascade to 52F</span>
+          </div>
+          <div class="rec-stats">
+            <div class="rec-stat"><span class="rs-v">95%</span><span class="rs-l">Conf</span></div>
+            <div class="rec-stat"><span class="rs-v">18m</span><span class="rs-l">ETA</span></div>
+          </div>
+        </div>
+
+        <div class="s-dock">
+          <div class="s-dock-orb"></div>
+          <div class="s-dock-wave"><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="s-dock-ph">Ask SOI, or issue a command…</span>
+          <span class="s-dock-list">Listening</span>
+        </div>
+      </div>
+
+      <div class="role-foot">
+        <div class="priorities">
+          <span class="priority-chip k">Recovery</span>
+          <span class="priority-chip k">Staffing</span>
+          <span class="priority-chip k">Gate Pressure</span>
+          <span class="priority-chip">Equipment</span>
+        </div>
+        <span class="desc">Crew Chief works one zone deeply. The default surfaces what's happening at <i>their</i> gates — pressure, staffing levels, active recovery steps, and the equipment in play.</span>
+      </div>
+    </div>
+
+    <!-- ========================== RAMP MANAGER ========================== -->
+    <div class="role-panel ramp">
+      <div class="role-cap">
+        <div class="rc-id">
+          <div class="rc-glyph">RM</div>
+          <div class="rc-tx">
+            <span class="r">Ramp Manager</span>
+            <span class="l">Default Preset</span>
+          </div>
+        </div>
+        <span class="rc-station">LAX · All Concourses</span>
+      </div>
+
+      <div class="surface">
+        <div class="s-head">
+          <span class="pip"></span>SOI · Monitoring 24 zones
+          <span class="meta">19:42 PST</span>
+        </div>
+
+        <div class="s-left">
+          <div class="mod emph">
+            <span class="ml">L1 · All Zones</span>
+            <div class="mini-bar"><i class="r" style="width:100%"></i></div>
+            <div class="mini-bar"><i class="o" style="width:72%"></i></div>
+            <div class="mini-bar"><i class="a" style="width:58%"></i></div>
+            <div class="mini-bar"><i class="c" style="width:30%"></i></div>
+          </div>
+          <div class="mod emph">
+            <span class="ml">L2 · Workforce Dist</span>
+            <span class="mn">3 incidents · 46 crew</span>
+          </div>
+          <div class="mod">
+            <span class="ml">L3 · Recovery Coord</span>
+            <span class="mn">2 active · 1 queued</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">L4 · Resource Utilization</span>
+          </div>
+        </div>
+
+        <div class="s-center">
+          <span class="map-tag">M1 · Pressure Field · Concourse View</span>
+        </div>
+
+        <div class="s-right">
+          <div class="mod">
+            <span class="ml">R1 · Operational Intel</span>
+            <span class="mn">2 risks · 3 predictive</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R2 · Cross-Zone Forecast</span>
+            <span class="mn">52G–I elevating 20:10</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R3 · Equipment Roster</span>
+            <span class="mn">12 active · 4 offline</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">R4 · Inbound Surge</span>
+          </div>
+        </div>
+
+        <div class="s-rec">
+          <span class="rec-tag">A2 · Recommendation</span>
+          <div class="rec-mid">
+            <span class="rec-title">Stabilize Gates 52C</span>
+            <span class="rec-desc">Re-allocate 3 crew from concourse 52G to support bypass</span>
+          </div>
+          <div class="rec-stats">
+            <div class="rec-stat"><span class="rs-v">95%</span><span class="rs-l">Conf</span></div>
+            <div class="rec-stat"><span class="rs-v">−42%</span><span class="rs-l">Press</span></div>
+          </div>
+        </div>
+
+        <div class="s-dock">
+          <div class="s-dock-orb"></div>
+          <div class="s-dock-wave"><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="s-dock-ph">Ask SOI, or issue a command…</span>
+          <span class="s-dock-list">Listening</span>
+        </div>
+      </div>
+
+      <div class="role-foot">
+        <div class="priorities">
+          <span class="priority-chip k">Broad Zones</span>
+          <span class="priority-chip k">Workforce Dist</span>
+          <span class="priority-chip k">Recovery Coord</span>
+          <span class="priority-chip">Forecast</span>
+        </div>
+        <span class="desc">Ramp Manager balances people and pressure across the whole ramp. Default emphasizes the full zone picture, where crew is deployed, and how multiple recoveries are progressing in parallel.</span>
+      </div>
+    </div>
+
+    <!-- ========================== DISPATCHER ========================== -->
+    <div class="role-panel disp">
+      <div class="role-cap">
+        <div class="rc-id">
+          <div class="rc-glyph">DS</div>
+          <div class="rc-tx">
+            <span class="r">Dispatcher</span>
+            <span class="l">Default Preset</span>
+          </div>
+        </div>
+        <span class="rc-station">LAX · Movement Control</span>
+      </div>
+
+      <div class="surface">
+        <div class="s-head">
+          <span class="pip"></span>SOI · Active
+          <span class="meta">19:42 PST</span>
+        </div>
+
+        <div class="s-left">
+          <div class="mod emph">
+            <span class="ml">L1 · Assignment Queue</span>
+            <span class="mn">7 pending · 3 enroute</span>
+          </div>
+          <div class="mod emph">
+            <span class="ml">L2 · Flight Schedule</span>
+            <span class="mn">14 in · 11 out · next 60m</span>
+          </div>
+          <div class="mod">
+            <span class="ml">L3 · Resource Movement</span>
+            <span class="mn">6 vehicles in motion</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">L4 · Equipment Availability</span>
+          </div>
+        </div>
+
+        <div class="s-center">
+          <span class="map-tag">M1 · Pressure Field · Movement Overlay</span>
+        </div>
+
+        <div class="s-right">
+          <div class="mod emph">
+            <span class="ml">R1 · Pending Dispatches</span>
+            <span class="mn">52C bypass · ready</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R2 · Inbound Coord</span>
+            <span class="mn">AA1273 · 8 min · gate 52H</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R3 · Coordination Msgs</span>
+            <span class="mn">3 new from crew chief</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">R4 · Gate Conflicts</span>
+          </div>
+        </div>
+
+        <div class="s-rec">
+          <span class="rec-tag">A2 · Recommendation</span>
+          <div class="rec-mid">
+            <span class="rec-title">Dispatch BL-042 bypass unit</span>
+            <span class="rec-desc">Route from staging to 52C · clear taxiway B</span>
+          </div>
+          <div class="rec-stats">
+            <div class="rec-stat"><span class="rs-v">95%</span><span class="rs-l">Conf</span></div>
+            <div class="rec-stat"><span class="rs-v">4m</span><span class="rs-l">ETA</span></div>
+          </div>
+        </div>
+
+        <div class="s-dock">
+          <div class="s-dock-orb"></div>
+          <div class="s-dock-wave"><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="s-dock-ph">Ask SOI, or dispatch a command…</span>
+          <span class="s-dock-list">Listening</span>
+        </div>
+      </div>
+
+      <div class="role-foot">
+        <div class="priorities">
+          <span class="priority-chip k">Assignment Queue</span>
+          <span class="priority-chip k">Inbound/Outbound</span>
+          <span class="priority-chip k">Resource Movement</span>
+          <span class="priority-chip">Coordination</span>
+        </div>
+        <span class="desc">Dispatcher moves things and people. Default surfaces the active assignment queue, flight schedule, where resources currently are, and any pending coordination from the field.</span>
+      </div>
+    </div>
+
+    <!-- ========================== EXECUTIVE ========================== -->
+    <div class="role-panel exec">
+      <div class="role-cap">
+        <div class="rc-id">
+          <div class="rc-glyph">EX</div>
+          <div class="rc-tx">
+            <span class="r">Executive</span>
+            <span class="l">Default Preset</span>
+          </div>
+        </div>
+        <span class="rc-station">Network · 6 Stations</span>
+      </div>
+
+      <div class="surface">
+        <div class="s-head">
+          <span class="pip"></span>SOI · Network Active
+          <span class="meta">19:42 PST</span>
+        </div>
+
+        <div class="s-left">
+          <div class="mod emph">
+            <span class="ml">L1 · KPI Strip</span>
+            <div class="pair"><span class="v">94.2%</span><span class="u">On-Time</span></div>
+          </div>
+          <div class="mod">
+            <span class="ml">L2 · Throughput</span>
+            <span class="mn">387 movements · last 4h</span>
+          </div>
+          <div class="mod emph">
+            <span class="ml">L3 · Stabilization Forecast</span>
+            <span class="mn">Network · 22 min ETA</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">L4 · Historical Trend</span>
+          </div>
+        </div>
+
+        <div class="s-center">
+          <span class="map-tag">M1 · Pressure Field · Network View</span>
+        </div>
+
+        <div class="s-right">
+          <div class="mod emph">
+            <span class="ml">R1 · Predictive Summary</span>
+            <span class="mn">3 stations elevating</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R2 · Cross-Station Status</span>
+            <span class="mn">LAX · JFK · ORD</span>
+          </div>
+          <div class="mod">
+            <span class="ml">R3 · Cost Impact</span>
+            <span class="mn">Today · $42K avoided</span>
+          </div>
+          <div class="mod compact">
+            <span class="ml">R4 · Governance / Audit</span>
+          </div>
+        </div>
+
+        <div class="s-rec">
+          <span class="rec-tag">A2 · Recommendation</span>
+          <div class="rec-mid">
+            <span class="rec-title">Stabilize LAX · Gates 52C</span>
+            <span class="rec-desc">Highest network leverage · prevents 3-station impact</span>
+          </div>
+          <div class="rec-stats">
+            <div class="rec-stat"><span class="rs-v">95%</span><span class="rs-l">Conf</span></div>
+            <div class="rec-stat"><span class="rs-v">$42K</span><span class="rs-l">Saved</span></div>
+          </div>
+        </div>
+
+        <div class="s-dock">
+          <div class="s-dock-orb"></div>
+          <div class="s-dock-wave"><span></span><span></span><span></span><span></span><span></span></div>
+          <span class="s-dock-ph">Ask SOI for a network briefing…</span>
+          <span class="s-dock-list">Listening</span>
+        </div>
+      </div>
+
+      <div class="role-foot">
+        <div class="priorities">
+          <span class="priority-chip k">Predictive</span>
+          <span class="priority-chip k">Throughput</span>
+          <span class="priority-chip k">Forecast</span>
+          <span class="priority-chip k">KPIs</span>
+        </div>
+        <span class="desc">Executive watches the network, not a gate. Default emphasizes throughput, stabilization forecasts, cross-station status, and the financial framing of operational decisions.</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

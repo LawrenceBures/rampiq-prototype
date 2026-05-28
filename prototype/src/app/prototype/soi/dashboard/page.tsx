@@ -104,7 +104,7 @@ import { computeWorkforceState, recommendTeamForGate, type WorkforceState } from
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import { ModuleFrame } from '@/components/soi-surface/ModuleFrame';
-import { type LayoutState, type RoleId, type SlotId, type LayoutName, LEFT_SLOTS, RIGHT_SLOTS, UTILITY_SLOTS, getModuleDef, loadLayout, saveLayout, getLastUsedLayoutName, setLastUsedLayoutName } from '@/lib/soi-surface';
+import { type LayoutState, type RoleId, type SlotId, type LayoutName, LEFT_SLOTS, RIGHT_SLOTS, UTILITY_SLOTS, MODULE_REGISTRY, getModuleDef, loadLayout, saveLayout, getLastUsedLayoutName, setLastUsedLayoutName } from '@/lib/soi-surface';
 import { getRolePreset, createDefaultLayout, ROLE_LABELS } from '@/lib/soi-surface';
 import dynamic from 'next/dynamic';
 import './surface.css';
@@ -183,23 +183,85 @@ export default function ManagerDashboard() {
   const [spatialMode, setSpatialMode] = useState<'2d' | '3d'>('2d');
   const [pendingAssignment, setPendingAssignment] = useState<{ gate: string; members: string[]; reasoning: string } | null>(null);
 
-  // ── Surface layout state ──
-  const [activeRole, setActiveRole] = useState<RoleId>('crew_chief');
+  // ── Surface layout state (persisted) ──
+  const [activeRole, setActiveRole] = useState<RoleId>(() => {
+    if (typeof window === 'undefined') return 'crew_chief';
+    const stored = getStoredIdentity();
+    if (stored?.viewerRole === 'manager') return 'ramp_manager';
+    if (stored?.viewerRole === 'ops_director') return 'executive';
+    if (stored?.role === 'CREW_CHIEF') return 'crew_chief';
+    return 'crew_chief';
+  });
   const [activeLayoutName, setActiveLayoutName] = useState<LayoutName>('Default');
-  const [layoutSlots, setLayoutSlots] = useState(() => getRolePreset('crew_chief'));
+  const [layoutSlots, setLayoutSlots] = useState(() => {
+    if (typeof window === 'undefined') return getRolePreset('crew_chief');
+    try {
+      const stored = getStoredIdentity();
+      const role: RoleId = stored?.viewerRole === 'manager' ? 'ramp_manager' : stored?.viewerRole === 'ops_director' ? 'executive' : 'crew_chief';
+      const saved = loadLayout(stored?.userId ?? 'anon', role, 'LAX', 'Default');
+      return saved?.slots ?? getRolePreset(role);
+    } catch { return getRolePreset('crew_chief'); }
+  });
   const [editMode, setEditMode] = useState(false);
   const [crisisMode, setCrisisMode] = useState(false);
+  const [crisisSuggested, setCrisisSuggested] = useState(false);
+  const [showModuleGallery, setShowModuleGallery] = useState(false);
+  const [galleryTarget, setGalleryTarget] = useState<SlotId | null>(null);
 
   function switchRole(role: RoleId) {
     setActiveRole(role);
-    setLayoutSlots(getRolePreset(role));
+    const saved = loadLayout(operator.userId, role, 'LAX', 'Default');
+    setLayoutSlots(saved?.slots ?? getRolePreset(role));
     setActiveLayoutName('Default');
     setEditMode(false);
   }
 
+  function saveCurrentLayout() {
+    saveLayout({
+      userId: operator.userId,
+      role: activeRole,
+      stationId: 'LAX',
+      layoutName: activeLayoutName,
+      slots: layoutSlots,
+      lastModified: Date.now(),
+    });
+    setLastUsedLayoutName(operator.userId, activeRole, 'LAX', activeLayoutName);
+    setEditMode(false);
+  }
+
+  function moveModuleInRail(slotId: SlotId, direction: 'up' | 'down') {
+    const rail = slotId.startsWith('L') ? LEFT_SLOTS : slotId.startsWith('R') ? RIGHT_SLOTS : UTILITY_SLOTS;
+    const idx = rail.indexOf(slotId);
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= rail.length) return;
+    const targetSlot = rail[targetIdx];
+    setLayoutSlots(prev => {
+      const next = { ...prev };
+      const temp = next[slotId];
+      next[slotId] = next[targetSlot];
+      next[targetSlot] = temp;
+      return next;
+    });
+  }
+
+  function removeModule(slotId: SlotId) {
+    setLayoutSlots(prev => { const next = { ...prev }; delete next[slotId]; return next; });
+  }
+
+  function addModuleToSlot(slotId: SlotId, moduleId: string) {
+    const def = getModuleDef(moduleId);
+    if (!def) return;
+    setLayoutSlots(prev => ({ ...prev, [slotId]: { moduleId, size: def.defaultSize, emphasized: false } }));
+    setShowModuleGallery(false);
+    setGalleryTarget(null);
+  }
+
   function toggleCrisis() {
     setCrisisMode(prev => !prev);
+    setCrisisSuggested(false);
   }
+
+  // Crisis auto-suggest moved after operationalAssessment declaration below
 
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
@@ -578,6 +640,14 @@ export default function ManagerDashboard() {
 
   // ── Workforce Model ──
   const workforceState = computeWorkforceState(temporalIncidents, temporalRecoveryActions, temporalEvents);
+
+  // ── Crisis auto-suggest ──
+  useEffect(() => {
+    if (!crisisMode && !crisisSuggested && operationalAssessment.globalPressure >= 80) {
+      setCrisisSuggested(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationalAssessment.globalPressure]);
 
   // ── Adaptive Reasoning ──
   const opProfile = analyzeOperationalContext(temporalIncidents, temporalRecoveryActions, temporalEvents, operationalAssessment, selectedZoneId ?? undefined);
@@ -2179,12 +2249,28 @@ export default function ManagerDashboard() {
 
   function renderSlot(slotId: SlotId) {
     const inst = layoutSlots[slotId];
-    if (!inst) return editMode ? <div key={slotId} style={{ padding: 8, border: '1px dashed var(--sf-amber)', borderRadius: 8, opacity: .3, fontSize: 9, color: 'var(--sf-ink-4)', textAlign: 'center' as const }}>— empty —</div> : null;
+    if (!inst) {
+      return editMode ? (
+        <div key={slotId} style={{ padding: 10, border: '1px dashed var(--sf-amber,#f3b13c)', borderRadius: 8, opacity: .4, fontSize: 9, color: 'var(--sf-ink-4)', textAlign: 'center' as const, cursor: 'pointer' }}
+          onClick={() => { setGalleryTarget(slotId); setShowModuleGallery(true); }}>
+          + {slotId}
+        </div>
+      ) : null;
+    }
     const def = getModuleDef(inst.moduleId);
     return (
-      <ModuleFrame key={slotId} moduleId={inst.moduleId} name={def?.name ?? inst.moduleId} size={inst.size} emphasized={inst.emphasized} editMode={editMode}>
-        {renderModuleContent(inst.moduleId)}
-      </ModuleFrame>
+      <div key={slotId}>
+        <ModuleFrame moduleId={inst.moduleId} name={def?.name ?? inst.moduleId} size={inst.size} emphasized={inst.emphasized} editMode={editMode}>
+          {renderModuleContent(inst.moduleId)}
+        </ModuleFrame>
+        {editMode && (
+          <div style={{ display: 'flex', gap: 3, justifyContent: 'center', padding: '3px 0', opacity: .5 }}>
+            <button onClick={() => moveModuleInRail(slotId, 'up')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>↑</button>
+            <button onClick={() => moveModuleInRail(slotId, 'down')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>↓</button>
+            <button onClick={() => removeModule(slotId)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-red,#ff5564)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>×</button>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -2264,7 +2350,7 @@ export default function ManagerDashboard() {
             <span style={{ flex: 1 }} />
             <button onClick={() => { setLayoutSlots(getRolePreset(activeRole)); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
             <button onClick={() => setEditMode(false)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
-            <button onClick={() => setEditMode(false)} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
+            <button onClick={saveCurrentLayout} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
           </div>
         )}
 
@@ -2454,6 +2540,45 @@ export default function ManagerDashboard() {
             )}
           </div>
         </div>
+
+        {/* Crisis suggestion prompt */}
+        {crisisSuggested && !crisisMode && (
+          <div style={{ margin: '0 24px 8px', padding: '10px 18px', background: 'rgba(255,125,77,.04)', border: '1px solid rgba(255,125,77,.15)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 14, fontFamily: 'var(--sf-mono)' }}>
+            <span style={{ fontSize: 10, color: 'var(--sf-orange,#ff7d4d)' }}>Pressure crossed threshold — switch to Crisis layout?</span>
+            <span style={{ flex: 1 }} />
+            <button onClick={toggleCrisis} className="sf-dock-btn" style={{ color: 'var(--sf-orange,#ff7d4d)', borderColor: 'rgba(255,125,77,.2)', padding: '5px 12px' }}>Switch</button>
+            <button onClick={() => setCrisisSuggested(false)} className="sf-dock-btn" style={{ padding: '5px 10px' }}>Dismiss</button>
+          </div>
+        )}
+
+        {/* Module gallery overlay */}
+        {showModuleGallery && galleryTarget && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => { setShowModuleGallery(false); setGalleryTarget(null); }}>
+            <div style={{ width: 480, maxHeight: '70vh', overflow: 'auto', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 12, padding: '20px 24px', fontFamily: 'var(--sf-sans)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-4)', marginBottom: 12 }}>Add Module to {galleryTarget}</div>
+              {(['core', 'dispatch', 'executive', 'utility', 'optional'] as const).map(cat => {
+                const region = galleryTarget.startsWith('L') ? 'L' : galleryTarget.startsWith('R') ? 'R' : 'U';
+                const modules = MODULE_REGISTRY.filter(m => m.category === cat && m.allowedRegions.includes(region as 'L' | 'R' | 'U'));
+                if (modules.length === 0) return null;
+                return (
+                  <div key={cat} style={{ marginBottom: 14 }}>
+                    <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--sf-ink-3)', marginBottom: 6 }}>{cat}</div>
+                    {modules.map(m => (
+                      <div key={m.id} onClick={() => addModuleToSlot(galleryTarget, m.id)}
+                        style={{ padding: '8px 10px', marginBottom: 4, background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderRadius: 8, cursor: 'pointer', transition: '.15s' }}>
+                        <div style={{ fontSize: 11, color: 'var(--sf-ink)', fontWeight: 500 }}>{m.name}</div>
+                        <div style={{ fontSize: 8, color: 'var(--sf-ink-4)', marginTop: 2 }}>{m.defaultSize} · {m.allowedRegions.join(', ')}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <button onClick={() => { setShowModuleGallery(false); setGalleryTarget(null); }} style={{ width: '100%', padding: '8px', marginTop: 8, background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, color: 'var(--sf-ink-3)', fontFamily: 'var(--sf-mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* ── A3: COMMAND DOCK ── */}
         <div className="sf-dock">

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOI — Slot System Architecture</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --void:#05070a; --bg:#080b10;
+  --line:rgba(150,170,190,.08);
+  --line-2:rgba(150,170,190,.18);
+  --ink:#eef3f8; --ink-2:#97a4b2; --ink-3:#5c6772; --ink-4:#3c454e;
+  --cyan:#52d6e6; --amber:#f3b13c; --orange:#ff7d4d; --red:#ff5564; --green:#3fd489;
+  --glow-cyan:rgba(82,214,230,.35); --glow-amber:rgba(243,177,60,.3);
+  --mono:'Spline Sans Mono',monospace; --sans:'Sora',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--sans); color:var(--ink); background:var(--void);
+  -webkit-font-smoothing:antialiased; overflow:hidden;
+  background:
+    radial-gradient(1400px 700px at 50% -8%, #0e151d 0%, transparent 55%),
+    linear-gradient(180deg, #070a0e 0%, #05070a 100%);
+}
+.tac{ font-family:var(--mono); font-size:9.5px; font-weight:500; letter-spacing:.22em;
+      text-transform:uppercase; color:var(--ink-3); }
+.mono{ font-family:var(--mono); }
+
+/* ===== DIAGRAM CHROME ===== */
+.diagram{ position:relative; height:100vh; width:100vw; display:flex; flex-direction:column; }
+
+.diagram-header{
+  padding:20px 30px 16px;
+  border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:24px;
+}
+.dh-title{ display:flex; flex-direction:column; gap:4px; }
+.dh-title .t{ font-size:18px; font-weight:600; letter-spacing:-.01em; color:var(--ink); }
+.dh-title .s{ font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--ink-3); text-transform:uppercase; }
+.dh-spacer{ flex:1; }
+.dh-key{ display:flex; gap:18px; }
+.dh-key .item{ display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:9.5px;
+  letter-spacing:.14em; color:var(--ink-2); text-transform:uppercase; }
+.dh-key .swatch{ width:18px; height:10px; border-radius:2px; }
+.dh-key .anchor{ background:rgba(82,214,230,.18); border:1px solid var(--cyan); }
+.dh-key .slot{ background:rgba(243,177,60,.08); border:1px dashed var(--amber); }
+
+/* ===== DIAGRAM BODY ===== */
+.diagram-body{ flex:1; display:grid; grid-template-columns:1fr 320px; min-height:0; }
+
+.canvas{
+  position:relative;
+  padding:40px;
+  background:
+    radial-gradient(800px 400px at 50% 30%, rgba(13,18,24,.4), transparent 70%),
+    transparent;
+  overflow:hidden;
+}
+/* engineering grid background */
+.canvas::before{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(82,214,230,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(82,214,230,.04) 1px, transparent 1px);
+  background-size:24px 24px;
+  mask:radial-gradient(circle at center, black 30%, transparent 80%);
+}
+
+.surface{
+  position:relative; z-index:2;
+  width:100%; height:100%;
+  display:grid;
+  grid-template-rows:62px 1fr 50px 76px;
+  grid-template-columns:240px 1fr 280px;
+  gap:10px;
+}
+
+/* slot base styling */
+.s-frame{
+  position:relative;
+  border-radius:8px;
+  display:flex; flex-direction:column; gap:6px;
+  padding:12px 14px;
+}
+.s-id{
+  font-family:var(--mono); font-size:9px; font-weight:600;
+  letter-spacing:.2em; text-transform:uppercase;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.s-id .badge{
+  font-family:var(--mono); font-size:8px; font-weight:600;
+  letter-spacing:.16em; padding:2px 7px; border-radius:3px;
+}
+.s-name{ font-size:13.5px; color:var(--ink); font-weight:500; }
+.s-meta{ font-family:var(--mono); font-size:10px; color:var(--ink-3); letter-spacing:.06em; }
+
+/* ANCHOR styling */
+.anchor{
+  background:rgba(82,214,230,.06);
+  border:1px solid var(--cyan);
+  box-shadow:0 0 24px rgba(82,214,230,.12), inset 0 0 0 1px rgba(82,214,230,.15);
+}
+.anchor .s-id{ color:var(--cyan); }
+.anchor .s-id .badge{ background:var(--cyan); color:#03222a; }
+
+/* SLOT styling (customizable) */
+.slot{
+  background:rgba(243,177,60,.04);
+  border:1px dashed var(--amber);
+}
+.slot .s-id{ color:var(--amber); }
+.slot .s-id .badge{ background:rgba(243,177,60,.18); color:var(--amber); border:1px solid rgba(243,177,60,.4); }
+
+/* anchor corner cuts (visual: little ticks at corners to look "fixed") */
+.anchor::before, .anchor::after,
+.anchor > .cnr1, .anchor > .cnr2{
+  content:""; position:absolute; width:8px; height:8px; border:1px solid var(--cyan);
+}
+.anchor::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; }
+.anchor::after{ top:-1px; right:-1px; border-left:none; border-bottom:none; }
+.anchor > .cnr1{ bottom:-1px; left:-1px; border-right:none; border-top:none; }
+.anchor > .cnr2{ bottom:-1px; right:-1px; border-left:none; border-top:none; }
+
+/* grid placements */
+.r-header{ grid-column:1 / -1; grid-row:1; flex-direction:row !important; align-items:center; padding:0 18px; gap:14px; }
+.r-header .s-name{ display:flex; align-items:center; gap:14px; }
+.r-header .divider{ width:1px; height:24px; background:rgba(82,214,230,.3); }
+
+.r-left{ grid-column:1; grid-row:2; display:grid; grid-template-rows:repeat(4,1fr); gap:8px; padding:0; background:transparent; border:none; box-shadow:none; }
+.r-left::before,.r-left::after{display:none;}
+.r-left .slot{ min-height:0; }
+
+.r-center{ grid-column:2; grid-row:2; display:grid; grid-template-rows:1.1fr 1.4fr; gap:8px; padding:0; background:transparent; border:none; box-shadow:none; }
+.r-center::before,.r-center::after{display:none;}
+
+.r-right{ grid-column:3; grid-row:2; display:grid; grid-template-rows:repeat(4,1fr); gap:8px; padding:0; background:transparent; border:none; box-shadow:none; }
+.r-right::before,.r-right::after{display:none;}
+.r-right .slot{ min-height:0; }
+
+.r-utility{ grid-column:2; grid-row:3; display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0; background:transparent; border:none; box-shadow:none; }
+.r-utility::before,.r-utility::after{display:none;}
+
+.r-dock{ grid-column:1 / -1; grid-row:4; flex-direction:row !important; align-items:center; padding:0 24px; gap:18px; }
+.r-dock::before{display:none;} .r-dock::after{display:none;}
+
+/* callout arrows / labels (decorative) */
+.corner-tick{ position:absolute; }
+
+/* ===== RIGHT LEGEND PANEL ===== */
+.legend-panel{
+  border-left:1px solid var(--line);
+  padding:24px 22px;
+  overflow-y:auto;
+  display:flex; flex-direction:column; gap:24px;
+  background:rgba(8,11,15,.6);
+}
+.legend-panel::-webkit-scrollbar{ width:0; }
+
+.lp-section{ display:flex; flex-direction:column; gap:10px; }
+.lp-section h4{
+  font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.22em;
+  color:var(--cyan); text-transform:uppercase;
+}
+.lp-section p{ font-size:12.5px; color:var(--ink-2); line-height:1.55; }
+
+.size-row{ display:flex; flex-direction:column; gap:9px; }
+.size-item{
+  display:grid; grid-template-columns:46px 1fr; gap:12px; align-items:center;
+  padding:9px 10px; border-radius:8px; background:rgba(255,255,255,.025); border:1px solid var(--line);
+}
+.size-vis{
+  width:46px; display:flex; flex-direction:column; gap:2px;
+}
+.size-vis span{ background:rgba(82,214,230,.3); border-radius:2px; height:4px; }
+.size-vis.compact span{ height:3px; }
+.size-vis.compact span:nth-child(n+3){ display:none; }
+.size-vis.normal span{ height:3px; }
+.size-vis.normal span:nth-child(n+5){ display:none; }
+.size-vis.expanded span{ height:3px; }
+.size-info .n{ font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.14em; color:var(--ink); text-transform:uppercase; }
+.size-info .d{ font-size:11px; color:var(--ink-3); margin-top:2px; }
+
+.rule-list{ display:flex; flex-direction:column; gap:8px; }
+.rule{ display:flex; gap:9px; font-size:12px; color:var(--ink-2); line-height:1.5; }
+.rule .b{ flex-shrink:0; width:5px; height:5px; border-radius:50%; background:var(--cyan); margin-top:7px; box-shadow:0 0 6px var(--glow-cyan); }
+
+.token-grid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.token{
+  padding:7px 9px; border-radius:6px;
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.1em;
+  background:rgba(255,255,255,.025); border:1px solid var(--line);
+  color:var(--ink-2);
+}
+.token .k{ color:var(--cyan); font-weight:600; }
+</style>
+</head>
+<body>
+
+<div class="diagram">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="diagram-header">
+    <div class="dh-title">
+      <span class="t">SOI Surface — Slot System Architecture</span>
+      <span class="s">v1.0 · Implementation Blueprint</span>
+    </div>
+    <div class="dh-spacer"></div>
+    <div class="dh-key">
+      <div class="item"><span class="swatch anchor"></span>Anchor · Permanent</div>
+      <div class="item"><span class="swatch slot"></span>Slot · Customizable</div>
+    </div>
+  </header>
+
+  <!-- ===================== BODY ===================== -->
+  <div class="diagram-body">
+
+    <!-- ============ CANVAS ============ -->
+    <div class="canvas">
+      <div class="surface">
+
+        <!-- HEADER ANCHOR -->
+        <div class="s-frame anchor r-header">
+          <div class="cnr1"></div><div class="cnr2"></div>
+          <span class="s-id"><span class="badge">A1</span>Header · Anchor</span>
+          <div class="divider"></div>
+          <span class="s-meta">Identity · Time · Conditions · Shift · SOI Status · Operator</span>
+        </div>
+
+        <!-- LEFT RAIL (4 slots) -->
+        <div class="r-left">
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">L1</span>Slot · Normal</span>
+            <span class="s-name">Operational Snapshot</span>
+            <span class="s-meta">System pressure index</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">L2</span>Slot · Normal</span>
+            <span class="s-name">Zone Health</span>
+            <span class="s-meta">8 active zones</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">L3</span>Slot · Compact</span>
+            <span class="s-name">Staffing</span>
+            <span class="s-meta">Ramp · 34/46</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">L4</span>Slot · Normal</span>
+            <span class="s-name">Recovery Status</span>
+            <span class="s-meta">52C · in progress</span>
+          </div>
+        </div>
+
+        <!-- CENTER COLUMN (Map anchor + Recommendation anchor) -->
+        <div class="r-center">
+          <div class="s-frame anchor">
+            <div class="cnr1"></div><div class="cnr2"></div>
+            <span class="s-id"><span class="badge">M1</span>Map · Anchor</span>
+            <span class="s-name">Pressure Field · Ambient</span>
+            <span class="s-meta">Cannot be moved · Visualization can switch (Spatial / Schematic / Topo)</span>
+          </div>
+          <div class="s-frame anchor">
+            <div class="cnr1"></div><div class="cnr2"></div>
+            <span class="s-id"><span class="badge">A2</span>Active Recommendation · Anchor</span>
+            <span class="s-name">Decision Surface</span>
+            <span class="s-meta">Always present · Expands in Crisis · Title, confidence, outcome, tradeoffs, controls</span>
+          </div>
+        </div>
+
+        <!-- RIGHT RAIL (4 slots) -->
+        <div class="r-right">
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">R1</span>Slot · Normal</span>
+            <span class="s-name">Operational Intelligence</span>
+            <span class="s-meta">Risks · Predictive · Summary</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">R2</span>Slot · Normal</span>
+            <span class="s-name">Recovery Confidence</span>
+            <span class="s-meta">Forecast over time</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">R3</span>Slot · Compact</span>
+            <span class="s-name">Recommended Next</span>
+            <span class="s-meta">3 micro-actions</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">R4</span>Slot · Available</span>
+            <span class="s-name" style="color:var(--ink-3)">— empty —</span>
+            <span class="s-meta">Add a module in Edit Layout</span>
+          </div>
+        </div>
+
+        <!-- UTILITY SLOTS (under recommendation, above dock) -->
+        <div class="r-utility">
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">U1</span>Slot · Compact</span>
+            <span class="s-name">Incident Timeline</span>
+          </div>
+          <div class="s-frame slot">
+            <span class="s-id"><span class="badge">U2</span>Slot · Available</span>
+            <span class="s-name" style="color:var(--ink-3)">— empty —</span>
+          </div>
+        </div>
+
+        <!-- DOCK ANCHOR -->
+        <div class="s-frame anchor r-dock">
+          <div class="cnr1"></div><div class="cnr2"></div>
+          <span class="s-id"><span class="badge">A3</span>Command Dock · Anchor</span>
+          <div class="divider"></div>
+          <span class="s-meta">AI presence · Waveform · Voice + text input · Always at bottom · Cannot be moved or hidden</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ LEGEND ============ -->
+    <aside class="legend-panel">
+
+      <div class="lp-section">
+        <h4>Architecture</h4>
+        <p>SOI is built on a fixed grid of <b style="color:var(--ink)">anchors</b> and <b style="color:var(--ink)">slots</b>. Anchors never move. Slots accept modules via snap-only placement. There is no freeform dragging — every layout is composed, never improvised.</p>
+      </div>
+
+      <div class="lp-section">
+        <h4>Anchors · Permanent</h4>
+        <div class="rule-list">
+          <div class="rule"><span class="b"></span><span><b style="color:var(--cyan);font-family:var(--mono);font-size:11px">A1</b> · Header. Operator identity, station, time, conditions, SOI status.</span></div>
+          <div class="rule"><span class="b"></span><span><b style="color:var(--cyan);font-family:var(--mono);font-size:11px">M1</b> · Map. Ambient pressure field. Visualization can switch, position is fixed.</span></div>
+          <div class="rule"><span class="b"></span><span><b style="color:var(--cyan);font-family:var(--mono);font-size:11px">A2</b> · Active Recommendation. The decision surface. Expands in Crisis Mode.</span></div>
+          <div class="rule"><span class="b"></span><span><b style="color:var(--cyan);font-family:var(--mono);font-size:11px">A3</b> · Command Dock. AI presence and voice/text input. Always at bottom.</span></div>
+        </div>
+      </div>
+
+      <div class="lp-section">
+        <h4>Slots · Customizable</h4>
+        <div class="rule-list">
+          <div class="rule"><span class="b" style="background:var(--amber);box-shadow:0 0 6px var(--glow-amber)"></span><span><b style="color:var(--amber);font-family:var(--mono);font-size:11px">L1–L4</b> · Left rail. 4 vertical slots.</span></div>
+          <div class="rule"><span class="b" style="background:var(--amber);box-shadow:0 0 6px var(--glow-amber)"></span><span><b style="color:var(--amber);font-family:var(--mono);font-size:11px">R1–R4</b> · Right rail. 4 vertical slots.</span></div>
+          <div class="rule"><span class="b" style="background:var(--amber);box-shadow:0 0 6px var(--glow-amber)"></span><span><b style="color:var(--amber);font-family:var(--mono);font-size:11px">U1–U2</b> · Lower utility. 2 horizontal slots under the recommendation panel.</span></div>
+        </div>
+      </div>
+
+      <div class="lp-section">
+        <h4>Slot Sizes</h4>
+        <div class="size-row">
+          <div class="size-item">
+            <div class="size-vis compact"><span></span><span></span></div>
+            <div class="size-info"><div class="n">Compact</div><div class="d">Header + 1-line summary. Used for de-emphasized modules.</div></div>
+          </div>
+          <div class="size-item">
+            <div class="size-vis normal"><span></span><span></span><span></span><span></span></div>
+            <div class="size-info"><div class="n">Normal</div><div class="d">Default size. Full content visible. Most modules ship here.</div></div>
+          </div>
+          <div class="size-item">
+            <div class="size-vis expanded"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="size-info"><div class="n">Expanded</div><div class="d">Takes 2 slot positions. Used for emphasis or richer detail.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="lp-section">
+        <h4>Placement Rules</h4>
+        <div class="rule-list">
+          <div class="rule"><span class="b"></span><span>Modules snap into slots. No freeform pixel positioning.</span></div>
+          <div class="rule"><span class="b"></span><span>A module can only sit in one slot at a time.</span></div>
+          <div class="rule"><span class="b"></span><span>An Expanded module consumes 2 adjacent slots in the same rail.</span></div>
+          <div class="rule"><span class="b"></span><span>Empty slots are valid and visible only in Edit Mode.</span></div>
+          <div class="rule"><span class="b"></span><span>Anchors cannot be moved, hidden, resized, or replaced.</span></div>
+        </div>
+      </div>
+
+      <div class="lp-section">
+        <h4>Reference Tokens</h4>
+        <div class="token-grid">
+          <div class="token"><span class="k">anchor</span> ·permanent</div>
+          <div class="token"><span class="k">slot</span> ·customizable</div>
+          <div class="token"><span class="k">compact</span> ·1 unit</div>
+          <div class="token"><span class="k">normal</span> ·1 unit</div>
+          <div class="token"><span class="k">expanded</span> ·2 units</div>
+          <div class="token"><span class="k">empty</span> ·placeholder</div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+</body>
+</html>
