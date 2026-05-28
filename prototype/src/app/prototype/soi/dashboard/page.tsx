@@ -97,11 +97,12 @@ import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
   routeVoiceCommand,
-  isTTSAvailable, speak, speakCritical, stopSpeaking, toggleTTS, isTTSEnabled,
+  isTTSAvailable, speak, speakDirect, speakCritical, stopSpeaking, toggleTTS, isTTSEnabled,
+  enableTTS, disableTTS, onTTSStateChange, getDiagnostic,
   toggleAmbient, isAmbientEnabled, playAmbientCue,
   shouldSpeak, getSpokenPriority, condenseForSpeech,
   generateSpokenBriefing,
-  type VoiceInputState,
+  type VoiceInputState, type TTSState,
 } from '@/lib/soi-voice';
 
 // ============================================================
@@ -152,6 +153,7 @@ export default function ManagerDashboard() {
   const liveExecTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStepPhasesRef = useRef<string[]>([]);
   const [voiceState, setVoiceState] = useState<VoiceInputState>('idle');
+  const [ttsState, setTtsState] = useState<TTSState>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [ttsOn, setTtsOn] = useState(false);
   const [ambientOn, setAmbientOn] = useState(false);
@@ -511,7 +513,7 @@ export default function ManagerDashboard() {
     const agenticParsed = parseAgenticIntent(raw, zones);
     if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
       handleApprovePlan();
-      if (ttsOn && lastInputWasVoiceRef.current) speak('Recovery chain approved and execution initiated.', 'normal', 'briefing');
+      if (ttsOn && lastInputWasVoiceRef.current) speakDirect('Recovery chain approved and execution initiated.');
       setCommandInput('');
       return;
     }
@@ -522,7 +524,7 @@ export default function ManagerDashboard() {
       setCmdMemory(clearCommandMemory(cmdMemory));
       setCommandResponse(['Execution plan cancelled.']);
       setCopilotAnswer(null);
-      if (ttsOn && lastInputWasVoiceRef.current) speak('Execution cancelled.', 'normal', 'briefing');
+      if (ttsOn && lastInputWasVoiceRef.current) speakDirect('Execution cancelled.');
       setCommandInput('');
       return;
     }
@@ -593,7 +595,7 @@ export default function ManagerDashboard() {
         setCommandResponse(null);
         setCopilotAnswer(null);
         if (ttsOn && lastInputWasVoiceRef.current) {
-          speak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`, 'normal', 'briefing');
+          speakDirect(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
         }
         if (!auth.authorized && auth.deniedReasons.length > 0) {
           setCommandResponse([
@@ -875,6 +877,7 @@ export default function ManagerDashboard() {
   // ── Voice input setup ──
   useEffect(() => {
     onVoiceStateChange(setVoiceState);
+    onTTSStateChange(setTtsState);
     onVoiceResult(result => {
       if (!result.isFinal) {
         setInterimTranscript(result.transcript);
@@ -883,7 +886,6 @@ export default function ManagerDashboard() {
       setInterimTranscript('');
       lastInputWasVoiceRef.current = true;
       const cmd = routeVoiceCommand(result.transcript);
-      // All commands route through the unified handler
       handleCommand(cmd.text);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -892,15 +894,16 @@ export default function ManagerDashboard() {
   // ── Speak copilot answers when voice input was used ──
   useEffect(() => {
     if (!ttsOn || !lastInputWasVoiceRef.current) return;
+    let spoken = false;
     if (copilotAnswer && copilotAnswer.answer !== prevCopilotAnswerRef.current) {
       prevCopilotAnswerRef.current = copilotAnswer.answer;
-      speak(condenseForSpeech(copilotAnswer.answer), 'normal', 'briefing');
+      speakDirect(condenseForSpeech(copilotAnswer.answer));
+      spoken = true;
     }
-    if (commandResponse && commandResponse.length > 0) {
-      const text = commandResponse.slice(0, 2).join('. ');
-      speak(condenseForSpeech(text), 'normal', 'briefing');
+    if (!spoken && commandResponse && commandResponse.length > 0) {
+      const text = commandResponse.slice(0, 3).join('. ');
+      speakDirect(condenseForSpeech(text));
     }
-    // Reset voice flag after speaking
     lastInputWasVoiceRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copilotAnswer, commandResponse]);
@@ -2131,19 +2134,37 @@ export default function ManagerDashboard() {
               )}
 
               {/* Voice state indicator */}
-              {voiceState !== 'idle' && !interimTranscript && (
+              {(voiceState !== 'idle' || ttsState === 'speaking') && !interimTranscript && (
                 <span style={{
                   fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
-                  color: voiceState === 'listening' ? 'var(--rq-red)' : voiceState === 'processing' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
+                  color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : voiceState === 'processing' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
                 }}>
-                  {voiceState}
+                  {ttsState === 'speaking' ? 'speaking' : voiceState}
                 </span>
               )}
 
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                {/* Test Voice */}
+                {isTTSAvailable() && ttsOn && (
+                  <button type="button" onClick={() => { speakDirect('SOI voice channel online.'); }}
+                    style={{
+                      padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
+                      fontFamily: 'inherit',
+                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                      cursor: 'pointer',
+                    }}
+                    title="Test voice output"
+                  >
+                    Test
+                  </button>
+                )}
+
                 {/* TTS toggle */}
                 {isTTSAvailable() && (
-                  <button type="button" onClick={() => { const on = toggleTTS(); setTtsOn(on); if (!on) stopSpeaking(); }}
+                  <button type="button" onClick={() => {
+                    if (ttsOn) { disableTTS(); setTtsOn(false); }
+                    else { enableTTS(); setTtsOn(true); }
+                  }}
                     style={{
                       padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
                       fontFamily: 'inherit',
@@ -2156,6 +2177,9 @@ export default function ManagerDashboard() {
                   >
                     {ttsOn ? 'Voice On' : 'Voice'}
                   </button>
+                )}
+                {!isTTSAvailable() && (
+                  <span style={{ fontSize: 7, color: 'var(--rq-ink-4)' }}>Speech unavailable</span>
                 )}
 
                 {/* Ambient toggle */}

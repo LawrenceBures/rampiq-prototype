@@ -46,8 +46,15 @@ const STABILIZE_PATTERNS = [
   /\bstabilize\b/,
   /\bbring.*(?:stable|under control)\b/,
   /\brestore\s+(?:stability|operations|normal)\b/,
-  /\bcalm\s+(?:down|things)\b/,
+  /\bcalm.*(?:down|things|this|zone|gate)\b/,
   /\bget.*(?:stable|under control|back to normal)\b/,
+  /\bfix\s+\d/,
+  /\brecover\s+\d/,
+  /\bhandle\s+\d/,
+  /\bsolve\s+(?:this|it|the|that|\d)/,
+  /\bget\s+this.*(?:control|stable|fixed)/,
+  /\bstabilize\s+(?:the\s+)?(?:worst|highest|most)/,
+  /\bfix\s+(?:the\s+)?(?:worst|highest|most)/,
 ];
 
 const PREVENT_ESCALATION_PATTERNS = [
@@ -100,10 +107,13 @@ const RESOLVE_CRITICALS_PATTERNS = [
 ];
 
 const EXECUTE_PATTERNS = [
-  /^(?:execute|approve|do\s+it|go|proceed|run\s+it|let'?s?\s+go|approve\s+it)$/,
+  /^(?:execute|approve|do\s+it|go|proceed|run\s+it|let'?s?\s+go|approve\s+it|send\s+it|dispatch\s+it|confirm|confirmed|yes\s+proceed|yes|affirmative)$/,
   /\bexecute\s+(?:the\s+)?plan\b/,
-  /\bapprove\s+(?:the\s+)?(?:plan|execution|recovery)\b/,
+  /\bapprove\s+(?:the\s+)?(?:plan|execution|recovery|recommendation)\b/,
   /\brun\s+(?:the\s+)?plan\b/,
+  /\bdispatch\s+(?:the\s+)?(?:plan|recovery|it)\b/,
+  /\brecommendations?\s+approved\b/,
+  /\bapprove\s+and\s+dispatch\b/,
 ];
 
 const CANCEL_PATTERNS = [
@@ -184,9 +194,19 @@ export function parseAgenticIntent(
   if (matchesAny(lower, DISPATCH_PATTERNS)) return { intent: 'dispatch_recovery', targetZone, targetGate, targetResource, constraint, raw };
   if (matchesAny(lower, OPTIMIZE_STAFFING_PATTERNS)) return { intent: 'optimize_staffing', targetZone, constraint, raw };
 
-  // Fuzzy: if "stabilize" or "recover" appears with a zone, treat as stabilize
-  if (/\b(?:stabilize|recover|fix|handle)\b/.test(lower) && targetZone) {
+  // Fuzzy: action verb + zone/gate target → stabilize
+  if (/\b(?:stabilize|recover|fix|handle|resolve|solve|address)\b/.test(lower) && (targetZone || targetGate)) {
     return { intent: 'stabilize_zone', targetZone, targetGate, constraint, raw };
+  }
+
+  // Fuzzy: action verb without target → stabilize worst zone
+  if (/\b(?:stabilize|solve\s+this|fix\s+this|handle\s+this)\b/.test(lower)) {
+    return { intent: 'stabilize_zone', targetZone, targetGate, constraint, raw };
+  }
+
+  // Fuzzy: "build the plan" / "make a plan"
+  if (/\b(?:build|make|create)\s+(?:a\s+|the\s+)?(?:plan|recovery)\b/.test(lower)) {
+    return { intent: 'stabilize_zone', targetZone, constraint, raw };
   }
 
   return { intent: null, raw };

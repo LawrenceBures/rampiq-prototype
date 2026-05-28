@@ -20,8 +20,9 @@ export { shouldSpeak, getSpokenPriority, condenseForSpeech } from './voice-respo
 
 // Text-to-speech
 export {
-  isTTSAvailable, speak, speakCritical, stopSpeaking, toggleTTS, isTTSEnabled, configureTTS,
-  getTTSState, type TTSConfig, type TTSState,
+  isTTSAvailable, speak, speakDirect, speakCritical, stopSpeaking, toggleTTS, isTTSEnabled,
+  enableTTS, disableTTS, configureTTS, getTTSState, onTTSStateChange, getDiagnostic,
+  type TTSConfig, type TTSState, type TTSDiagnostic,
 } from './text-to-speech-engine';
 
 // Ambient awareness

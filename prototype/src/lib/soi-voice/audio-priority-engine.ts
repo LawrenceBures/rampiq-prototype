@@ -38,6 +38,7 @@ const PRIORITY_WEIGHT: Record<AudioPriority, number> = {
 };
 
 const CATEGORY_COOLDOWN_MS: Record<string, number> = {
+  direct_response: 0,
   escalation: 15000,
   step_completed: 8000,
   step_stalled: 10000,
