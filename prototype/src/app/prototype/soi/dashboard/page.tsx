@@ -355,6 +355,32 @@ export default function ManagerDashboard() {
     setGalleryTarget(null);
   }
 
+  function deleteLayout(name: LayoutName) {
+    if (name === 'Default') return;
+    if (!confirm(`Delete layout "${name}"?`)) return;
+    // Remove from localStorage
+    try {
+      const key = `${operator.userId}:${activeRole}:LAX:${name}`;
+      const all = JSON.parse(localStorage.getItem('soi_layout_state') ?? '{}');
+      delete all[key];
+      localStorage.setItem('soi_layout_state', JSON.stringify(all));
+    } catch { /* */ }
+    // Switch to Default if deleting active
+    if (activeLayoutName === name) {
+      switchLayout('Default');
+    }
+  }
+
+  const [showDiffPopover, setShowDiffPopover] = useState(false);
+  const [liveWeatherText, setLiveWeatherText] = useState<string | null>(null);
+
+  // Fetch live weather for module
+  useEffect(() => {
+    fetchLiveWeather(operator.station).then(w => {
+      setLiveWeatherText(`${w.station}: ${w.condition}, ${w.temperature}. ${w.wind}. ${w.impactDescription}${w.isDemo ? ' (demo)' : ''}`);
+    }).catch(() => setLiveWeatherText(null));
+  }, [operator.station]);
+
   function exportLayout(): string {
     return JSON.stringify({ version: 1, role: activeRole, layoutName: activeLayoutName, slots: layoutSlots, exportedAt: Date.now() });
   }
@@ -2356,7 +2382,7 @@ export default function ManagerDashboard() {
           <span>R:{recoveryProgress.active}</span>
         </div>);
       case 'weather-impact': {
-        return (<div style={mono}>LAX: Clear, 57°F, W at 4 kt. No weather-driven disruption modeled. <span style={{ fontSize: 8, color: 'var(--sf-ink-4)' }}>Open-Meteo</span></div>);
+        return (<div style={mono}>{liveWeatherText ?? 'Loading weather...'}</div>);
       }
       case 'incident-history': {
         const resolved = temporalIncidents.filter(i => i.status === 'RESOLVED' || i.status === 'CLOSED');
@@ -2378,7 +2404,12 @@ export default function ManagerDashboard() {
       case 'cost-impact':
         return (<div style={mono}>Delay cost estimate: <span style={{ color: 'var(--sf-amber)' }}>${Math.round(operationalAssessment.globalPressure * 120)}</span>/hr projected · demo model</div>);
       case 'cross-station':
-        return (<div style={mono}>LAX operational. No cross-station data available. <span style={{ fontSize: 8, color: 'var(--sf-ink-4)' }}>Single-station mode</span></div>);
+        return (<div style={mono}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}><span style={{ color: 'var(--sf-ink)' }}>LAX</span><span style={{ color: 'var(--sf-green)' }}>Live</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, opacity: .4 }}><span>SFO</span><span style={{ color: 'var(--sf-ink-4)' }}>Preview</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, opacity: .4 }}><span>JFK</span><span style={{ color: 'var(--sf-ink-4)' }}>Preview</span></div>
+          <div style={{ fontSize: 8, color: 'var(--sf-ink-4)', marginTop: 4 }}>Network preview · demo stations</div>
+        </div>);
       case 'throughput': {
         const resolved = temporalIncidents.filter(i => i.status === 'RESOLVED' || i.status === 'CLOSED').length;
         const total = temporalIncidents.length;
@@ -2531,14 +2562,43 @@ export default function ManagerDashboard() {
                     Save as Operational
                   </div>
                 )}
+                {activeLayoutName !== 'Default' && (
+                  <div onClick={() => { deleteLayout(activeLayoutName); setShowLayoutDropdown(false); }}
+                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-red,#ff5564)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
+                    Delete {activeLayoutName}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Modified indicator */}
+          {/* Modified indicator with popover */}
           {isModified && (
-            <div title={diffSummary} style={{ padding: '3px 8px', background: 'rgba(243,177,60,.06)', border: '1px solid rgba(243,177,60,.15)', borderRadius: 5, fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-amber,#f3b13c)', cursor: 'help' }}>
-              Modified
+            <div style={{ position: 'relative' }}>
+              <div onClick={() => setShowDiffPopover(!showDiffPopover)} style={{ padding: '3px 8px', background: 'rgba(243,177,60,.06)', border: '1px solid rgba(243,177,60,.15)', borderRadius: 5, fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-amber,#f3b13c)', cursor: 'pointer' }}>
+                Modified
+              </div>
+              {showDiffPopover && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, padding: '10px 14px', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, zIndex: 50, minWidth: 220, maxWidth: 320, fontFamily: 'var(--sf-mono)', boxShadow: '0 4px 16px rgba(0,0,0,.4)' }}>
+                  <div style={{ fontSize: 7, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-4)', marginBottom: 8 }}>Layout Changes</div>
+                  {(() => {
+                    const allSlots = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...UTILITY_SLOTS] as SlotId[];
+                    const changes: string[] = [];
+                    for (const s of allSlots) {
+                      const curr = layoutSlots[s];
+                      const saved = savedSlots[s];
+                      if (!curr && saved) changes.push(`${s}: ${getModuleDef(saved.moduleId)?.name ?? saved.moduleId} removed`);
+                      else if (curr && !saved) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? curr.moduleId} added`);
+                      else if (curr && saved && curr.moduleId !== saved.moduleId) changes.push(`${s}: ${getModuleDef(saved.moduleId)?.name ?? ''} → ${getModuleDef(curr.moduleId)?.name ?? ''}`);
+                      else if (curr && saved && curr.size !== saved.size) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? ''} ${saved.size}→${curr.size}`);
+                    }
+                    return changes.length > 0 ? changes.slice(0, 6).map((c, i) => (
+                      <div key={i} style={{ fontSize: 9, color: 'var(--sf-ink-2)', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,.02)' }}>· {c}</div>
+                    )) : <div style={{ fontSize: 9, color: 'var(--sf-ink-3)' }}>No changes detected</div>;
+                  })()}
+                  <button onClick={() => setShowDiffPopover(false)} style={{ marginTop: 8, width: '100%', padding: '4px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>Close</button>
+                </div>
+              )}
             </div>
           )}
 
