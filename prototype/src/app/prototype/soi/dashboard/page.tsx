@@ -2608,23 +2608,50 @@ export default function ManagerDashboard() {
               <div className="bloom r" />
               <div className="bloom o" />
               <div className="bloom a" />
-              <SpatialField
-                assessment={operationalAssessment}
-                gates={ALL_GATES}
-                incidents={temporalIncidents}
-                recoveryActions={temporalRecoveryActions}
-                events={temporalEvents}
-                flightWorld={flightWorldMap}
-                selectedZoneId={selectedZoneId}
-                selectedGateId={selectedGateId}
-                liveExec={liveExec}
-                activePlan={cmdMemory.activePlan}
-                onGateClick={gateId => {
-                  setSelectedGateId(gateId === selectedGateId ? null : gateId);
-                  const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
-                  if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
-                }}
-              />
+              <svg viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" style={{ width: '100%', height: '100%' }}>
+                <defs>
+                  <radialGradient id="vg" cx="50%" cy="38%" r="70%">
+                    <stop offset="0" stopColor="#0c1119" stopOpacity="0"/>
+                    <stop offset="1" stopColor="#05070a" stopOpacity=".9"/>
+                  </radialGradient>
+                  <filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter>
+                </defs>
+                {/* Isometric apron grid */}
+                <g stroke="rgba(120,150,170,.07)" strokeWidth="1">
+                  <path d="M120 250 L780 130"/><path d="M120 300 L780 180"/>
+                  <path d="M120 350 L780 230"/><path d="M120 400 L780 280"/>
+                  <path d="M120 450 L780 330"/>
+                  <path d="M200 470 L300 110"/><path d="M340 460 L420 110"/>
+                  <path d="M480 450 L540 120"/><path d="M620 430 L660 130"/>
+                </g>
+                {/* Pier ribbons — colored by zone pressure */}
+                <g opacity=".5" filter="url(#soft)">
+                  {operationalAssessment.zoneAssessments.map((za, i) => {
+                    const paths = [
+                      'M150 260 L300 215 L335 320 L185 365 Z',
+                      'M370 235 L520 195 L560 360 L410 400 Z',
+                      'M590 215 L690 185 L725 340 L625 370 Z',
+                    ];
+                    const fill = za.pressure >= 80 ? 'rgba(255,85,100,.1)' : za.pressure >= 60 ? 'rgba(255,125,77,.08)' : za.pressure >= 40 ? 'rgba(243,177,60,.07)' : 'rgba(82,214,230,.04)';
+                    const stroke = za.pressure >= 80 ? 'rgba(255,85,100,.4)' : za.pressure >= 60 ? 'rgba(255,125,77,.35)' : za.pressure >= 40 ? 'rgba(243,177,60,.3)' : 'rgba(82,214,230,.15)';
+                    return paths[i] ? <path key={za.zoneId} d={paths[i]} fill={fill} stroke={stroke} /> : null;
+                  })}
+                </g>
+                {/* Cascade hairlines */}
+                <path d="M280 300 C 330 350 380 330 420 305" fill="none" stroke="rgba(255,125,77,.45)" strokeWidth="1.5" strokeDasharray="2 6"/>
+                <path d="M560 320 C 600 320 620 312 660 300" fill="none" stroke="rgba(243,177,60,.4)" strokeWidth="1.5" strokeDasharray="2 6"/>
+                {/* Pressure nodes — from live data */}
+                <g>
+                  {operationalAssessment.zoneAssessments.map((za, zi) => {
+                    const positions = [[255, 290], [225, 265], [470, 300], [430, 280], [660, 300], [690, 280]];
+                    const nodeColor = za.pressure >= 80 ? '#ff5564' : za.pressure >= 60 ? '#ff7d4d' : za.pressure >= 40 ? '#f3b13c' : '#52d6e6';
+                    const p1 = positions[zi * 2];
+                    const p2 = positions[zi * 2 + 1];
+                    return p1 && p2 ? <g key={za.zoneId}><circle cx={p1[0]} cy={p1[1]} r="3.5" fill={nodeColor} /><circle cx={p2[0]} cy={p2[1]} r="3" fill={nodeColor} /></g> : null;
+                  })}
+                </g>
+                <rect width="900" height="600" fill="url(#vg)"/>
+              </svg>
             </div>
 
             <div className="stage-inner">
