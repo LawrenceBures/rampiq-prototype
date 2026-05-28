@@ -2596,8 +2596,21 @@ export default function ManagerDashboard() {
 
             {/* Dev controls */}
             <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', paddingTop: 12 }}>
-              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
-              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
+              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={async () => {
+                const btn = document.activeElement as HTMLButtonElement;
+                if (btn) btn.textContent = 'Seeding...';
+                await clearDemoData();
+                await seedDemoScenario();
+                refresh();
+                refreshIncidents();
+                if (btn) btn.textContent = 'Seed ✓';
+                setTimeout(() => { if (btn) btn.textContent = 'Seed'; }, 2000);
+              }}>Seed</button>
+              <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={async () => {
+                await clearDemoData();
+                refresh();
+                refreshIncidents();
+              }}>Clear</button>
               <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={refresh}>Refresh</button>
             </div>
           </aside>
