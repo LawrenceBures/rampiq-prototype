@@ -1,5 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap');
 
+/* Override parent rq-shell for dashboard */
+.rq-shell:has(.env) {
+  background: none;
+  font-family: var(--sans);
+  font-size: unset;
+  line-height: unset;
+  padding: 0;
+  overflow: hidden;
+}
+
 :root{
   --void:#05070a;
   --bg:#080b10;
