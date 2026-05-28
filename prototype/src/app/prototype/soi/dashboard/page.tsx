@@ -95,7 +95,7 @@ import {
 } from '@/lib/soi-narrative';
 import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
 import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
-import { isWeatherQuestion, getDemoWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
+import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
   routeVoiceCommand,
@@ -103,8 +103,9 @@ import {
   enableTTS, disableTTS, onTTSStateChange, getDiagnostic,
   toggleAmbient, isAmbientEnabled, playAmbientCue,
   shouldSpeak, getSpokenPriority, condenseForSpeech,
-  generateSpokenBriefing,
-  type VoiceInputState, type TTSState,
+  generateSpokenBriefing, prepareForSpeech,
+  checkOpenAITTS, getTTSMode, speakWithOpenAI, stopOpenAI, onOpenAISpeakingChange,
+  type VoiceInputState, type TTSState, type TTSMode,
 } from '@/lib/soi-voice';
 
 // ============================================================
@@ -172,6 +173,7 @@ export default function ManagerDashboard() {
   const [ttsState, setTtsState] = useState<TTSState>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [ttsOn, setTtsOn] = useState(false);
+  const [ttsMode, setTtsMode] = useState<TTSMode>('browser');
   const [ambientOn, setAmbientOn] = useState(false);
   const lastInputWasVoiceRef = useRef(false);
   const prevCopilotAnswerRef = useRef<string | null>(null);
@@ -529,7 +531,7 @@ export default function ManagerDashboard() {
     const agenticParsed = parseAgenticIntent(raw, zones);
     if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
       handleApprovePlan();
-      if (ttsOn && lastInputWasVoiceRef.current) speakDirect('Recovery chain approved and execution initiated.');
+      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak('Recovery chain approved and execution initiated.');
       setCommandInput('');
       return;
     }
@@ -540,7 +542,7 @@ export default function ManagerDashboard() {
       setCmdMemory(clearCommandMemory(cmdMemory));
       setCommandResponse(['Execution plan cancelled.']);
       setCopilotAnswer(null);
-      if (ttsOn && lastInputWasVoiceRef.current) speakDirect('Execution cancelled.');
+      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak('Execution cancelled.');
       setCommandInput('');
       return;
     }
@@ -611,7 +613,7 @@ export default function ManagerDashboard() {
         setCommandResponse(null);
         setCopilotAnswer(null);
         if (ttsOn && lastInputWasVoiceRef.current) {
-          speakDirect(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
+          soiSpeak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
         }
         if (!auth.authorized && auth.deniedReasons.length > 0) {
           setCommandResponse([
@@ -701,17 +703,19 @@ export default function ManagerDashboard() {
       default: {
         // D. Weather check (before copilot)
         if (isWeatherQuestion(raw)) {
-          const weather = getDemoWeather(operator.station);
-          const wa = generateWeatherAnswer(weather, raw);
-          setCopilotAnswer({
-            title: wa.title,
-            answer: wa.answer,
-            confidence: 'high',
-            bullets: wa.bullets,
-            assumptions: weather.isDemo ? ['Demo weather context — not live data'] : [],
-            source: 'deterministic_operational_model',
-          });
           setCommandResponse(null);
+          setCopilotAnswer({ title: 'Weather', answer: 'Fetching weather...', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          fetchLiveWeather(operator.station).then(weather => {
+            const wa = generateWeatherAnswer(weather, raw);
+            setCopilotAnswer({
+              title: wa.title,
+              answer: wa.answer,
+              confidence: 'high',
+              bullets: wa.bullets,
+              assumptions: weather.isDemo ? ['Live weather unavailable — using demo weather'] : [],
+              source: 'deterministic_operational_model',
+            });
+          });
           setCommandInput('');
           return;
         }
@@ -923,6 +927,26 @@ export default function ManagerDashboard() {
   }, []);
 
   // ── Voice input setup ──
+  // Check OpenAI TTS availability
+  useEffect(() => {
+    checkOpenAITTS().then(available => {
+      setTtsMode(available ? 'openai' : (isTTSAvailable() ? 'browser' : 'unavailable'));
+    });
+    onOpenAISpeakingChange(speaking => {
+      setTtsState(speaking ? 'speaking' : 'idle');
+    });
+  }, []);
+
+  /** Speak using best available TTS (OpenAI preferred, browser fallback). */
+  async function soiSpeak(text: string) {
+    if (!ttsOn) return;
+    if (ttsMode === 'openai') {
+      const used = await speakWithOpenAI(text);
+      if (used) return;
+    }
+    soiSpeak(text);
+  }
+
   useEffect(() => {
     onVoiceStateChange(setVoiceState);
     onTTSStateChange(setTtsState);
@@ -945,12 +969,12 @@ export default function ManagerDashboard() {
     let spoken = false;
     if (copilotAnswer && copilotAnswer.answer !== prevCopilotAnswerRef.current) {
       prevCopilotAnswerRef.current = copilotAnswer.answer;
-      speakDirect(condenseForSpeech(copilotAnswer.answer));
+      soiSpeak(condenseForSpeech(copilotAnswer.answer));
       spoken = true;
     }
     if (!spoken && commandResponse && commandResponse.length > 0) {
       const text = commandResponse.slice(0, 3).join('. ');
-      speakDirect(condenseForSpeech(text));
+      soiSpeak(condenseForSpeech(text));
     }
     lastInputWasVoiceRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1051,17 +1075,19 @@ export default function ManagerDashboard() {
         break;
       }
       case 'weather_query': {
-        const weather = getDemoWeather(operator.station);
-        const wa = generateWeatherAnswer(weather, _raw);
-        setCopilotAnswer({
-          title: wa.title,
-          answer: wa.answer,
-          confidence: 'high',
-          bullets: wa.bullets,
-          assumptions: weather.isDemo ? ['Demo weather context — not live data'] : [],
-          source: 'deterministic_operational_model',
-        });
+        setCopilotAnswer({ title: 'Weather', answer: 'Fetching weather...', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
         setCommandResponse(null);
+        fetchLiveWeather(operator.station).then(weather => {
+          const wa = generateWeatherAnswer(weather, _raw);
+          setCopilotAnswer({
+            title: wa.title,
+            answer: wa.answer,
+            confidence: 'high',
+            bullets: wa.bullets,
+            assumptions: weather.isDemo ? ['Live weather unavailable — using demo weather'] : [],
+            source: 'deterministic_operational_model',
+          });
+        });
         break;
       }
       default: {
@@ -1781,7 +1807,7 @@ export default function ManagerDashboard() {
       setAccessError('');
       const g = generateGreeting(op);
       setGreeting(g);
-      if (ttsOn) speakDirect(g);
+      if (ttsOn) soiSpeak(g);
       setTimeout(() => setGreeting(null), 12000);
     } else {
       setAccessError('Invalid access code. Try: CHIEF52, MGRLAX, OPSDIR, or AGENT14');
@@ -1927,14 +1953,14 @@ export default function ManagerDashboard() {
         {/* Voice/ambient controls */}
         <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
           {isTTSAvailable() && ttsOn && (
-            <button type="button" onClick={() => speakDirect('SOI voice channel online.')}
+            <button type="button" onClick={() => soiSpeak('Soi voice channel online.')}
               style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
               title="Test voice">Test</button>
           )}
           {isTTSAvailable() && (
             <button type="button" onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
               style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ttsOn ? 'rgba(90,169,255,.08)' : 'none', border: `1px solid ${ttsOn ? 'var(--rq-blue)' : 'var(--rq-line)'}`, color: ttsOn ? 'var(--rq-blue)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
-              title="Toggle voice">{ttsOn ? 'Voice' : 'Voice'}</button>
+              title={`Toggle voice (${ttsMode})`}>{ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}</button>
           )}
           <button type="button" onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}
             style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ambientOn ? 'rgba(201,255,58,.06)' : 'none', border: `1px solid ${ambientOn ? 'var(--rq-accent)' : 'var(--rq-line)'}`, color: ambientOn ? 'var(--rq-accent)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}

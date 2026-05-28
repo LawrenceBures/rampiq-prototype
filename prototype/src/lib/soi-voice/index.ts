@@ -39,3 +39,12 @@ export {
 
 // Spoken briefings
 export { generateSpokenBriefing } from './spoken-briefing-generator';
+
+// Pronunciation
+export { prepareForSpeech } from './pronunciation';
+
+// OpenAI TTS
+export {
+  checkOpenAITTS, getTTSMode, speakWithOpenAI, stopOpenAI, isOpenAIPlaying,
+  onOpenAISpeakingChange, type TTSMode,
+} from './openai-tts-engine';

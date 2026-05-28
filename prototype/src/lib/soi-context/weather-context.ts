@@ -88,3 +88,17 @@ export function generateWeatherAnswer(weather: WeatherContext, question: string)
 export function isWeatherQuestion(input: string): boolean {
   return /\b(?:weather|wind|rain|storm|fog|visibility|ceiling|temperature|temp|hot|cold|ice|snow|thunder)\b/i.test(input);
 }
+
+/**
+ * Fetch live weather from SOI API route.
+ * Falls back to demo weather on failure.
+ */
+export async function fetchLiveWeather(station: string): Promise<WeatherContext> {
+  try {
+    const res = await fetch(`/api/soi/weather?station=${encodeURIComponent(station)}`);
+    if (!res.ok) throw new Error(`${res.status}`);
+    return await res.json();
+  } catch {
+    return getDemoWeather(station);
+  }
+}

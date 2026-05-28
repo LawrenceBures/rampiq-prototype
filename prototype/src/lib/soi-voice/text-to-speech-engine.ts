@@ -7,6 +7,7 @@
  * Handles Chrome's async voice loading via onvoiceschanged.
  */
 
+import { prepareForSpeech } from './pronunciation';
 import {
   type AudioPriorityState, type AudioPriority,
   enqueueAudio, dequeueNext, finishPlayback, shouldInterrupt,
@@ -224,7 +225,7 @@ export function disableTTS(): void {
 // ============================================================
 
 function createUtterance(text: string): SpeechSynthesisUtterance {
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(prepareForSpeech(text));
   utterance.rate = config.rate;
   utterance.pitch = config.pitch;
   utterance.volume = config.volume;
