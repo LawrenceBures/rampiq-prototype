@@ -89,8 +89,8 @@ function GateNode({ gateId, pos, pressure, incidents, isFocused, isHovered, flig
   targetHeight.current = 0.1 + (pressure / 100) * 1.2;
   const color = pColorHex(pressure);
   const dimmed = !isFocused;
-  const baseOpacity = dimmed ? 0.08 : pressure >= 50 ? 0.28 : pressure >= 20 ? 0.14 : 0.04;
-  const capOpacity = dimmed ? 0.12 : isHovered ? 0.8 : 0.55;
+  const baseOpacity = dimmed ? 0.1 : pressure >= 50 ? 0.4 : pressure >= 20 ? 0.25 : 0.1;
+  const capOpacity = dimmed ? 0.15 : isHovered ? 0.9 : 0.7;
 
   // Smooth height interpolation
   useFrame(() => {
@@ -249,12 +249,12 @@ function AtmosphericGrid() {
   return (
     <>
       {lines.map((pts, i) => (
-        <Line key={i} points={pts} color="#0c1320" lineWidth={0.3} transparent opacity={0.25} />
+        <Line key={i} points={pts} color="#1a2540" lineWidth={0.4} transparent opacity={0.35} />
       ))}
       {/* Ground plane for depth */}
       <mesh position={[0.5, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[16, 10]} />
-        <meshBasicMaterial color="#050810" transparent opacity={0.95} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#060a14" transparent opacity={0.9} side={THREE.DoubleSide} />
       </mesh>
     </>
   );
@@ -296,12 +296,11 @@ export function SpatialField3D({ assessment, flightWorld, incidents, recoveryAct
         <OrthographicCamera makeDefault position={[8, 10, 8]} zoom={65} near={0.1} far={100} />
         <CameraDrift />
 
-        <ambientLight intensity={0.7} />
-        {/* Soft directional for subtle depth cues */}
-        <directionalLight position={[5, 8, 3]} intensity={0.15} color="#8899cc" />
+        <ambientLight intensity={1.2} />
+        <directionalLight position={[5, 10, 5]} intensity={0.3} color="#aabbdd" />
 
-        {/* Atmospheric fog */}
-        <fog attach="fog" args={['#040810', 12, 22]} />
+        {/* Atmospheric fog — pushed further for visibility */}
+        <fog attach="fog" args={['#040810', 18, 30]} />
 
         <AtmosphericGrid />
 

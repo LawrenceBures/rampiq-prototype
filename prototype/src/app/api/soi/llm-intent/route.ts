@@ -36,19 +36,22 @@ You do NOT have operational data. You do NOT know current pressure, incidents, o
 You ONLY classify what the operator wants to do.
 
 VALID INTENTS:
-- focus_gate: operator wants to see/view a specific gate (e.g., "show me 52C", "pull up 52E")
+- focus_gate: operator wants to see/view a specific gate (e.g., "show me 52C", "pull up 52E", "what about 52C")
 - focus_zone: operator wants to focus on a zone (e.g., "show zone 52A-C", "focus on gates 52D-F")
-- explain_gate: operator asks what's happening at a gate (e.g., "what's happening at 52C")
-- explain_zone: operator asks about a zone's state (e.g., "why is 52D-F red")
-- stabilize_zone: operator wants to stabilize a zone/gate (e.g., "stabilize 52C", "fix this zone")
-- stabilize_worst: operator wants to stabilize the worst area (e.g., "fix the worst zone", "stabilize the highest risk")
-- recovery_plan: operator asks for best course of action (e.g., "what's the play", "best move", "what should I do")
-- risk_assessment: operator asks about risks (e.g., "what should I worry about", "where are we exposed")
-- approval_dispatch: operator approves/confirms an action (e.g., "approve it", "do it", "confirmed")
+- explain_gate: operator asks what's happening at a gate (e.g., "what's happening at 52C", "status of 52D")
+- explain_zone: operator asks about a zone's state (e.g., "why is 52D-F red", "what's wrong with zone A-C")
+- stabilize_zone: operator wants to stabilize a zone/gate (e.g., "stabilize 52C", "fix this zone", "get 52D under control")
+- stabilize_worst: operator wants to stabilize the worst area (e.g., "fix the worst zone", "handle the hottest area")
+- recovery_plan: operator asks for best course of action (e.g., "what's the play", "best move", "what should I do", "what would you recommend")
+- risk_assessment: operator asks about risks (e.g., "what should I worry about", "where are we exposed", "biggest risk")
+- approval_dispatch: operator approves/confirms an action (e.g., "approve it", "do it", "confirmed", "yes", "go ahead")
 - cancel_action: operator cancels (e.g., "cancel", "abort", "nevermind")
-- briefing: operator wants a status summary (e.g., "brief me", "what's happening", "bring me up to speed")
+- briefing: operator wants a status summary (e.g., "brief me", "what's happening", "bring me up to speed", "sitrep")
 - plan_status: operator asks about execution progress (e.g., "where are we on recovery", "what step are we on")
-- weather_query: operator asks about weather (e.g., "what's the weather", "is wind affecting us", "weather report")
+- weather_query: operator asks about weather (e.g., "what's the weather", "is wind affecting us")
+- workforce_query: operator asks about staffing/crew (e.g., "how many ramp agents on shift", "who is available", "staffing levels", "who can I send")
+- assign_team: operator wants to assign crew to a gate/zone (e.g., "assign a team to 52D", "send two agents to 52C", "dispatch crew to 52D", "move support to 52D")
+- workforce_status: operator asks about specific crew member or workload (e.g., "where is RA14", "who is overloaded", "is anyone on break")
 
 GATE PATTERNS: Gates are like "52A", "52B", "52C", "52D", "52E", "52F", "52G", "52H", "52I"
 ZONE PATTERNS: Zones group gates: 52A-C, 52D-F, 52G-I
@@ -126,7 +129,8 @@ export async function POST(req: NextRequest) {
       'focus_gate', 'focus_zone', 'explain_gate', 'explain_zone',
       'stabilize_zone', 'stabilize_worst', 'recovery_plan', 'risk_assessment',
       'approval_dispatch', 'cancel_action', 'briefing', 'plan_status',
-      'weather_query', 'unknown',
+      'weather_query', 'workforce_query', 'assign_team', 'workforce_status',
+      'unknown',
     ];
     if (!validIntents.includes(parsed.intent)) {
       parsed.intent = 'unknown';

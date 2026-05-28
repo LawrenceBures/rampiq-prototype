@@ -114,10 +114,10 @@
 
 /* ── Spatial field ── */
 .mc-spatial {
-  flex: 1;
+  flex: 2;
   position: relative;
   margin: 0 16px;
-  min-height: 300px;
+  min-height: 320px;
   background:
     radial-gradient(ellipse at 30% 35%, rgba(255,92,92,.02) 0%, transparent 40%),
     radial-gradient(ellipse at 70% 60%, rgba(245,177,61,.015) 0%, transparent 40%),

@@ -100,6 +100,7 @@ import { computeFlightWorld, getAtRiskFlights, findFlight } from '@/lib/soi-cont
 import { forecastPressure, forecastCascades, assessRecoveryConfidence, type OperationalForecast, type CascadeRisk } from '@/lib/soi-predictive';
 import { compareScenarios, simulateScenario, type Scenario } from '@/lib/soi-simulation';
 import { analyzeOperationalContext, analyzeHistoricalEffectiveness } from '@/lib/soi-adaptive';
+import { computeWorkforceState, recommendTeamForGate, type WorkforceState } from '@/lib/soi-context/workforce-model';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import dynamic from 'next/dynamic';
@@ -177,6 +178,7 @@ export default function ManagerDashboard() {
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [spatialMode, setSpatialMode] = useState<'2d' | '3d'>('2d');
+  const [pendingAssignment, setPendingAssignment] = useState<{ gate: string; members: string[]; reasoning: string } | null>(null);
 
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
@@ -553,6 +555,9 @@ export default function ManagerDashboard() {
   } catch { /* keep null */ }
   const recoveryConf = assessRecoveryConfidence(temporalIncidents, temporalRecoveryActions, selectedZoneId ?? undefined);
 
+  // ── Workforce Model ──
+  const workforceState = computeWorkforceState(temporalIncidents, temporalRecoveryActions, temporalEvents);
+
   // ── Adaptive Reasoning ──
   const opProfile = analyzeOperationalContext(temporalIncidents, temporalRecoveryActions, temporalEvents, operationalAssessment, selectedZoneId ?? undefined);
   const historicalEff = analyzeHistoricalEffectiveness(temporalIncidents, temporalRecoveryActions);
@@ -575,6 +580,36 @@ export default function ManagerDashboard() {
 
   // ── SOI Command Handler ──
   function handleCommand(raw: string) {
+    // A0. Confirm pending team assignment
+    if (pendingAssignment && /\b(?:confirm|yes|go|approved?|dispatch|do\s+it)\b/i.test(raw)) {
+      const pa = pendingAssignment;
+      setPendingAssignment(null);
+      // Create recovery action for the assignment
+      const gateInc = temporalIncidents.find(i => i.gate_id === pa.gate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+      if (gateInc) {
+        createRecoveryAction({
+          incident_id: gateInc.id,
+          title: `Team assignment: ${pa.members.join(', ')} to ${pa.gate}`,
+          action_type: 'DISPATCH',
+          severity: 'HIGH',
+          proposed_by: operator.userId,
+          assigned_to: pa.members[0],
+          gate_id: pa.gate,
+          description: `SOI assignment: ${pa.reasoning}`,
+        }).then(() => { refreshRecovery(); refresh(); });
+      }
+      setCopilotAnswer({
+        title: 'Assignment Confirmed',
+        answer: `Team dispatched to ${pa.gate}. ${pa.members.join(', ')} assigned. Recovery action created.`,
+        confidence: 'high', bullets: [], assumptions: [],
+        source: 'deterministic_operational_model',
+      });
+      setCommandResponse(null);
+      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak(`Assignment confirmed. Team dispatched to gate ${pa.gate}.`);
+      setCommandInput('');
+      return;
+    }
+
     // A. Approval / confirmation / cancel (highest priority)
     const agenticParsed = parseAgenticIntent(raw, zones);
     if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
@@ -877,79 +912,47 @@ export default function ManagerDashboard() {
           return;
         }
 
-        // E. Copilot deterministic answer first
+        // E. LLM intent interpreter is PRIMARY for unmatched input
         setCommandResponse(null);
-        const opCtx = {
-          assessment: operationalAssessment,
-          recommendations: soiRecommendations,
-          dispatchPlan,
-          activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
-          activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
-        };
-        const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
-        setCopilotAnswer(result.answer);
-        setConversationMemory(result.updatedMemory);
-        setLastInferredFrom(result.inferredFrom);
+        setCopilotAnswer({ title: 'Processing', answer: 'Interpreting...', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
 
-        // E. If copilot returned "unknown" intent, try LLM intent interpreter
-        const isUnknown = result.answer.title === 'Unable to interpret';
-        if (isUnknown) {
-          fetch('/api/soi/llm-intent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: raw }),
-          }).then(r => r.json()).then(data => {
-            if (!data.intent || data.intent.intent === 'unknown') return;
-            const li = data.intent;
-            // Route the LLM-interpreted intent into existing SOI engines
-            routeLLMIntent(li, raw);
-          }).catch(() => { /* keep deterministic answer */ });
-        }
-
-        // Async LLM voice rewrite (non-blocking, upgrades answer when ready)
-        if (!isUnknown && isVoiceAvailable()) {
-          const isBriefing = /brief|situation|status|summarize|overview/i.test(raw);
-          const grounded: GroundedData = {
-            answer: {
-              title: result.answer.title,
-              content: result.answer.answer,
-              confidence: result.answer.confidence,
-              bullets: result.answer.bullets,
-              assumptions: result.answer.assumptions,
-              recommendedAction: result.answer.recommendedNextAction,
-            },
-            operationalState: {
-              globalPressure: operationalAssessment.globalPressure,
-              globalStability: operationalAssessment.globalStability,
-              activeIncidents: opCtx.activeIncidentCount,
-              activeRecoveries: opCtx.activeRecoveryCount,
-              zoneStates: operationalAssessment.zoneAssessments.map(z => ({
-                zone: z.zoneLabel,
-                pressure: z.pressure,
-                stability: z.stability,
-                unresolved: z.unresolvedCount,
-              })),
-            },
-            executionContext: liveExec ? {
-              objective: cmdMemory.activePlan?.objective.operationalGoal ?? '',
-              phase: liveExec.phase,
-              stepsCompleted: liveExec.steps.filter(s => s.phase === 'completed').length,
-              stepsTotal: liveExec.steps.length,
-              estimatedMinutes: cmdMemory.activePlan?.totalEstimatedMinutes ?? 0,
-            } : undefined,
-            operatorRole: operator.role,
-            operatorName: operator.displayName,
+        fetch('/api/soi/llm-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: raw }),
+        }).then(r => r.json()).then(data => {
+          if (data.intent && data.intent.intent !== 'unknown') {
+            routeLLMIntent(data.intent, raw);
+          } else {
+            // LLM couldn't interpret — fall back to deterministic copilot
+            const opCtx = {
+              assessment: operationalAssessment,
+              recommendations: soiRecommendations,
+              dispatchPlan,
+              activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
+              activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
+            };
+            const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
+            setCopilotAnswer(result.answer);
+            setConversationMemory(result.updatedMemory);
+            setLastInferredFrom(result.inferredFrom);
+          }
+        }).catch(() => {
+          // API unavailable — fall back to deterministic copilot
+          const opCtx = {
+            assessment: operationalAssessment,
+            recommendations: soiRecommendations,
+            dispatchPlan,
+            activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
+            activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
           };
-          voiceRewrite(raw, grounded, { briefingMode: isBriefing }).then(voiceResult => {
-            if (voiceResult.source === 'llm') {
-              setCopilotAnswer(prev => prev ? {
-                ...prev,
-                answer: voiceResult.text,
-                source: 'deterministic_operational_model' as const,
-              } : prev);
-            }
-          }).catch(() => { /* keep deterministic answer */ });
-        }
+          const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
+          setCopilotAnswer(result.answer);
+          setConversationMemory(result.updatedMemory);
+          setLastInferredFrom(result.inferredFrom);
+        });
+
+        // Voice rewrite handled by the copilot answer useEffect
       }
     }
     setCommandInput('');
@@ -1256,10 +1259,88 @@ export default function ManagerDashboard() {
         });
         break;
       }
+      case 'workforce_query': {
+        const ws = workforceState;
+        setCopilotAnswer({
+          title: 'Workforce Status',
+          answer: `${ws.totalOnShift} personnel on shift. ${ws.rampAgentsOnShift} ramp agents. ${ws.available.length} available, ${ws.assigned.length} assigned, ${ws.recovering.length} in recovery.`,
+          confidence: 'high',
+          bullets: [
+            `Available: ${ws.available.map(m => m.name).join(', ') || 'None'}`,
+            `Assigned: ${ws.assigned.map(m => m.name).join(', ') || 'None'}`,
+            `Recovering: ${ws.recovering.map(m => m.name).join(', ') || 'None'}`,
+            ws.isDemo ? 'Demo workforce model' : '',
+          ].filter(Boolean),
+          assumptions: ws.isDemo ? ['Workforce data is demo-derived, not live roster'] : [],
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
+        break;
+      }
+      case 'workforce_status': {
+        const ws = workforceState;
+        // Check if asking about specific person
+        if (li.resource) {
+          const member = ws.roster.find(m => m.id === li.resource?.toUpperCase());
+          if (member) {
+            setCopilotAnswer({
+              title: `${member.name}`,
+              answer: `${member.name} (${member.role}) is ${member.status}${member.currentGate ? ` at gate ${member.currentGate}` : member.currentZone ? ` in ${member.currentZone}` : ''}. Workload: ${member.workload}/3.`,
+              confidence: 'high', bullets: [], assumptions: ws.isDemo ? ['Demo workforce model'] : [],
+              source: 'deterministic_operational_model',
+            });
+          } else {
+            setCopilotAnswer({ title: 'Not Found', answer: `Could not find crew member ${li.resource}.`, confidence: 'low', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          }
+        } else {
+          // General workload overview
+          const overloaded = ws.roster.filter(m => m.workload >= 2 && m.status !== 'off_shift');
+          setCopilotAnswer({
+            title: 'Workload Overview',
+            answer: overloaded.length > 0 ? `${overloaded.length} crew member${overloaded.length > 1 ? 's' : ''} at elevated workload: ${overloaded.map(m => m.name).join(', ')}.` : 'No crew members at elevated workload.',
+            confidence: 'high', bullets: overloaded.map(m => `${m.name}: workload ${m.workload}/3, ${m.status}`),
+            assumptions: ws.isDemo ? ['Demo workforce model'] : [],
+            source: 'deterministic_operational_model',
+          });
+        }
+        setCommandResponse(null);
+        break;
+      }
+      case 'assign_team': {
+        const gate = (li.gate ?? targetGate ?? '').toUpperCase();
+        if (!gate) {
+          setCopilotAnswer({ title: 'Assignment', answer: 'Which gate should I assign a team to? Specify a gate like 52D.', confidence: 'low', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          setCommandResponse(null);
+          break;
+        }
+        const rec = recommendTeamForGate(workforceState, gate);
+        if (rec.members.length === 0) {
+          setCopilotAnswer({ title: 'No Available Crew', answer: `No agents currently available for assignment to ${gate}. ${rec.reasoning}`, confidence: 'moderate', bullets: [], assumptions: ['Demo workforce model'], source: 'deterministic_operational_model' });
+        } else {
+          setPendingAssignment({ gate, members: rec.members.map(m => m.id), reasoning: rec.reasoning });
+          const gateInc = temporalIncidents.filter(i => i.gate_id === gate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+          setCopilotAnswer({
+            title: `Assign Team to ${gate}`,
+            answer: `Recommended: ${rec.members.map(m => m.name).join(' and ')}. ${rec.reasoning}`,
+            confidence: 'high',
+            bullets: [
+              ...rec.members.map(m => `${m.name} (${m.role}) — ${m.status}, workload ${m.workload}/3`),
+              gateInc.length > 0 ? `${gate} has ${gateInc.length} active incident${gateInc.length > 1 ? 's' : ''}` : `${gate} operational`,
+              'Projected impact: pressure reduction within 12–18 minutes',
+            ],
+            assumptions: ['Demo workforce model'],
+            recommendedNextAction: 'Say "confirm" to dispatch',
+            source: 'deterministic_operational_model',
+          });
+        }
+        setCommandResponse(null);
+        break;
+      }
       default: {
-        // LLM couldn't resolve either — show reasoning
-        setCommandResponse([`SOI: ${li.reasoning ?? 'Unable to interpret this command.'}`]);
+        // LLM couldn't resolve — show reasoning
+        setCommandResponse([`SOI: ${li.reasoning ?? 'I can help with gates, zones, staffing, recovery, weather, or status. Try being more specific.'}`]);
         setCopilotAnswer(null);
+        break;
       }
     }
   }
