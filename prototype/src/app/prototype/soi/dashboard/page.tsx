@@ -2008,12 +2008,35 @@ export default function ManagerDashboard() {
               <span>—</span>
               <span>Gates 52A–I</span>
               {selectedZone && <span style={{ color: 'var(--rq-accent)' }}>· Focused: {selectedZone.label}</span>}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center' }}>
+                {replayMode ? (
+                  <>
+                    <span style={{ fontSize: 8, color: 'var(--rq-amber)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Replay</span>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(-15)}>−15m</button>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(-5)}>−5m</button>
+                    <button className={`mc-dock-btn${replayPlaying ? ' active' : ''}`} style={{ padding: '2px 6px', fontSize: 7 }} onClick={togglePlayback}>
+                      {replayPlaying ? '⏸' : '▶'}
+                    </button>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(5)}>+5m</button>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={() => stepReplay(15)}>+15m</button>
+                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={exitReplay}>Exit</button>
+                    {replayTimestamp && (
+                      <span style={{ fontSize: 8, color: 'var(--rq-ink-3)' }}>
+                        {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={startReplay}>Replay</button>
+                )}
+              </div>
             </div>
 
             {/* Spatial gate map */}
             <SpatialField
               assessment={operationalAssessment}
               gates={ALL_GATES}
+              selectedZoneId={selectedZoneId}
               onGateClick={gateId => {
                 const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
                 if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
@@ -2129,6 +2152,24 @@ export default function ManagerDashboard() {
 
           {/* ── RIGHT RAIL: Intelligence Feed ── */}
           <div className="mc-rail">
+            {/* Incident detail panel (when selected) */}
+            {selectedIncident ? (
+              <IncidentDetailPanel
+                incident={selectedIncident}
+                incidentEvents={incidentEvents}
+                recoveryActions={recoveryActions}
+                isTransitioning={incidentTransitioning === selectedIncident.id}
+                onTransition={handleIncidentTransition}
+                onBack={() => setSelectedIncidentId(null)}
+                onCreateRecoveryAction={handleCreateRecoveryAction}
+                onRecoveryTransition={handleRecoveryTransition}
+                raTransitioning={raTransitioning}
+                raSubmitting={raSubmitting}
+                showRecoveryForm={showRecoveryForm}
+                onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
+              />
+            ) : (
+              <>
             <div className="mc-rail-title">Active Incidents</div>
 
             {triageIncidents.length === 0 && (
@@ -2141,8 +2182,8 @@ export default function ManagerDashboard() {
                 <div key={inc.id} onClick={() => setSelectedIncidentId(inc.id === selectedIncidentId ? null : inc.id)}
                   style={{
                     padding: '8px 10px', marginBottom: 6,
-                    background: selectedIncidentId === inc.id ? 'var(--rq-bg-2)' : 'var(--rq-bg-1)',
-                    border: `1px solid ${selectedIncidentId === inc.id ? sevColor : 'var(--rq-line)'}`,
+                    background: 'var(--rq-bg-1)',
+                    border: '1px solid var(--rq-line)',
                     borderLeft: `3px solid ${sevColor}`,
                     cursor: 'pointer', transition: 'all .15s',
                   }}>
@@ -2197,6 +2238,8 @@ export default function ManagerDashboard() {
                 </>
               );
             })()}
+              </>
+            )}
           </div>
 
         </div>

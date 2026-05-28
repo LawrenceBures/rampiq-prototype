@@ -112,6 +112,34 @@
   }
 }
 
+@media (max-width: 900px) {
+  .mc-grid {
+    grid-template-columns: 1fr 260px;
+  }
+  .mc-grid > .mc-rail:first-child {
+    display: none;
+  }
+  .mc-header {
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .mc-header-meta {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .mc-grid {
+    grid-template-columns: 1fr;
+  }
+  .mc-grid > .mc-rail:last-child {
+    display: none;
+  }
+  .mc-dock {
+    padding: 6px 10px;
+  }
+}
+
 /* ── Rails ── */
 .mc-rail {
   overflow-y: auto;
