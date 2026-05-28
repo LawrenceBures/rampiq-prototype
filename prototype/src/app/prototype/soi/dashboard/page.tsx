@@ -155,6 +155,8 @@ export default function ManagerDashboard() {
   const [interimTranscript, setInterimTranscript] = useState('');
   const [ttsOn, setTtsOn] = useState(false);
   const [ambientOn, setAmbientOn] = useState(false);
+  const lastInputWasVoiceRef = useRef(false);
+  const prevCopilotAnswerRef = useRef<string | null>(null);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
@@ -505,6 +507,107 @@ export default function ManagerDashboard() {
 
   // ── SOI Command Handler ──
   function handleCommand(raw: string) {
+    // A. Approval / confirmation / cancel (highest priority)
+    const agenticParsed = parseAgenticIntent(raw, zones);
+    if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
+      handleApprovePlan();
+      if (ttsOn && lastInputWasVoiceRef.current) speak('Recovery chain approved and execution initiated.', 'normal', 'briefing');
+      setCommandInput('');
+      return;
+    }
+    if (agenticParsed.intent === 'cancel_plan') {
+      if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+      setLiveExec(null);
+      setAdaptiveRecs([]);
+      setCmdMemory(clearCommandMemory(cmdMemory));
+      setCommandResponse(['Execution plan cancelled.']);
+      setCopilotAnswer(null);
+      if (ttsOn && lastInputWasVoiceRef.current) speak('Execution cancelled.', 'normal', 'briefing');
+      setCommandInput('');
+      return;
+    }
+    if (agenticParsed.intent === 'show_plan_status') {
+      if (liveExec && isExecutionActive(liveExec)) {
+        const prog = executionProgressSummary(liveExec);
+        setCommandResponse([
+          `Execution: ${prog.completed}/${prog.total} steps (${prog.percentage}%)`,
+          `Phase: ${liveExec.phase}`,
+          ...(prog.failed > 0 ? [`${prog.failed} steps failed`] : []),
+          ...(prog.stalled > 0 ? [`${prog.stalled} steps stalled`] : []),
+        ]);
+      } else if (cmdMemory.activePlan) {
+        setCommandResponse([`Plan staged: ${cmdMemory.activePlan.summary}`, 'Say "execute" or "approve" to begin.']);
+      } else {
+        setCommandResponse(['No active plan. Give an operational objective like "stabilize 52A-C".']);
+      }
+      setCopilotAnswer(null);
+      setCommandInput('');
+      return;
+    }
+    if (agenticParsed.intent === 'show_alternatives' && cmdMemory.activePlan) {
+      const altPlan = buildAlternativePlan(
+        cmdMemory.activePlan.objective, operationalAssessment,
+        soiRecommendations, temporalIncidents, temporalRecoveryActions,
+      );
+      setCmdMemory(stagePlan(cmdMemory, altPlan, altPlan.objective, operationalAssessment));
+      setCommandResponse(null);
+      setCopilotAnswer(null);
+      setCommandInput('');
+      return;
+    }
+    if (agenticParsed.intent === 'continue_recovery' && liveExec && isExecutionActive(liveExec)) {
+      setCommandResponse(['Recovery chain is progressing. Use the live execution panel to monitor.']);
+      setCopilotAnswer(null);
+      setCommandInput('');
+      return;
+    }
+
+    // B. Agentic execution intents (stabilize, prevent, reduce, dispatch, etc.)
+    if (agenticParsed.intent && !['execute_plan', 'cancel_plan', 'show_plan_status', 'show_alternatives', 'continue_recovery'].includes(agenticParsed.intent)) {
+      // Resolve gate to zone if only gate was provided
+      if (!agenticParsed.targetZone && agenticParsed.targetGate && zones.length > 0) {
+        const resolved = resolveZonePattern(agenticParsed.targetGate, zones);
+        if (resolved) agenticParsed.targetZone = resolved;
+      }
+
+      const objective = buildObjective(agenticParsed, operationalAssessment, zones);
+      const plan = buildExecutionPlan(
+        objective, operationalAssessment,
+        soiRecommendations, temporalIncidents, temporalRecoveryActions,
+      );
+
+      if (plan.steps.length === 0) {
+        // Explain why no plan could be built
+        const zoneLabel = objective.targetZoneLabel ?? objective.targetZone ?? 'the target area';
+        const za = objective.targetZone ? operationalAssessment.zoneAssessments.find(z => z.zoneId === objective.targetZone) : null;
+        const reason = za
+          ? za.unresolvedCount === 0
+            ? `No active incidents at ${zoneLabel}. Zone is currently stable.`
+            : `Recovery actions already cover incidents at ${zoneLabel}. No additional steps needed.`
+          : `Unable to assess ${zoneLabel}. Zone data not available.`;
+        setCommandResponse([reason]);
+        setCopilotAnswer(null);
+      } else {
+        const auth = authorizeExecution(plan.steps, operator.viewerRole as 'coordinator' | 'manager' | 'ops_director');
+        setCmdMemory(stagePlan(cmdMemory, plan, objective, operationalAssessment));
+        setCommandResponse(null);
+        setCopilotAnswer(null);
+        if (ttsOn && lastInputWasVoiceRef.current) {
+          speak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`, 'normal', 'briefing');
+        }
+        if (!auth.authorized && auth.deniedReasons.length > 0) {
+          setCommandResponse([
+            `Plan staged with ${auth.deniedSteps.length} restricted step${auth.deniedSteps.length > 1 ? 's' : ''}:`,
+            ...auth.deniedReasons.map(r => `· ${r}`),
+            ...(auth.escalationPath ? [`Escalation: ${auth.escalationPath}`] : []),
+          ]);
+        }
+      }
+      setCommandInput('');
+      return;
+    }
+
+    // C. Exact legacy commands
     const intent = parseCommand(raw);
     switch (intent.type) {
       case 'summarize_operation': {
@@ -578,76 +681,7 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
-        // Try agentic intent first
-        const agenticParsed = parseAgenticIntent(raw, zones);
-
-        if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
-          handleApprovePlan();
-          break;
-        }
-        if (agenticParsed.intent === 'cancel_plan') {
-          setCmdMemory(clearCommandMemory(cmdMemory));
-          setCommandResponse(['Execution plan cancelled.']);
-          setCopilotAnswer(null);
-          break;
-        }
-        if (agenticParsed.intent === 'show_plan_status') {
-          if (liveExec && isExecutionActive(liveExec)) {
-            const prog = executionProgressSummary(liveExec);
-            setCommandResponse([
-              `Execution: ${prog.completed}/${prog.total} steps (${prog.percentage}%)`,
-              `Phase: ${liveExec.phase}`,
-              ...(prog.failed > 0 ? [`${prog.failed} steps failed`] : []),
-              ...(prog.stalled > 0 ? [`${prog.stalled} steps stalled`] : []),
-            ]);
-          } else if (cmdMemory.activePlan) {
-            setCommandResponse([`Plan staged: ${cmdMemory.activePlan.summary}`, 'Say "execute" or "approve" to begin.']);
-          } else {
-            setCommandResponse(['No active plan. Give an operational objective like "stabilize 52A-C".']);
-          }
-          setCopilotAnswer(null);
-          break;
-        }
-        if (agenticParsed.intent === 'show_alternatives' && cmdMemory.activePlan) {
-          const altPlan = buildAlternativePlan(
-            cmdMemory.activePlan.objective, operationalAssessment,
-            soiRecommendations, temporalIncidents, temporalRecoveryActions,
-          );
-          setCmdMemory(stagePlan(cmdMemory, altPlan, altPlan.objective, operationalAssessment));
-          setCommandResponse(null);
-          setCopilotAnswer(null);
-          break;
-        }
-        if (agenticParsed.intent === 'continue_recovery' && liveExec && isExecutionActive(liveExec)) {
-          setCommandResponse(['Recovery chain is progressing. Use the live execution panel to monitor.']);
-          setCopilotAnswer(null);
-          break;
-        }
-
-        if (agenticParsed.intent && agenticParsed.intent !== 'execute_plan') {
-          // Build execution plan from agentic intent
-          const objective = buildObjective(agenticParsed, operationalAssessment, zones);
-          const plan = buildExecutionPlan(
-            objective, operationalAssessment,
-            soiRecommendations, temporalIncidents, temporalRecoveryActions,
-          );
-          const auth = authorizeExecution(plan.steps, operator.viewerRole as 'coordinator' | 'manager' | 'ops_director');
-
-          setCmdMemory(stagePlan(cmdMemory, plan, objective, operationalAssessment));
-          setCommandResponse(null);
-          setCopilotAnswer(null);
-
-          if (!auth.authorized && auth.deniedReasons.length > 0) {
-            setCommandResponse([
-              `Plan staged with ${auth.deniedSteps.length} restricted step${auth.deniedSteps.length > 1 ? 's' : ''}:`,
-              ...auth.deniedReasons.map(r => `· ${r}`),
-              ...(auth.escalationPath ? [`Escalation: ${auth.escalationPath}`] : []),
-            ]);
-          }
-          break;
-        }
-
-        // Copilot fallback: route through context-aware operational reasoning
+        // D. Copilot fallback: route through context-aware operational reasoning
         setCommandResponse(null);
         const opCtx = {
           assessment: operationalAssessment,
@@ -847,24 +881,29 @@ export default function ManagerDashboard() {
         return;
       }
       setInterimTranscript('');
+      lastInputWasVoiceRef.current = true;
       const cmd = routeVoiceCommand(result.transcript);
-      if (cmd.type === 'approval' && cmdMemory.activePlan && !liveExec) {
-        handleApprovePlan();
-        if (ttsOn) speak('Recovery chain approved and execution initiated.', 'normal', 'briefing');
-      } else if (cmd.type === 'cancellation') {
-        if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
-        setLiveExec(null);
-        setAdaptiveRecs([]);
-        setCmdMemory(clearCommandMemory(cmdMemory));
-        if (ttsOn) speak('Execution cancelled.', 'normal', 'briefing');
-      } else {
-        // Route through existing command handler
-        setCommandInput(cmd.text);
-        handleCommand(cmd.text);
-      }
+      // All commands route through the unified handler
+      handleCommand(cmd.text);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmdMemory.activePlan, liveExec, ttsOn]);
+  }, []);
+
+  // ── Speak copilot answers when voice input was used ──
+  useEffect(() => {
+    if (!ttsOn || !lastInputWasVoiceRef.current) return;
+    if (copilotAnswer && copilotAnswer.answer !== prevCopilotAnswerRef.current) {
+      prevCopilotAnswerRef.current = copilotAnswer.answer;
+      speak(condenseForSpeech(copilotAnswer.answer), 'normal', 'briefing');
+    }
+    if (commandResponse && commandResponse.length > 0) {
+      const text = commandResponse.slice(0, 2).join('. ');
+      speak(condenseForSpeech(text), 'normal', 'briefing');
+    }
+    // Reset voice flag after speaking
+    lastInputWasVoiceRef.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copilotAnswer, commandResponse]);
 
   // ── Speak narratives that qualify ──
   useEffect(() => {
@@ -2144,7 +2183,7 @@ export default function ManagerDashboard() {
                 type="text"
                 value={commandInput}
                 onChange={e => setCommandInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) handleCommand(commandInput); }}
+                onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
                 placeholder="Ask SOI... show zone, explain instability, recommend recovery"
                 style={{
                   flex: 1, padding: '6px 10px',
@@ -2155,7 +2194,7 @@ export default function ManagerDashboard() {
               />
               <button
                 type="button"
-                onClick={() => { if (commandInput.trim()) handleCommand(commandInput); }}
+                onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
                 disabled={!commandInput.trim()}
                 style={{
                   padding: '6px 10px',
