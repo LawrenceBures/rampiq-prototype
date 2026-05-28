@@ -21,11 +21,30 @@ export type CommandIntent =
   | { type: 'unknown'; raw: string };
 
 // ============================================================
+// NATO PHONETIC → GATE NORMALIZER
+// ============================================================
+
+const NATO_TO_LETTER: Record<string, string> = {
+  alpha: 'A', bravo: 'B', charlie: 'C', delta: 'D',
+  echo: 'E', foxtrot: 'F', golf: 'G', hotel: 'H', india: 'I',
+};
+
+/** Normalize NATO phonetic gate references to gate IDs.
+ *  "52 alpha" → "52A", "52 bravo" → "52B", "gate 52 charlie" → "gate 52C"
+ *  Also handles "52-alpha", "52alpha". */
+export function normalizeNatoGates(input: string): string {
+  return input.replace(
+    /\b(\d{2})\s*[-]?\s*(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india)\b/gi,
+    (_, num, nato) => `${num}${NATO_TO_LETTER[nato.toLowerCase()]}`,
+  );
+}
+
+// ============================================================
 // PARSER
 // ============================================================
 
 export function parseCommand(input: string): CommandIntent {
-  const raw = input.trim();
+  const raw = normalizeNatoGates(input.trim());
   const lower = raw.toLowerCase();
 
   // "show zone 52A-C" / "show zone GATES-52ABC" / "show 52A"

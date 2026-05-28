@@ -52,6 +52,7 @@ export {
 export {
   parseCommand,
   resolveZonePattern,
+  normalizeNatoGates,
   type CommandIntent,
 } from './soi-command-parser';
 

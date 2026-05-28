@@ -45,6 +45,7 @@ import {
   rankRecommendations,
   parseCommand,
   resolveZonePattern,
+  normalizeNatoGates,
   explainInstability,
   assessOperation,
   answerOperationalQuestion,
@@ -212,6 +213,10 @@ export default function ManagerDashboard() {
   });
   const [savedSlots, setSavedSlots] = useState(layoutSlots); // snapshot for diff
   const [editMode, setEditMode] = useState(false);
+  const [leftRailOrder, setLeftRailOrder] = useState([0, 1, 2, 3]);
+  const [rightRailOrder, setRightRailOrder] = useState([0, 1, 2]);
+  const dragRef = useRef<{ rail: 'left' | 'right'; index: number } | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<{ rail: 'left' | 'right'; index: number } | null>(null);
   const [crisisMode, setCrisisMode] = useState(false);
   const [crisisSuggested, setCrisisSuggested] = useState(false);
   const [showModuleGallery, setShowModuleGallery] = useState(false);
@@ -355,6 +360,36 @@ export default function ManagerDashboard() {
     setGalleryTarget(null);
   }
 
+  // Drag-and-drop reorder for rail blocks
+  function handleDragStart(rail: 'left' | 'right', index: number) {
+    dragRef.current = { rail, index };
+  }
+  function handleDragOver(e: React.DragEvent, rail: 'left' | 'right', index: number) {
+    e.preventDefault();
+    setDragOverIndex({ rail, index });
+  }
+  function handleDragLeave() {
+    setDragOverIndex(null);
+  }
+  function handleDrop(rail: 'left' | 'right', index: number) {
+    setDragOverIndex(null);
+    if (!dragRef.current || dragRef.current.rail !== rail) { dragRef.current = null; return; }
+    const fromIdx = dragRef.current.index;
+    dragRef.current = null;
+    if (fromIdx === index) return;
+    const setOrder = rail === 'left' ? setLeftRailOrder : setRightRailOrder;
+    setOrder(prev => {
+      const next = [...prev];
+      const [removed] = next.splice(fromIdx, 1);
+      next.splice(index, 0, removed);
+      return next;
+    });
+  }
+  function handleDragEnd() {
+    dragRef.current = null;
+    setDragOverIndex(null);
+  }
+
   function deleteLayout(name: LayoutName) {
     if (name === 'Default') return;
     if (!confirm(`Delete layout "${name}"?`)) return;
@@ -418,7 +453,7 @@ export default function ManagerDashboard() {
   const [voiceState, setVoiceState] = useState<VoiceInputState>('idle');
   const [ttsState, setTtsState] = useState<TTSState>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [ttsOn, setTtsOn] = useState(false);
+  const [ttsOn, setTtsOn] = useState(true);
   const [ttsMode, setTtsMode] = useState<TTSMode>('browser');
   const [ambientOn, setAmbientOn] = useState(false);
   const lastInputWasVoiceRef = useRef(false);
@@ -809,7 +844,8 @@ export default function ManagerDashboard() {
   }
 
   // ── SOI Command Handler ──
-  function handleCommand(raw: string) {
+  function handleCommand(rawInput: string) {
+    const raw = normalizeNatoGates(rawInput);
     // A0. Confirm pending team assignment
     if (pendingAssignment && /\b(?:confirm|yes|go|approved?|dispatch|do\s+it)\b/i.test(raw)) {
       const pa = pendingAssignment;
@@ -835,7 +871,7 @@ export default function ManagerDashboard() {
         source: 'deterministic_operational_model',
       });
       setCommandResponse(null);
-      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak(`Assignment confirmed. Team dispatched to gate ${pa.gate}.`);
+      soiSpeak(`Assignment confirmed. Team dispatched to gate ${pa.gate}.`);
       setCommandInput('');
       return;
     }
@@ -844,7 +880,7 @@ export default function ManagerDashboard() {
     const agenticParsed = parseAgenticIntent(raw, zones);
     if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
       handleApprovePlan();
-      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak('Recovery chain approved and execution initiated.');
+      soiSpeak('Recovery chain approved and execution initiated.');
       setCommandInput('');
       return;
     }
@@ -855,7 +891,7 @@ export default function ManagerDashboard() {
       setCmdMemory(clearCommandMemory(cmdMemory));
       setCommandResponse(['Execution plan cancelled.']);
       setCopilotAnswer(null);
-      if (ttsOn && lastInputWasVoiceRef.current) soiSpeak('Execution cancelled.');
+      soiSpeak('Execution cancelled.');
       setCommandInput('');
       return;
     }
@@ -925,9 +961,7 @@ export default function ManagerDashboard() {
         setCmdMemory(stagePlan(cmdMemory, plan, objective, operationalAssessment));
         setCommandResponse(null);
         setCopilotAnswer(null);
-        if (ttsOn && lastInputWasVoiceRef.current) {
-          soiSpeak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
-        }
+        soiSpeak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
         if (!auth.authorized && auth.deniedReasons.length > 0) {
           setCommandResponse([
             `Plan staged with ${auth.deniedSteps.length} restricted step${auth.deniedSteps.length > 1 ? 's' : ''}:`,
@@ -1317,8 +1351,9 @@ export default function ManagerDashboard() {
   }, []);
 
   // ── Voice input setup ──
-  // Check OpenAI TTS availability
+  // Check OpenAI TTS availability and enable TTS on mount
   useEffect(() => {
+    enableTTS(); // TTS on by default
     checkOpenAITTS().then(available => {
       setTtsMode(available ? 'openai' : (isTTSAvailable() ? 'browser' : 'unavailable'));
     });
@@ -1353,9 +1388,9 @@ export default function ManagerDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Speak copilot answers when voice input was used ──
+  // ── Speak copilot answers and command responses when TTS is on ──
   useEffect(() => {
-    if (!ttsOn || !lastInputWasVoiceRef.current) return;
+    if (!ttsOn) return;
     let spoken = false;
     if (copilotAnswer && copilotAnswer.answer !== prevCopilotAnswerRef.current) {
       prevCopilotAnswerRef.current = copilotAnswer.answer;
@@ -1366,7 +1401,6 @@ export default function ManagerDashboard() {
       const text = commandResponse.slice(0, 3).join('. ');
       soiSpeak(condenseForSpeech(text));
     }
-    lastInputWasVoiceRef.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copilotAnswer, commandResponse]);
 
@@ -2601,60 +2635,78 @@ export default function ManagerDashboard() {
 
           {/* ─── LEFT RAIL ─── */}
           <aside className="rail left">
-            <div className="block">
-              <div className="block-head"><span className="tac">Operational Snapshot</span></div>
-              <div className="snapshot">
-                <div className="big"><span className="num">{operationalAssessment.globalPressure}</span><span className="unit">/ 100 PSI</span></div>
-                <div className="cap">System pressure index — {operationalAssessment.globalStability}</div>
-                {forecast && forecast.globalTrend !== 'stable' && (
-                  <div className="trend"><span className="arrow">{forecast.globalTrend === 'rising' ? '▲' : '▼'}</span> {forecast.globalTrend} trend</div>
-                )}
-              </div>
-            </div>
-
-            <div className="block">
-              <div className="block-head"><span className="tac">Zone Health</span><span className="meta">{operationalAssessment.zoneAssessments.length} ACTIVE</span></div>
-              <div className="zone-row">
-                {operationalAssessment.zoneAssessments.map(za => {
-                  const barClass = za.pressure >= 80 ? 'red' : za.pressure >= 60 ? 'orange' : za.pressure >= 40 ? 'amber' : 'cyan';
-                  const colorClass = za.pressure >= 80 ? 'c-red' : za.pressure >= 60 ? 'c-orange' : za.pressure >= 40 ? 'c-amber' : 'c-cyan';
-                  const label = za.pressure >= 80 ? 'CRITICAL' : za.pressure >= 60 ? 'HIGH' : za.pressure >= 40 ? 'ELEVATED' : 'STABLE';
-                  return (
-                    <div key={za.zoneId} className="zone-item">
-                      <div className="zl"><span className="nm">{za.zoneLabel}</span><span className={`vl ${colorClass}`}>{label} · {za.pressure}</span></div>
-                      <div className="bar"><i className={barClass} style={{ width: `${za.pressure}%` }} /></div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="block">
-              <div className="block-head"><span className="tac">Staffing</span><span className="meta">RAMP</span></div>
-              <div className="staff">
-                <div className="grp"><span className="n num">{workforceState.assigned.length + workforceState.recovering.length}</span><span className="l">Deployed</span></div>
-                <div className="grp"><span className="n num c-cyan">{workforceState.available.length}</span><span className="l">Available</span></div>
-                <div className="grp"><span className="n num c-amber">{workforceState.recovering.length}</span><span className="l">Recovery</span></div>
-              </div>
-            </div>
-
-            <div className="block">
-              <div className="block-head"><span className="tac">Recovery Status</span></div>
-              <div className="recov">
-                {soiRecommendations.length > 0 && soiRecommendations[0].recommendedActions.slice(0, 4).map((a, i) => (
-                  <div key={i} className="step">
-                    <span className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
-                    <div className="txt">
-                      <span className="t">{a.label}</span>
-                      <span className="s">{i === 0 ? 'Complete' : i === 1 ? 'In progress' : `Est. ${a.expectedImpact?.slice(0, 30) ?? 'Queued'}`}</span>
-                    </div>
+            {(() => {
+              const leftBlocks = [
+                // 0: Operational Snapshot
+                <div key="snap" className="block-head"><span className="tac">Operational Snapshot</span>
+                  <div className="snapshot" style={{ marginTop: 12 }}>
+                    <div className="big"><span className="num">{operationalAssessment.globalPressure}</span><span className="unit">/ 100 PSI</span></div>
+                    <div className="cap">System pressure index — {operationalAssessment.globalStability}</div>
+                    {forecast && forecast.globalTrend !== 'stable' && (
+                      <div className="trend"><span className="arrow">{forecast.globalTrend === 'rising' ? '▲' : '▼'}</span> {forecast.globalTrend} trend</div>
+                    )}
                   </div>
-                ))}
-                {soiRecommendations.length === 0 && (
-                  <div className="step"><span className="marker done" /><div className="txt"><span className="t">No active recovery</span><span className="s">Operations nominal</span></div></div>
-                )}
-              </div>
-            </div>
+                </div>,
+                // 1: Zone Health
+                <div key="zones">
+                  <div className="block-head"><span className="tac">Zone Health</span><span className="meta">{operationalAssessment.zoneAssessments.length} ACTIVE</span></div>
+                  <div className="zone-row">
+                    {operationalAssessment.zoneAssessments.map(za => {
+                      const barClass = za.pressure >= 80 ? 'red' : za.pressure >= 60 ? 'orange' : za.pressure >= 40 ? 'amber' : 'cyan';
+                      const colorClass = za.pressure >= 80 ? 'c-red' : za.pressure >= 60 ? 'c-orange' : za.pressure >= 40 ? 'c-amber' : 'c-cyan';
+                      const label = za.pressure >= 80 ? 'CRITICAL' : za.pressure >= 60 ? 'HIGH' : za.pressure >= 40 ? 'ELEVATED' : 'STABLE';
+                      return (
+                        <div key={za.zoneId} className="zone-item">
+                          <div className="zl"><span className="nm">{za.zoneLabel}</span><span className={`vl ${colorClass}`}>{label} · {za.pressure}</span></div>
+                          <div className="bar"><i className={barClass} style={{ width: `${za.pressure}%` }} /></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>,
+                // 2: Staffing
+                <div key="staff">
+                  <div className="block-head"><span className="tac">Staffing</span><span className="meta">RAMP</span></div>
+                  <div className="staff">
+                    <div className="grp"><span className="n num">{workforceState.assigned.length + workforceState.recovering.length}</span><span className="l">Deployed</span></div>
+                    <div className="grp"><span className="n num c-cyan">{workforceState.available.length}</span><span className="l">Available</span></div>
+                    <div className="grp"><span className="n num c-amber">{workforceState.recovering.length}</span><span className="l">Recovery</span></div>
+                  </div>
+                </div>,
+                // 3: Recovery Status
+                <div key="recov">
+                  <div className="block-head"><span className="tac">Recovery Status</span></div>
+                  <div className="recov">
+                    {soiRecommendations.length > 0 && soiRecommendations[0].recommendedActions.slice(0, 4).map((a, i) => (
+                      <div key={i} className="step">
+                        <span className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
+                        <div className="txt">
+                          <span className="t">{a.label}</span>
+                          <span className="s">{i === 0 ? 'Complete' : i === 1 ? 'In progress' : `Est. ${a.expectedImpact?.slice(0, 30) ?? 'Queued'}`}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {soiRecommendations.length === 0 && (
+                      <div className="step"><span className="marker done" /><div className="txt"><span className="t">No active recovery</span><span className="s">Operations nominal</span></div></div>
+                    )}
+                  </div>
+                </div>,
+              ];
+              return leftRailOrder.map((blockIdx, renderIdx) => (
+                <div key={blockIdx}
+                  className={`block${dragRef.current?.rail === 'left' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'left' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
+                  draggable={editMode}
+                  onDragStart={() => handleDragStart('left', renderIdx)}
+                  onDragOver={e => handleDragOver(e, 'left', renderIdx)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={() => handleDrop('left', renderIdx)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {editMode && <div className="drag-handle"><span /><span /><span /></div>}
+                  {leftBlocks[blockIdx]}
+                </div>
+              ));
+            })()}
 
             {/* Dev controls */}
             <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', paddingTop: 12 }}>
@@ -2785,103 +2837,129 @@ export default function ManagerDashboard() {
                 </div>
               )}
 
-              {/* COMMAND DOCK */}
-              <div className="dock-wrap">
-                <div className="dock">
-                  <div className="dock-orb" />
-                  <div className="wave">
-                    <span /><span /><span /><span /><span /><span /><span />
-                  </div>
-                  <div className="dock-input" onClick={() => {
-                    const el = document.getElementById('soi-cmd-input');
-                    if (el) el.focus();
-                  }}>
-                    <input id="soi-cmd-input" type="text" value={commandInput} onChange={e => setCommandInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-                      placeholder="Ask SOI, or issue a command…"
-                      style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--ink-2)', fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 300, width: '100%' }} />
-                    <span className="hint">Voice ready · type or hold mic</span>
-                  </div>
-                  <div className="dock-meta">
-                    {isVoiceInputAvailable() && (
-                      <div style={{ cursor: 'pointer' }} onMouseDown={() => startListening()} onMouseUp={() => stopListening()} onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}>
-                        {voiceState === 'listening' ? (
-                          <div className="listening"><span className="ld" />Listening</div>
-                        ) : (
-                          <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.16em', color: 'var(--ink-4)', textTransform: 'uppercase', cursor: 'pointer' }}>🎙 Hold</div>
-                        )}
-                      </div>
-                    )}
-                    <button className="dock-send" onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}>
-                      <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#03222a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    </button>
-                  </div>
-                  {crisisMode && (
-                    <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
-                      <button className="dock-chip info" onClick={() => handleCommand('brief me')}>Brief Team</button>
-                      <button className="dock-chip warn" onClick={() => handleCommand('stabilize worst zone')}>Hold Position</button>
-                      <button className="dock-chip danger" onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
+            </div>
+
+            {/* COMMAND DOCK — pinned at bottom of stage, never scrolls away */}
+            <div className="dock-wrap">
+              <div className="dock">
+                <div className="dock-orb" />
+                <div className="wave">
+                  <span /><span /><span /><span /><span /><span /><span />
+                </div>
+                <div className="dock-input" onClick={() => {
+                  const el = document.getElementById('soi-cmd-input');
+                  if (el) el.focus();
+                }}>
+                  <input id="soi-cmd-input" type="text" value={commandInput} onChange={e => setCommandInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+                    placeholder="Ask SOI, or issue a command…"
+                    style={{ background: 'none', border: 'none', outline: 'none', color: 'var(--ink-2)', fontFamily: 'var(--sans)', fontSize: 15, fontWeight: 300, width: '100%' }} />
+                  <span className="hint">{ttsOn ? 'Voice on' : 'Voice off'} · {voiceState !== 'idle' ? voiceState : 'type or hold mic'}</span>
+                </div>
+                <div className="dock-meta">
+                  {/* Voice toggle */}
+                  <button onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
+                    style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', padding: '6px 10px', borderRadius: 8, background: ttsOn ? 'rgba(82,214,230,.08)' : 'transparent', border: `1px solid ${ttsOn ? 'rgba(82,214,230,.3)' : 'var(--line)'}`, color: ttsOn ? 'var(--cyan)' : 'var(--ink-4)', cursor: 'pointer', transition: '.16s' }}>
+                    {ttsOn ? '🔊 On' : '🔇 Off'}
+                  </button>
+                  {/* Mic push-to-talk */}
+                  {isVoiceInputAvailable() && (
+                    <div style={{ cursor: 'pointer' }} onMouseDown={() => startListening()} onMouseUp={() => stopListening()} onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}>
+                      {voiceState === 'listening' ? (
+                        <div className="listening"><span className="ld" />Listening</div>
+                      ) : (
+                        <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.16em', color: 'var(--ink-4)', textTransform: 'uppercase', cursor: 'pointer' }}>🎙 Hold</div>
+                      )}
                     </div>
                   )}
+                  <button className="dock-send" onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}>
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h13M13 6l6 6-6 6" stroke="#03222a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
                 </div>
+                {crisisMode && (
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 8 }}>
+                    <button className="dock-chip info" onClick={() => handleCommand('brief me')}>Brief Team</button>
+                    <button className="dock-chip warn" onClick={() => handleCommand('stabilize worst zone')}>Hold Position</button>
+                    <button className="dock-chip danger" onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
+                  </div>
+                )}
               </div>
             </div>
           </main>
 
           {/* ─── RIGHT RAIL ─── */}
           <aside className="rail right">
-            <div className="block">
-              <div className="block-head"><span className="tac">Operational Intelligence</span></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {soiRecommendations.slice(0, 3).map((rec, i) => {
-                  const sevColor = rec.severity === 'critical' ? 'var(--red)' : rec.severity === 'high' ? 'var(--orange)' : 'var(--amber)';
-                  const glowColor = rec.severity === 'critical' ? 'var(--glow-red)' : rec.severity === 'high' ? 'var(--glow-orange)' : 'var(--glow-amber)';
-                  return (
-                    <div key={rec.id} className="intel-item">
-                      <div className="intel-row">
-                        <span className="intel-glyph" style={{ background: sevColor, boxShadow: `0 0 8px ${glowColor}` }} />
-                        <div className="intel-txt">
-                          <span className="it">{rec.title}</span>
-                          <span className="is">{rec.summary.slice(0, 120)}</span>
-                          <span className="intel-tag">{rec.severity === 'critical' ? 'Active Risk' : rec.severity === 'high' ? 'Elevated' : 'Advisory'}</span>
+            {(() => {
+              const rightBlocks = [
+                // 0: Operational Intelligence
+                <div key="intel">
+                  <div className="block-head"><span className="tac">Operational Intelligence</span></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {soiRecommendations.slice(0, 3).map((rec, i) => {
+                      const sevColor = rec.severity === 'critical' ? 'var(--red)' : rec.severity === 'high' ? 'var(--orange)' : 'var(--amber)';
+                      const glowColor = rec.severity === 'critical' ? 'var(--glow-red)' : rec.severity === 'high' ? 'var(--glow-orange)' : 'var(--glow-amber)';
+                      return (
+                        <div key={rec.id} className="intel-item">
+                          <div className="intel-row">
+                            <span className="intel-glyph" style={{ background: sevColor, boxShadow: `0 0 8px ${glowColor}` }} />
+                            <div className="intel-txt">
+                              <span className="it">{rec.title}</span>
+                              <span className="is">{rec.summary.slice(0, 120)}</span>
+                              <span className="intel-tag">{rec.severity === 'critical' ? 'Active Risk' : rec.severity === 'high' ? 'Elevated' : 'Advisory'}</span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {soiRecommendations.length === 0 && (
-                  <div className="intel-item"><div className="intel-row"><span className="intel-glyph" style={{ background: 'var(--cyan)', boxShadow: '0 0 8px var(--glow-cyan)' }} /><div className="intel-txt"><span className="it">Operations nominal</span><span className="is">No elevated intelligence signals.</span></div></div></div>
-                )}
-              </div>
-            </div>
-
-            <div className="block">
-              <div className="block-head"><span className="tac">Recovery Confidence</span><span className="meta">FORECAST</span></div>
-              <div className="predict">
-                <div className="spark">
-                  {Array.from({ length: 9 }).map((_, i) => (
-                    <span key={i} style={{ height: `${Math.min(95, 30 + recoveryConf.score * (i + 1) / 9)}%` }} />
-                  ))}
-                </div>
-                <div className="pr"><span>If plan executes now</span><span className="num c-cyan">{recoveryConf.score}%</span></div>
-                <div className="pr"><span>If delayed 10 min</span><span className="num c-amber">{Math.max(20, recoveryConf.score - 28)}%</span></div>
-              </div>
-            </div>
-
-            <div className="block">
-              <div className="block-head"><span className="tac">Recommended Next</span></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {soiRecommendations.slice(0, 3).map((rec, i) => (
-                  <div key={i} className="micro" onClick={() => handleCommand(rec.recommendedActions[0]?.label ?? rec.title)}>
-                    <span className="mi">{rec.recommendedActions[0]?.label ?? rec.title}</span>
-                    <span className="ma">Execute</span>
+                      );
+                    })}
+                    {soiRecommendations.length === 0 && (
+                      <div className="intel-item"><div className="intel-row"><span className="intel-glyph" style={{ background: 'var(--cyan)', boxShadow: '0 0 8px var(--glow-cyan)' }} /><div className="intel-txt"><span className="it">Operations nominal</span><span className="is">No elevated intelligence signals.</span></div></div></div>
+                    )}
                   </div>
-                ))}
-                {soiRecommendations.length === 0 && (
-                  <div className="micro"><span className="mi">No pending actions</span><span className="ma">—</span></div>
-                )}
-              </div>
-            </div>
+                </div>,
+                // 1: Recovery Confidence
+                <div key="conf">
+                  <div className="block-head"><span className="tac">Recovery Confidence</span><span className="meta">FORECAST</span></div>
+                  <div className="predict">
+                    <div className="spark">
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <span key={i} style={{ height: `${Math.min(95, 30 + recoveryConf.score * (i + 1) / 9)}%` }} />
+                      ))}
+                    </div>
+                    <div className="pr"><span>If plan executes now</span><span className="num c-cyan">{recoveryConf.score}%</span></div>
+                    <div className="pr"><span>If delayed 10 min</span><span className="num c-amber">{Math.max(20, recoveryConf.score - 28)}%</span></div>
+                  </div>
+                </div>,
+                // 2: Recommended Next
+                <div key="next">
+                  <div className="block-head"><span className="tac">Recommended Next</span></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                    {soiRecommendations.slice(0, 3).map((rec, i) => (
+                      <div key={i} className="micro" onClick={() => handleCommand(rec.recommendedActions[0]?.label ?? rec.title)}>
+                        <span className="mi">{rec.recommendedActions[0]?.label ?? rec.title}</span>
+                        <span className="ma">Execute</span>
+                      </div>
+                    ))}
+                    {soiRecommendations.length === 0 && (
+                      <div className="micro"><span className="mi">No pending actions</span><span className="ma">—</span></div>
+                    )}
+                  </div>
+                </div>,
+              ];
+              return rightRailOrder.map((blockIdx, renderIdx) => (
+                <div key={blockIdx}
+                  className={`block${dragRef.current?.rail === 'right' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'right' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
+                  draggable={editMode}
+                  onDragStart={() => handleDragStart('right', renderIdx)}
+                  onDragOver={e => handleDragOver(e, 'right', renderIdx)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={() => handleDrop('right', renderIdx)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {editMode && <div className="drag-handle"><span /><span /><span /></div>}
+                  {rightBlocks[blockIdx]}
+                </div>
+              ));
+            })()}
           </aside>
         </div>
       </div>

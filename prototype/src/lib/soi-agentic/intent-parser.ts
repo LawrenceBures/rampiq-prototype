@@ -7,7 +7,7 @@
  * No LLM. Deterministic pattern matching.
  */
 
-import { resolveZonePattern } from '@/lib/soi-intelligence/soi-command-parser';
+import { resolveZonePattern, normalizeNatoGates } from '@/lib/soi-intelligence/soi-command-parser';
 
 // ============================================================
 // TYPES
@@ -152,7 +152,7 @@ export function parseAgenticIntent(
   input: string,
   zones?: readonly { id: string; gate_ids: string[] }[],
 ): ParsedAgenticIntent {
-  const raw = input.trim();
+  const raw = normalizeNatoGates(input.trim());
   const lower = raw.toLowerCase();
 
   // Extract targets

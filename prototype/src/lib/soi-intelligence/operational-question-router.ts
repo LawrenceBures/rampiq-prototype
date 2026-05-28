@@ -6,7 +6,7 @@
  * No LLM. Deterministic pattern matching only.
  */
 
-import { resolveZonePattern } from './soi-command-parser';
+import { resolveZonePattern, normalizeNatoGates } from './soi-command-parser';
 
 // ============================================================
 // TYPES
@@ -118,7 +118,7 @@ export function routeQuestion(
   input: string,
   zones?: readonly { id: string; gate_ids: string[] }[],
 ): RoutedQuestion {
-  const raw = input.trim();
+  const raw = normalizeNatoGates(input.trim());
   const lower = raw.toLowerCase();
 
   // Extract zone/gate targets from the input
