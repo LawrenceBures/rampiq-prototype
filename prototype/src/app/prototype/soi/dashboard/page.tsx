@@ -84,6 +84,15 @@ import {
   type LiveExecutionState,
   type AdaptiveRecommendation,
 } from '@/lib/soi-execution';
+import {
+  createNarrativeFeed,
+  narrateStep,
+  narrateChainHealth,
+  narrateAdaptive,
+  narrateBriefing,
+  getVisibleNarratives,
+  type NarrativeFeed,
+} from '@/lib/soi-narrative';
 
 // ============================================================
 // TYPES
@@ -129,7 +138,9 @@ export default function ManagerDashboard() {
   const [cmdMemory, setCmdMemory] = useState<CommandMemory>(createCommandMemory());
   const [liveExec, setLiveExec] = useState<LiveExecutionState | null>(null);
   const [adaptiveRecs, setAdaptiveRecs] = useState<AdaptiveRecommendation[]>([]);
+  const [narrativeFeed, setNarrativeFeed] = useState<NarrativeFeed>(createNarrativeFeed());
   const liveExecTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevStepPhasesRef = useRef<string[]>([]);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
@@ -484,9 +495,14 @@ export default function ManagerDashboard() {
     switch (intent.type) {
       case 'summarize_operation': {
         setCopilotAnswer(null);
+        const { briefing } = narrateBriefing(
+          narrativeFeed, operationalAssessment, soiRecommendations, dispatchPlan, liveExec,
+          temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
+          temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
+        );
         setCommandResponse([
-          operationalAssessment.summary,
-          ...operationalAssessment.topPressureSources.slice(0, 3).map(ps => `· ${ps.description}`),
+          briefing.title,
+          ...briefing.sections.map(s => `${s.heading}: ${s.content}`),
         ]);
         break;
       }
@@ -681,6 +697,8 @@ export default function ManagerDashboard() {
     exec = approveLiveExecution(exec);
     setLiveExec(exec);
     setAdaptiveRecs([]);
+    setNarrativeFeed(createNarrativeFeed());
+    prevStepPhasesRef.current = exec.steps.map(s => s.phase);
 
     // Dispatch all steps sequentially with live state updates
     const plan = cmdMemory.activePlan;
@@ -689,12 +707,27 @@ export default function ManagerDashboard() {
       setLiveExec({ ...exec });
     }
 
+    // Generate initial dispatch narratives
+    const zoneLabel = plan.objective.targetZoneLabel ?? plan.objective.targetZone ?? 'target zone';
+    setNarrativeFeed(prev => {
+      let f = prev;
+      for (let i = 0; i < exec.steps.length; i++) {
+        if (exec.steps[i].phase !== 'queued') {
+          f = narrateStep(f, plan.steps[i], exec.steps[i], null, zoneLabel);
+        }
+      }
+      return f;
+    });
+    prevStepPhasesRef.current = exec.steps.map(s => s.phase);
+
     // Start tick interval for step progression
     startExecutionTick(plan);
   }
 
   function startExecutionTick(plan: ExecutionPlan) {
     if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+    const zoneLabel = plan.objective.targetZoneLabel ?? plan.objective.targetZone ?? 'target zone';
+
     liveExecTickRef.current = setInterval(() => {
       setLiveExec(prev => {
         if (!prev || !isExecutionActive(prev)) {
@@ -704,10 +737,28 @@ export default function ManagerDashboard() {
         const next = tickExecution(prev, plan);
 
         // Chain health monitoring
+        let report: import('@/lib/soi-execution').ChainMonitorReport | null = null;
         if (cmdMemory.preExecutionAssessment) {
-          const report = evaluateChainHealth(next, cmdMemory.preExecutionAssessment, operationalAssessment);
+          report = evaluateChainHealth(next, cmdMemory.preExecutionAssessment, operationalAssessment);
           const recs = generateAdaptiveRecommendations(report, next);
-          if (recs.length > 0) setAdaptiveRecs(recs);
+          if (recs.length > 0) {
+            setAdaptiveRecs(recs);
+            setNarrativeFeed(prevFeed => narrateAdaptive(prevFeed, recs, zoneLabel));
+          }
+        }
+
+        // Generate narratives for step transitions
+        const prevPhases = prevStepPhasesRef.current;
+        for (let i = 0; i < next.steps.length; i++) {
+          if (next.steps[i].phase !== prevPhases[i]) {
+            setNarrativeFeed(prevFeed => narrateStep(prevFeed, plan.steps[i], next.steps[i], report, zoneLabel));
+          }
+        }
+        prevStepPhasesRef.current = next.steps.map(s => s.phase);
+
+        // Chain health narratives
+        if (report) {
+          setNarrativeFeed(prevFeed => narrateChainHealth(prevFeed, report!, next, zoneLabel));
         }
 
         // Auto-complete: clear plan when execution terminal
@@ -2146,6 +2197,48 @@ export default function ManagerDashboard() {
                   <div style={{ fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 6, letterSpacing: '.06em' }}>
                     Deterministic operational model — not guaranteed outcome.
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* SOI Live Narrative Feed */}
+            {(() => {
+              const visible = getVisibleNarratives(narrativeFeed, 5);
+              if (visible.length === 0) return null;
+              return (
+                <div style={{ margin: '4px 16px 0' }}>
+                  {visible.map(entry => {
+                    const borderColor = entry.severity === 'critical' ? 'var(--rq-red)'
+                      : entry.severity === 'warning' ? 'var(--rq-amber)'
+                      : entry.severity === 'success' ? 'var(--rq-green)'
+                      : 'var(--rq-blue)';
+                    const labelColor = entry.severity === 'critical' ? 'var(--rq-red)'
+                      : entry.severity === 'warning' ? 'var(--rq-amber)'
+                      : entry.severity === 'success' ? 'var(--rq-green)'
+                      : 'var(--rq-ink-4)';
+                    const label = entry.pinned
+                      ? (entry.severity === 'critical' ? 'SOI ALERT' : entry.severity === 'warning' ? 'SOI WARNING' : 'SOI UPDATE')
+                      : (entry.severity === 'success' ? 'SOI UPDATE' : 'SOI');
+
+                    return (
+                      <div key={entry.id} style={{
+                        padding: '6px 10px', marginBottom: 3,
+                        background: 'var(--rq-bg-1)', borderLeft: `2px solid ${borderColor}`,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        transition: 'opacity .5s',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                          <span style={{ fontSize: 7, color: labelColor, letterSpacing: '.12em', textTransform: 'uppercase', fontWeight: 700 }}>
+                            {label}
+                          </span>
+                          {entry.pinned && <span style={{ fontSize: 7, color: borderColor }}>●</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5 }}>
+                          {entry.narrative}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
