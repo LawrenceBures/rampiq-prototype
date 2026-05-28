@@ -97,6 +97,7 @@ import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm
 import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
 import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
 import { computeFlightWorld, getAtRiskFlights, findFlight } from '@/lib/soi-context/flight-context';
+import { forecastPressure, forecastCascades, assessRecoveryConfidence, type OperationalForecast, type CascadeRisk } from '@/lib/soi-predictive';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import './mission-control.css';
@@ -526,6 +527,25 @@ export default function ManagerDashboard() {
   // ── Flight Intelligence ──
   const flightWorldMap = computeFlightWorld(temporalIncidents, temporalRecoveryActions, temporalEvents);
 
+  // ── Predictive Operations ──
+  const gatePressureMap = new Map<string, number>();
+  // Build gate pressures from spatial field computation
+  const ALL_GATES = ['52A', '52B', '52C', '52D', '52E', '52F', '52G', '52H', '52I'];
+  for (const gateId of ALL_GATES) {
+    const gi = temporalIncidents.filter(i => i.gate_id === gateId && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+    const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
+    const za = zoneId ? operationalAssessment.zoneAssessments.find(z => z.zoneId === zoneId) : null;
+    const p = Math.min(100, Math.round(gi.reduce((s, i) => s + ({ CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 }[i.severity] ?? 1) * 12, 0) + (za ? za.pressure * 0.2 : 0)));
+    gatePressureMap.set(gateId, p);
+  }
+  let forecast: OperationalForecast | null = null;
+  let cascadeRisks: CascadeRisk[] = [];
+  try {
+    forecast = forecastPressure(operationalAssessment, temporalIncidents, temporalRecoveryActions, gatePressureMap);
+    cascadeRisks = forecastCascades(operationalAssessment, forecast.zones);
+  } catch { /* keep null */ }
+  const recoveryConf = assessRecoveryConfidence(temporalIncidents, temporalRecoveryActions, selectedZoneId ?? undefined);
+
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
   const currentFilterCount = countActiveFilters(filters);
@@ -776,7 +796,30 @@ export default function ManagerDashboard() {
           return;
         }
 
-        // E. Weather check (before copilot)
+        // E. Predictive queries
+        if (/\b(?:what.*(?:worse|next|happen.*nothing)|where.*pressure.*mov|how\s+likely.*stab|do\s+nothing|forecast|predict)/i.test(raw)) {
+          if (forecast) {
+            const cascadeNote = cascadeRisks.length > 0 ? ` Cascade risk: ${cascadeRisks[0].direction} (${cascadeRisks[0].transferLikelihood}% likely, ~${cascadeRisks[0].estimatedMinutes}m).` : '';
+            setCopilotAnswer({
+              title: 'Operational Forecast',
+              answer: `${forecast.summary}${cascadeNote} Recovery confidence: ${recoveryConf.score}% (${recoveryConf.overallConfidence}). Estimated stabilization: ${recoveryConf.estimatedStabilizationMin}m.`,
+              confidence: forecast.globalConfidence,
+              bullets: [
+                ...forecast.zones.filter(z => z.trend !== 'stable').map(z => `${z.zoneLabel}: ${z.currentPressure} → ${z.pressure15m} (+15m) [${z.trend}]`),
+                ...cascadeRisks.slice(0, 2).map(cr => `Cascade: ${cr.direction} — ${cr.transferLikelihood}% likely`),
+                ...recoveryConf.weaknesses.slice(0, 2),
+              ],
+              assumptions: ['Assumes no new critical incidents', 'Based on current recovery trajectory'],
+              recommendedNextAction: forecast.globalTrend === 'rising' ? 'Intervene before pressure escalates further' : undefined,
+              source: 'deterministic_operational_model',
+            });
+            setCommandResponse(null);
+            setCommandInput('');
+            return;
+          }
+        }
+
+        // F. Weather check (before copilot)
         if (isWeatherQuestion(raw)) {
           setCommandResponse(null);
           setCopilotAnswer({ title: 'Weather', answer: 'Fetching weather...', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
@@ -1899,7 +1942,6 @@ export default function ManagerDashboard() {
   }
 
   // Derived data for spatial field
-  const ALL_GATES = ['52A', '52B', '52C', '52D', '52E', '52F', '52G', '52H', '52I'];
   const recoveryProgress = (() => {
     const active = temporalRecoveryActions.filter(ra => ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN' && ra.status !== 'ESCALATED');
     const completed = temporalRecoveryActions.filter(ra => ra.status === 'COMPLETE');
@@ -2055,6 +2097,84 @@ export default function ManagerDashboard() {
             })}
 
             {/* Recovery progress */}
+            {/* Forecast */}
+            {forecast && forecast.globalTrend !== 'stable' && (
+              <>
+                <div className="mc-rail-title" style={{ marginTop: 16 }}>Forecast (+15m)</div>
+                {forecast.zones.filter(z => z.trend !== 'stable').map(zf => {
+                  const trendColor = zf.trend === 'rising' ? 'var(--rq-red)' : 'var(--rq-green)';
+                  const arrow = zf.trend === 'rising' ? '↑' : '↓';
+                  return (
+                    <div key={zf.zoneId} style={{
+                      padding: '8px 10px', marginBottom: 6,
+                      background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
+                      border: '1px solid rgba(255,255,255,.04)',
+                      borderLeft: `2px solid ${trendColor}`,
+                      fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <span style={{ color: 'var(--rq-ink)', fontWeight: 600 }}>{zf.zoneLabel}</span>
+                        <span style={{ color: trendColor, fontWeight: 700 }}>{zf.currentPressure} {arrow} {zf.pressure15m}</span>
+                      </div>
+                      <div style={{ fontSize: 7, color: 'rgba(255,255,255,.2)' }}>{zf.drivers[0] ?? ''}</div>
+                      <div style={{ fontSize: 7, color: 'rgba(255,255,255,.15)', marginTop: 2 }}>
+                        conf: {zf.confidence}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* Cascade risks */}
+            {cascadeRisks.length > 0 && (
+              <>
+                <div className="mc-rail-title" style={{ marginTop: 12 }}>Cascade Risk</div>
+                {cascadeRisks.slice(0, 2).map((cr, i) => (
+                  <div key={i} style={{
+                    padding: '8px 10px', marginBottom: 6,
+                    background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
+                    border: '1px solid rgba(255,255,255,.04)',
+                    borderLeft: '2px solid var(--rq-amber)',
+                    fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
+                  }}>
+                    <div style={{ color: 'var(--rq-amber)', fontWeight: 600, fontSize: 9, marginBottom: 2 }}>{cr.direction}</div>
+                    <div style={{ color: 'rgba(255,255,255,.25)' }}>
+                      {cr.transferLikelihood}% likely · ~{cr.estimatedMinutes}m · {cr.confidence}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Recovery Confidence */}
+            <div className="mc-rail-title" style={{ marginTop: 16 }}>Recovery Confidence</div>
+            <div style={{
+              padding: '10px 12px',
+              background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
+              border: '1px solid rgba(255,255,255,.04)',
+              marginBottom: 10, fontFamily: "'JetBrains Mono', monospace",
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{
+                  fontSize: 20, fontWeight: 800,
+                  color: recoveryConf.score >= 70 ? 'var(--rq-green)' : recoveryConf.score >= 40 ? 'var(--rq-amber)' : 'var(--rq-red)',
+                }}>{recoveryConf.score}%</span>
+                <span style={{
+                  fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase',
+                  color: recoveryConf.score >= 70 ? 'var(--rq-green)' : recoveryConf.score >= 40 ? 'var(--rq-amber)' : 'var(--rq-red)',
+                }}>{recoveryConf.overallConfidence}</span>
+              </div>
+              <div style={{ fontSize: 8, color: 'rgba(255,255,255,.2)' }}>
+                Est. stabilization: {recoveryConf.estimatedStabilizationMin}m
+              </div>
+              {recoveryConf.weaknesses.length > 0 && (
+                <div style={{ fontSize: 7, color: 'rgba(255,255,255,.15)', marginTop: 3 }}>
+                  {recoveryConf.weaknesses[0]}
+                </div>
+              )}
+            </div>
+
             <div className="mc-rail-title" style={{ marginTop: 20 }}>Recovery Progress</div>
             <div className="mc-recovery-card">
               <div className="mc-recovery-title">
