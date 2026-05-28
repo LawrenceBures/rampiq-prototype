@@ -2588,6 +2588,10 @@ export default function ManagerDashboard() {
               <span className="b">Monitoring · {operationalAssessment.zoneAssessments.length} zones</span>
             </div>
           </div>
+
+          <button onClick={() => setEditMode(true)} style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', padding: '7px 13px', borderRadius: 10, background: 'var(--elev-2)', border: '1px solid var(--line-2)', color: 'var(--ink-3)', cursor: 'pointer', transition: '.16s' }}>Edit</button>
+          <button onClick={toggleCrisis} style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.14em', textTransform: 'uppercase', padding: '7px 13px', borderRadius: 10, background: operationalAssessment.globalPressure >= 70 ? 'rgba(255,125,77,.06)' : 'var(--elev-2)', border: `1px solid ${operationalAssessment.globalPressure >= 70 ? 'rgba(255,125,77,.3)' : 'var(--line-2)'}`, color: operationalAssessment.globalPressure >= 70 ? 'var(--orange)' : 'var(--ink-3)', cursor: 'pointer', transition: '.16s' }}>Crisis</button>
+
           <div className="op-avatar" onClick={() => { clearIdentity(); setShowAccessPrompt(true); }} style={{ cursor: 'pointer' }} title="Switch operator">{operator.displayName.split(' ').map(n => n[0]).join('')}</div>
         </header>
         ))}
