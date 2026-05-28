@@ -2324,6 +2324,8 @@ export default function ManagerDashboard() {
                 flightWorld={flightWorldMap}
                 selectedGateId={selectedGateId}
                 selectedZoneId={selectedZoneId}
+                liveExec={liveExec}
+                activePlan={cmdMemory.activePlan}
                 onGateClick={gateId => {
                   setSelectedGateId(gateId === selectedGateId ? null : gateId);
                   const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
