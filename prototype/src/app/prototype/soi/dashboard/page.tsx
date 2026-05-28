@@ -96,6 +96,7 @@ import {
 import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
 import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
 import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
+import { computeFlightWorld, getAtRiskFlights, findFlight } from '@/lib/soi-context/flight-context';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import './mission-control.css';
@@ -522,6 +523,9 @@ export default function ManagerDashboard() {
     console.error('[SOI Intelligence] derivation error:', err);
   }
 
+  // ── Flight Intelligence ──
+  const flightWorldMap = computeFlightWorld(temporalIncidents, temporalRecoveryActions, temporalEvents);
+
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
   const currentFilterCount = countActiveFilters(filters);
@@ -734,7 +738,45 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
-        // D. Weather check (before copilot)
+        // D. Flight query check
+        const flightMatch = raw.match(/\b([A-Z]{2}\d{3,4})\b/i);
+        if (flightMatch) {
+          const fw = findFlight(flightWorldMap, flightMatch[1]);
+          if (fw) {
+            setSelectedGateId(fw.gateId);
+            const zoneId = zones.find(z => z.gate_ids.includes(fw.gateId))?.id ?? null;
+            if (zoneId) setSelectedZoneId(zoneId);
+            const riskColor = fw.departureRisk === 'CRITICAL' || fw.departureRisk === 'HIGH' ? fw.departureRisk : '';
+            setCommandResponse([
+              `${fw.flightNumber} · ${fw.aircraft} · ${fw.route}`,
+              `Gate ${fw.gateId} · ${fw.turnPhase.replace('_', ' ')} · ${fw.minutesToDeparture}m to departure`,
+              `Departure risk: ${fw.departureRisk}${fw.riskFactors.length > 0 ? ` — ${fw.riskFactors[0]}` : ''}`,
+              ...(fw.riskFactors.slice(1, 3).map(r => `· ${r}`)),
+            ]);
+            setCopilotAnswer(null);
+            setCommandInput('');
+            return;
+          }
+        }
+
+        // Flight risk query
+        if (/\b(?:flight|departure|outbound).*(?:risk|unstable|at risk|attention|compressing)\b/i.test(raw) ||
+            /\b(?:which|what).*(?:flight|departure|turn).*(?:risk|danger|unstable|delay)\b/i.test(raw)) {
+          const atRisk = getAtRiskFlights(flightWorldMap);
+          if (atRisk.length === 0) {
+            setCommandResponse(['All departures within normal parameters. No elevated flight risk detected.']);
+          } else {
+            setCommandResponse([
+              `${atRisk.length} flight${atRisk.length > 1 ? 's' : ''} at elevated departure risk:`,
+              ...atRisk.slice(0, 5).map(f => `· ${f.flightNumber} at ${f.gateId}: ${f.departureRisk} — ${f.riskFactors[0] ?? 'elevated pressure'}`),
+            ]);
+          }
+          setCopilotAnswer(null);
+          setCommandInput('');
+          return;
+        }
+
+        // E. Weather check (before copilot)
         if (isWeatherQuestion(raw)) {
           setCommandResponse(null);
           setCopilotAnswer({ title: 'Weather', answer: 'Fetching weather...', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
@@ -2079,6 +2121,7 @@ export default function ManagerDashboard() {
               incidents={temporalIncidents}
               recoveryActions={temporalRecoveryActions}
               events={temporalEvents}
+              flightWorld={flightWorldMap}
               selectedZoneId={selectedZoneId}
               selectedGateId={selectedGateId}
               liveExec={liveExec}

@@ -19,6 +19,7 @@ import type { ExecutionPlan } from '@/lib/soi-agentic/execution-planner';
 import type { Incident } from '@/lib/lifecycle-types';
 import type { RecoveryAction } from '@/lib/lifecycle-types';
 import type { SoiEvent } from '@/lib/soi-types';
+import type { FlightWorld } from '@/lib/soi-context/flight-context';
 
 // ============================================================
 // TYPES
@@ -30,6 +31,7 @@ interface Props {
   incidents: readonly Incident[];
   recoveryActions?: readonly RecoveryAction[];
   events: readonly SoiEvent[];
+  flightWorld?: Map<string, FlightWorld>;
   selectedZoneId?: string | null;
   selectedGateId?: string | null;
   liveExec?: LiveExecutionState | null;
@@ -176,7 +178,7 @@ function computeGateWorld(
 // COMPONENT
 // ============================================================
 
-export function SpatialField({ assessment, gates, incidents, recoveryActions, events, selectedZoneId, selectedGateId, liveExec, activePlan, onGateClick }: Props) {
+export function SpatialField({ assessment, gates, incidents, recoveryActions, events, flightWorld, selectedZoneId, selectedGateId, liveExec, activePlan, onGateClick }: Props) {
   const [hoveredGate, setHoveredGate] = useState<string | null>(null);
   const zoneMap = new Map<string, ZoneAssessment>();
   for (const za of assessment.zoneAssessments) zoneMap.set(za.zoneId, za);
@@ -345,17 +347,31 @@ export function SpatialField({ assessment, gates, incidents, recoveryActions, ev
               {/* Gate letter */}
               <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle" fill={nodeColor} fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace">{gateId.replace('52', '')}</text>
 
-              {/* Turn state label */}
-              <text x={pos.x} y={pos.y + 34} textAnchor="middle" fill={turnColor} fontSize="6" letterSpacing="0.14em" fontFamily="'JetBrains Mono', monospace" opacity="0.6">{TURN_LABEL[gw.turnState]}</text>
-
-              {/* Pressure */}
-              {gw.pressure > 0 && <text x={pos.x} y={pos.y + 44} textAnchor="middle" fill={nodeColor} fontSize="9" fontWeight="600" fontFamily="'JetBrains Mono', monospace" opacity="0.6">{gw.pressure}</text>}
+              {/* Flight number + carrier */}
+              {(() => {
+                const fw = flightWorld?.get(gateId);
+                if (!fw) return (
+                  <text x={pos.x} y={pos.y + 34} textAnchor="middle" fill={turnColor} fontSize="6" letterSpacing="0.14em" fontFamily="'JetBrains Mono', monospace" opacity="0.5">{TURN_LABEL[gw.turnState]}</text>
+                );
+                const riskColor = fw.departureRisk === 'CRITICAL' ? '#ff5c5c' : fw.departureRisk === 'HIGH' ? '#f5b13d' : fw.departureRisk === 'MEDIUM' ? '#d4a04a' : 'rgba(255,255,255,.25)';
+                const depLabel = fw.isOverdue ? `+${Math.abs(fw.minutesToDeparture)}m` : fw.minutesToDeparture <= 0 ? 'NOW' : `${fw.minutesToDeparture}m`;
+                return (
+                  <>
+                    {/* Flight ID */}
+                    <text x={pos.x} y={pos.y + 34} textAnchor="middle" fill="rgba(255,255,255,.35)" fontSize="8" fontWeight="600" fontFamily="'JetBrains Mono', monospace">{fw.flightNumber}</text>
+                    {/* Departure timer + risk */}
+                    <text x={pos.x} y={pos.y + 45} textAnchor="middle" fill={riskColor} fontSize="7" fontWeight="600" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.06em">
+                      {depLabel}{fw.departureRisk !== 'LOW' ? ` · ${fw.departureRisk}` : ''}
+                    </text>
+                  </>
+                );
+              })()}
 
               {/* Staffing dots */}
               {gw.staffingLevel > 0 && (
                 <g>
                   {Array.from({ length: gw.staffingLevel }).map((_, si) => (
-                    <circle key={si} cx={pos.x - 8 + si * 6} cy={pos.y + 52} r={2} fill="#5aa9ff" opacity="0.4" />
+                    <circle key={si} cx={pos.x - 8 + si * 6} cy={pos.y + 54} r={2} fill="#5aa9ff" opacity="0.35" />
                   ))}
                 </g>
               )}
@@ -411,24 +427,50 @@ export function SpatialField({ assessment, gates, incidents, recoveryActions, ev
         })()}
 
         {/* Hover context card */}
-        {hovered && hoveredPos && (
-          <g style={{ pointerEvents: 'none' }}>
-            <rect x={hoveredPos.x + 30} y={hoveredPos.y - 50} width={140} height={80} rx={3} fill="#0c1018" fillOpacity="0.95" stroke="rgba(255,255,255,.08)" strokeWidth="1" />
-            <text x={hoveredPos.x + 38} y={hoveredPos.y - 34} fill={pColor(hovered.pressure)} fontSize="10" fontWeight="700" fontFamily="'JetBrains Mono', monospace">Gate {hovered.gateId}</text>
-            <text x={hoveredPos.x + 38} y={hoveredPos.y - 20} fill="#6b7585" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">{TURN_LABEL[hovered.turnState]} · P{hovered.pressure}</text>
-            <text x={hoveredPos.x + 38} y={hoveredPos.y - 6} fill="rgba(255,255,255,.3)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
-              {hovered.incidents > 0 ? `${hovered.incidents} incident${hovered.incidents > 1 ? 's' : ''}` : 'No incidents'}
-              {hovered.activeRecoveries > 0 ? ` · ${hovered.activeRecoveries} recovery` : ''}
-            </text>
-            <text x={hoveredPos.x + 38} y={hoveredPos.y + 8} fill="rgba(255,255,255,.25)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
-              {hovered.hasEquipmentFailure ? 'Equipment issue' : hovered.equipmentIds.length > 0 ? `${hovered.equipmentIds.length} equip` : ''}
-              {hovered.staffingLevel > 0 ? ` · ${hovered.staffingLevel} crew` : ' · No crew'}
-            </text>
-            {hovered.oldestIncidentMin > 0 && (
-              <text x={hoveredPos.x + 38} y={hoveredPos.y + 20} fill="rgba(255,255,255,.2)" fontSize="7" fontFamily="'JetBrains Mono', monospace">Oldest: {hovered.oldestIncidentMin}m</text>
-            )}
-          </g>
-        )}
+        {hovered && hoveredPos && (() => {
+          const fw = flightWorld?.get(hovered.gateId);
+          const cx = hoveredPos.x + 30;
+          const cy = hoveredPos.y - 55;
+          const riskColor = fw?.departureRisk === 'CRITICAL' ? '#ff5c5c' : fw?.departureRisk === 'HIGH' ? '#f5b13d' : 'rgba(255,255,255,.3)';
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <rect x={cx} y={cy} width={150} height={fw ? 95 : 80} rx={3} fill="#0a0e16" fillOpacity="0.96" stroke="rgba(255,255,255,.07)" strokeWidth="1" />
+              {/* Gate + flight */}
+              <text x={cx + 8} y={cy + 14} fill={pColor(hovered.pressure)} fontSize="10" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
+                {hovered.gateId}{fw ? ` · ${fw.flightNumber}` : ''}
+              </text>
+              {fw && (
+                <text x={cx + 8} y={cy + 26} fill="rgba(255,255,255,.25)" fontSize="7" fontFamily="'JetBrains Mono', monospace">{fw.aircraft} · {fw.route}</text>
+              )}
+              {/* Status */}
+              <text x={cx + 8} y={cy + (fw ? 40 : 28)} fill="#6b7585" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.08em">
+                {TURN_LABEL[hovered.turnState]} · P{hovered.pressure}
+                {fw ? ` · ${fw.minutesToDeparture}m to dep` : ''}
+              </text>
+              {/* Risk */}
+              {fw && fw.departureRisk !== 'LOW' && (
+                <text x={cx + 8} y={cy + 52} fill={riskColor} fontSize="7" fontWeight="600" fontFamily="'JetBrains Mono', monospace">
+                  Departure Risk: {fw.departureRisk}
+                </text>
+              )}
+              {/* Incidents */}
+              <text x={cx + 8} y={cy + (fw ? 64 : 42)} fill="rgba(255,255,255,.25)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+                {hovered.incidents > 0 ? `${hovered.incidents} incident${hovered.incidents > 1 ? 's' : ''}` : 'No incidents'}
+                {hovered.activeRecoveries > 0 ? ` · ${hovered.activeRecoveries} rcvry` : ''}
+              </text>
+              {/* Equipment + crew */}
+              <text x={cx + 8} y={cy + (fw ? 76 : 56)} fill="rgba(255,255,255,.2)" fontSize="7" fontFamily="'JetBrains Mono', monospace">
+                {hovered.hasEquipmentFailure ? 'Equip issue' : hovered.equipmentIds.length > 0 ? `${hovered.equipmentIds.length} equip` : ''}
+                {hovered.staffingLevel > 0 ? ` · ${hovered.staffingLevel} crew` : ' · No crew'}
+              </text>
+              {fw && fw.riskFactors.length > 0 && (
+                <text x={cx + 8} y={cy + 88} fill="rgba(255,255,255,.15)" fontSize="6" fontFamily="'JetBrains Mono', monospace">
+                  {fw.riskFactors[0]}
+                </text>
+              )}
+            </g>
+          );
+        })()}
 
         {/* Coordinates */}
         <text x="30" y="582" fill="#1c2230" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">LAX T5 RAMP</text>
