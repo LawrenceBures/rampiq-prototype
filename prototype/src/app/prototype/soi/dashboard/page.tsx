@@ -61,23 +61,29 @@ import {
   buildExecutionPlan,
   buildAlternativePlan,
   authorizeExecution,
-  createExecutionState,
-  approveExecution,
-  cancelExecution,
-  executeNextStep,
-  executionProgress,
-  monitorPostExecution,
   createCommandMemory,
   stagePlan,
   updateExecution,
   completePlan,
   clearCommandMemory,
   hasActivePlan,
-  hasActiveExecution,
   type CommandMemory,
   type ExecutionPlan,
-  type ExecutionState,
 } from '@/lib/soi-agentic';
+import {
+  createLiveExecution,
+  approveLiveExecution,
+  cancelLiveExecution,
+  dispatchNextStep as liveDispatchNext,
+  tickExecution,
+  isExecutionActive,
+  executionProgressSummary,
+  evaluateChainHealth,
+  generateAdaptiveRecommendations,
+  formatTimelineTime,
+  type LiveExecutionState,
+  type AdaptiveRecommendation,
+} from '@/lib/soi-execution';
 
 // ============================================================
 // TYPES
@@ -121,7 +127,9 @@ export default function ManagerDashboard() {
   const [lastInferredFrom, setLastInferredFrom] = useState<string[]>([]);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
   const [cmdMemory, setCmdMemory] = useState<CommandMemory>(createCommandMemory());
-  const [executingPlan, setExecutingPlan] = useState(false);
+  const [liveExec, setLiveExec] = useState<LiveExecutionState | null>(null);
+  const [adaptiveRecs, setAdaptiveRecs] = useState<AdaptiveRecommendation[]>([]);
+  const liveExecTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
@@ -554,12 +562,13 @@ export default function ManagerDashboard() {
           break;
         }
         if (agenticParsed.intent === 'show_plan_status') {
-          if (cmdMemory.activeExecution) {
-            const prog = executionProgress(cmdMemory.activeExecution);
+          if (liveExec && isExecutionActive(liveExec)) {
+            const prog = executionProgressSummary(liveExec);
             setCommandResponse([
               `Execution: ${prog.completed}/${prog.total} steps (${prog.percentage}%)`,
-              `Status: ${cmdMemory.activeExecution.status}`,
+              `Phase: ${liveExec.phase}`,
               ...(prog.failed > 0 ? [`${prog.failed} steps failed`] : []),
+              ...(prog.stalled > 0 ? [`${prog.stalled} steps stalled`] : []),
             ]);
           } else if (cmdMemory.activePlan) {
             setCommandResponse([`Plan staged: ${cmdMemory.activePlan.summary}`, 'Say "execute" or "approve" to begin.']);
@@ -579,8 +588,9 @@ export default function ManagerDashboard() {
           setCopilotAnswer(null);
           break;
         }
-        if (agenticParsed.intent === 'continue_recovery' && hasActiveExecution(cmdMemory)) {
-          handleExecuteNextStep();
+        if (agenticParsed.intent === 'continue_recovery' && liveExec && isExecutionActive(liveExec)) {
+          setCommandResponse(['Recovery chain is progressing. Use the live execution panel to monitor.']);
+          setCopilotAnswer(null);
           break;
         }
 
@@ -664,43 +674,58 @@ export default function ManagerDashboard() {
     refresh();
   }
 
-  // ── Agentic plan execution ──
+  // ── Live Execution Engine ──
   async function handleApprovePlan() {
     if (!cmdMemory.activePlan) return;
-    setExecutingPlan(true);
-    let state = createExecutionState(cmdMemory.activePlan);
-    state = approveExecution(state);
-    setCmdMemory(updateExecution(cmdMemory, state));
+    let exec = createLiveExecution(cmdMemory.activePlan);
+    exec = approveLiveExecution(exec);
+    setLiveExec(exec);
+    setAdaptiveRecs([]);
 
-    // Execute all steps sequentially
-    for (let i = 0; i < cmdMemory.activePlan.steps.length; i++) {
-      state = await executeNextStep(state, cmdMemory.activePlan, operator.userId, operator.role);
-      setCmdMemory(prev => updateExecution(prev, state));
+    // Dispatch all steps sequentially with live state updates
+    const plan = cmdMemory.activePlan;
+    for (let i = 0; i < plan.steps.length; i++) {
+      exec = await liveDispatchNext(exec, plan, operator.userId, operator.role);
+      setLiveExec({ ...exec });
     }
 
-    setExecutingPlan(false);
-    if (state.status === 'completed' || state.status === 'failed') {
-      const report = monitorPostExecution(cmdMemory.activePlan, state, cmdMemory.preExecutionAssessment ?? operationalAssessment, operationalAssessment);
-      setCommandResponse([
-        `Execution ${state.status}. ${report.observations[0] ?? ''}`,
-        ...report.observations.slice(1).map(o => `· ${o}`),
-        ...(report.recommendedAction ? [`→ ${report.recommendedAction}`] : []),
-      ]);
-      setCmdMemory(prev => completePlan(prev));
-    }
-    refreshRecovery();
-    refresh();
+    // Start tick interval for step progression
+    startExecutionTick(plan);
   }
 
-  async function handleExecuteNextStep() {
-    if (!cmdMemory.activePlan || !cmdMemory.activeExecution) return;
-    setExecutingPlan(true);
-    const state = await executeNextStep(cmdMemory.activeExecution, cmdMemory.activePlan, operator.userId, operator.role);
-    setCmdMemory(prev => updateExecution(prev, state));
-    setExecutingPlan(false);
-    refreshRecovery();
-    refresh();
+  function startExecutionTick(plan: ExecutionPlan) {
+    if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+    liveExecTickRef.current = setInterval(() => {
+      setLiveExec(prev => {
+        if (!prev || !isExecutionActive(prev)) {
+          if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+          return prev;
+        }
+        const next = tickExecution(prev, plan);
+
+        // Chain health monitoring
+        if (cmdMemory.preExecutionAssessment) {
+          const report = evaluateChainHealth(next, cmdMemory.preExecutionAssessment, operationalAssessment);
+          const recs = generateAdaptiveRecommendations(report, next);
+          if (recs.length > 0) setAdaptiveRecs(recs);
+        }
+
+        // Auto-complete: clear plan when execution terminal
+        if (next.phase === 'completed' || next.phase === 'failed') {
+          if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+          setCmdMemory(prev2 => completePlan(prev2));
+          refreshRecovery();
+          refresh();
+        }
+        return next;
+      });
+    }, 2000);
   }
+
+  // Cleanup tick on unmount
+  useEffect(() => {
+    return () => { if (liveExecTickRef.current) clearInterval(liveExecTickRef.current); };
+  }, []);
 
   // EventCard — extracted to components/soi/EventCard.tsx
 
@@ -1927,126 +1952,203 @@ export default function ManagerDashboard() {
               </div>
             )}
 
-            {/* SOI Command Center — staged execution plan */}
-            {cmdMemory.activePlan && !cmdMemory.activeExecution?.status?.startsWith('complet') && (
-              <div style={{
-                margin: '6px 16px 0', padding: '12px',
-                background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-                borderLeft: '3px solid var(--rq-accent)',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                <div style={{ fontSize: 8, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>
-                  SOI Objective
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>
-                  {cmdMemory.activePlan.objective.operationalGoal}
-                </div>
-                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 8 }}>
-                  {cmdMemory.activePlan.summary}
-                </div>
+            {/* SOI Live Execution Panel */}
+            {(cmdMemory.activePlan || liveExec) && (() => {
+              const plan = cmdMemory.activePlan;
+              const exec = liveExec;
+              const isLive = exec && isExecutionActive(exec);
+              const progress = exec ? executionProgressSummary(exec) : null;
+              const phaseColor = exec?.phase === 'completed' ? 'var(--rq-green)'
+                : exec?.phase === 'failed' ? 'var(--rq-red)'
+                : exec?.phase === 'blocked' ? 'var(--rq-amber)'
+                : isLive ? 'var(--rq-accent)' : 'var(--rq-accent)';
 
-                {/* Steps */}
-                <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Modeled Recovery Plan
-                </div>
-                {cmdMemory.activePlan.steps.map((step, i) => {
-                  const stepState = cmdMemory.activeExecution?.steps[i];
-                  const statusColor = stepState?.status === 'completed' ? 'var(--rq-green)'
-                    : stepState?.status === 'failed' ? 'var(--rq-red)'
-                    : stepState?.status === 'executing' ? 'var(--rq-amber)'
-                    : 'var(--rq-ink-4)';
-                  return (
-                    <div key={step.stepId} style={{
-                      padding: '4px 8px', marginBottom: 2,
-                      background: 'var(--rq-bg-2)',
-                      borderLeft: `2px solid ${statusColor}`,
-                      display: 'flex', alignItems: 'center', gap: 8,
-                    }}>
-                      <span style={{ fontSize: 10, color: statusColor, fontWeight: 700, width: 16, flexShrink: 0 }}>
-                        {stepState?.status === 'completed' ? '✓' : stepState?.status === 'failed' ? '✗' : step.sequence}
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 10, color: 'var(--rq-ink)' }}>{step.title}</div>
-                        <div style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedImpact}</div>
-                      </div>
-                      <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedDurationMinutes}m</span>
-                    </div>
-                  );
-                })}
-
-                {/* Metrics */}
-                <div style={{ display: 'flex', gap: 16, margin: '8px 0', fontSize: 9 }}>
-                  <div>
-                    <span style={{ color: 'var(--rq-ink-4)' }}>est. stabilization </span>
-                    <span style={{ color: 'var(--rq-ink-2)' }}>{cmdMemory.activePlan.totalEstimatedMinutes}m</span>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--rq-ink-4)' }}>confidence </span>
-                    <span style={{ color: cmdMemory.activePlan.confidence >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
-                      {cmdMemory.activePlan.confidence}%
+              return (
+                <div style={{
+                  margin: '6px 16px 0', padding: '12px',
+                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+                  borderLeft: `3px solid ${phaseColor}`,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>
+                  {/* Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 8, color: phaseColor, letterSpacing: '.14em', textTransform: 'uppercase' }}>
+                      {isLive ? 'Recovery Chain Active' : exec?.phase === 'completed' ? 'Recovery Complete' : exec?.phase === 'failed' ? 'Recovery Failed' : 'SOI Objective'}
                     </span>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--rq-ink-4)' }}>pressure −</span>
-                    <span style={{ color: 'var(--rq-green)' }}>{cmdMemory.activePlan.estimatedPressureReduction}</span>
-                  </div>
-                </div>
-
-                {/* Tradeoffs */}
-                {cmdMemory.activePlan.tradeoffs.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 2 }}>Tradeoffs</div>
-                    {cmdMemory.activePlan.tradeoffs.map((t, i) => (
-                      <div key={i} style={{ fontSize: 8, color: 'var(--rq-amber)', lineHeight: 1.3 }}>· {t}</div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Action buttons */}
-                {!replayMode && (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {(!cmdMemory.activeExecution || cmdMemory.activeExecution.status === 'staged') && (
-                      <button type="button" disabled={executingPlan}
-                        onClick={() => { handleApprovePlan(); }}
-                        style={{
-                          flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
-                          textTransform: 'uppercase', fontFamily: 'inherit',
-                          background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
-                          cursor: executingPlan ? 'default' : 'pointer', opacity: executingPlan ? 0.5 : 1,
-                        }}>
-                        {executingPlan ? 'Executing...' : 'Approve Execution'}
-                      </button>
+                    {isLive && <span className="rq-pulse" />}
+                    {progress && isLive && (
+                      <span style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--rq-ink-3)' }}>
+                        {progress.completed}/{progress.total} steps
+                      </span>
                     )}
-                    {hasActiveExecution(cmdMemory) && (
-                      <button type="button" disabled={executingPlan}
-                        onClick={handleExecuteNextStep}
-                        style={{
-                          flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
-                          textTransform: 'uppercase', fontFamily: 'inherit',
-                          background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
-                          cursor: executingPlan ? 'default' : 'pointer', opacity: executingPlan ? 0.5 : 1,
-                        }}>
-                        {executingPlan ? 'Executing...' : 'Continue Recovery'}
-                      </button>
-                    )}
-                    <button type="button"
-                      onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}
-                      style={{
-                        flex: 1, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
-                        textTransform: 'uppercase', fontFamily: 'inherit',
-                        background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                        cursor: 'pointer',
+                  </div>
+
+                  {plan && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>
+                        {plan.objective.operationalGoal}
+                      </div>
+                      <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 8 }}>
+                        {plan.summary}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Live steps */}
+                  <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4 }}>
+                    {isLive ? 'Live Recovery Chain' : 'Modeled Recovery Plan'}
+                  </div>
+                  {(plan?.steps ?? []).map((step, i) => {
+                    const ls = exec?.steps[i];
+                    const stepColor = ls?.phase === 'completed' ? 'var(--rq-green)'
+                      : ls?.phase === 'failed' ? 'var(--rq-red)'
+                      : ls?.phase === 'stalled' ? 'var(--rq-amber)'
+                      : ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged' ? 'var(--rq-blue)'
+                      : 'var(--rq-ink-4)';
+                    const stepLabel = ls?.phase === 'completed' ? '✓'
+                      : ls?.phase === 'failed' ? '✗'
+                      : ls?.phase === 'stalled' ? '!'
+                      : ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged' ? '▸'
+                      : `${step.sequence}`;
+                    const isActiveStep = ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged';
+
+                    return (
+                      <div key={step.stepId} style={{
+                        padding: '5px 8px', marginBottom: 2,
+                        background: isActiveStep ? 'var(--rq-bg-3)' : 'var(--rq-bg-2)',
+                        borderLeft: `2px solid ${stepColor}`,
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        transition: 'background .3s',
                       }}>
-                      Cancel
-                    </button>
-                  </div>
-                )}
+                        <span style={{ fontSize: 11, color: stepColor, fontWeight: 700, width: 16, flexShrink: 0, textAlign: 'center' }}>
+                          {stepLabel}
+                        </span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 10, color: isActiveStep ? 'var(--rq-ink)' : ls?.phase === 'completed' ? 'var(--rq-ink-2)' : 'var(--rq-ink)' }}>
+                            {step.title}
+                          </div>
+                          <div style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>
+                            {ls?.phase && ls.phase !== 'queued' ? ls.phase.toUpperCase() : step.estimatedImpact}
+                          </div>
+                        </div>
+                        <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedDurationMinutes}m</span>
+                      </div>
+                    );
+                  })}
 
-                <div style={{ fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 6, letterSpacing: '.06em' }}>
-                  Deterministic operational model — not guaranteed outcome.
+                  {/* Metrics */}
+                  {plan && (
+                    <div style={{ display: 'flex', gap: 16, margin: '8px 0', fontSize: 9 }}>
+                      <div>
+                        <span style={{ color: 'var(--rq-ink-4)' }}>est. </span>
+                        <span style={{ color: 'var(--rq-ink-2)' }}>{plan.totalEstimatedMinutes}m</span>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--rq-ink-4)' }}>confidence </span>
+                        <span style={{ color: plan.confidence >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
+                          {plan.confidence}%
+                        </span>
+                      </div>
+                      {progress && (
+                        <div>
+                          <span style={{ color: 'var(--rq-ink-4)' }}>progress </span>
+                          <span style={{ color: progress.percentage === 100 ? 'var(--rq-green)' : 'var(--rq-ink-2)' }}>
+                            {progress.percentage}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Adaptive recommendations */}
+                  {adaptiveRecs.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <div style={{ fontSize: 8, color: 'var(--rq-amber)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+                        Adaptive Warning
+                      </div>
+                      {adaptiveRecs.map(ar => (
+                        <div key={ar.id} style={{
+                          padding: '4px 8px', marginBottom: 2,
+                          background: ar.urgency === 'immediate' ? 'rgba(255,92,92,.04)' : 'rgba(245,177,61,.04)',
+                          borderLeft: `2px solid ${ar.urgency === 'immediate' ? 'var(--rq-red)' : 'var(--rq-amber)'}`,
+                          fontSize: 9, color: 'var(--rq-ink-2)', lineHeight: 1.3,
+                        }}>
+                          <div style={{ fontWeight: 600 }}>{ar.title}</div>
+                          <div style={{ fontSize: 8, color: 'var(--rq-ink-3)' }}>{ar.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tradeoffs */}
+                  {plan && plan.tradeoffs.length > 0 && !isLive && (
+                    <div style={{ marginBottom: 6 }}>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 2 }}>Tradeoffs</div>
+                      {plan.tradeoffs.map((t, i) => (
+                        <div key={i} style={{ fontSize: 8, color: 'var(--rq-amber)', lineHeight: 1.3 }}>· {t}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Timeline (last 6 entries) */}
+                  {exec && exec.timeline.entries.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 3 }}>
+                        Execution Timeline
+                      </div>
+                      {exec.timeline.entries.slice(-6).map(entry => (
+                        <div key={entry.id} style={{
+                          display: 'flex', gap: 8, padding: '2px 0',
+                          fontSize: 8, color: entry.severity === 'critical' ? 'var(--rq-red)' : entry.severity === 'warning' ? 'var(--rq-amber)' : entry.severity === 'success' ? 'var(--rq-green)' : 'var(--rq-ink-3)',
+                        }}>
+                          <span style={{ color: 'var(--rq-ink-4)', width: 36, flexShrink: 0 }}>
+                            {formatTimelineTime(entry.timestamp, exec.timeline.startedAt)}
+                          </span>
+                          <span>{entry.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  {!replayMode && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {!exec && plan && (
+                        <button type="button"
+                          onClick={handleApprovePlan}
+                          style={{
+                            flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
+                            textTransform: 'uppercase', fontFamily: 'inherit',
+                            background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
+                            cursor: 'pointer',
+                          }}>
+                          Approve Execution
+                        </button>
+                      )}
+                      <button type="button"
+                        onClick={() => {
+                          if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
+                          setLiveExec(null);
+                          setAdaptiveRecs([]);
+                          setCmdMemory(clearCommandMemory(cmdMemory));
+                        }}
+                        style={{
+                          flex: 1, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
+                          textTransform: 'uppercase', fontFamily: 'inherit',
+                          background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                          cursor: 'pointer',
+                        }}>
+                        {isLive ? 'Abort' : exec ? 'Dismiss' : 'Cancel'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 6, letterSpacing: '.06em' }}>
+                    Deterministic operational model — not guaranteed outcome.
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Context indicator */}
             {(() => {
