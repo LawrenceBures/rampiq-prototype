@@ -166,6 +166,7 @@ export default function ManagerDashboard() {
   const prevIdsRef = useRef<Set<string>>(new Set());
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
 
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
@@ -677,12 +678,32 @@ export default function ManagerDashboard() {
       }
       case 'show_zone': {
         setCopilotAnswer(null);
+        // Check if it's a single gate reference
+        const gateMatch = intent.zonePattern.match(/^(52[A-I])$/i);
+        if (gateMatch) {
+          const gate = gateMatch[1].toUpperCase();
+          setSelectedGateId(gate);
+          const zoneId = zones.find(z => z.gate_ids.includes(gate))?.id ?? null;
+          if (zoneId) setSelectedZoneId(zoneId);
+          // Per-gate summary
+          const gateInc = temporalIncidents.filter(i => i.gate_id === gate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+          if (gateInc.length > 0) {
+            setCommandResponse([
+              `Gate ${gate}: ${gateInc.length} active incident${gateInc.length > 1 ? 's' : ''}`,
+              ...gateInc.slice(0, 3).map(i => `· ${i.severity} — ${i.title.slice(0, 50)}`),
+            ]);
+          } else {
+            setCommandResponse([`Gate ${gate}: No active incidents. Gate operational.`]);
+          }
+          break;
+        }
         const zoneId = resolveZonePattern(intent.zonePattern, zones);
         if (zoneId) {
           setSelectedZoneId(zoneId);
+          setSelectedGateId(null);
           setCommandResponse([`Focused on zone: ${zones.find(z => z.id === zoneId)?.label ?? zoneId}`]);
         } else {
-          setCommandResponse([`Could not resolve "${intent.zonePattern}" to a known zone.`]);
+          setCommandResponse([`Could not resolve "${intent.zonePattern}" to a known zone or gate.`]);
         }
         break;
       }
@@ -1030,8 +1051,17 @@ export default function ManagerDashboard() {
     switch (li.intent) {
       case 'focus_gate': {
         if (targetGate) {
+          setSelectedGateId(targetGate);
           if (targetZone) setSelectedZoneId(targetZone);
-          setCommandResponse([`Focused on gate ${targetGate}${targetZone ? ` (${zones.find(z => z.id === targetZone)?.label ?? targetZone})` : ''}.`]);
+          const gateInc = temporalIncidents.filter(i => i.gate_id === targetGate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+          if (gateInc.length > 0) {
+            setCommandResponse([
+              `Gate ${targetGate}: ${gateInc.length} active incident${gateInc.length > 1 ? 's' : ''}`,
+              ...gateInc.slice(0, 3).map(i => `· ${i.severity} — ${i.title.slice(0, 50)}`),
+            ]);
+          } else {
+            setCommandResponse([`Gate ${targetGate}: No active incidents. Gate operational.`]);
+          }
           setCopilotAnswer(null);
         }
         break;
@@ -2036,10 +2066,14 @@ export default function ManagerDashboard() {
             <SpatialField
               assessment={operationalAssessment}
               gates={ALL_GATES}
+              incidents={temporalIncidents}
+              events={temporalEvents}
               selectedZoneId={selectedZoneId}
+              selectedGateId={selectedGateId}
               liveExec={liveExec}
               activePlan={cmdMemory.activePlan}
               onGateClick={gateId => {
+                setSelectedGateId(gateId === selectedGateId ? null : gateId);
                 const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
                 if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
               }}
