@@ -102,7 +102,11 @@ import { compareScenarios, simulateScenario, type Scenario } from '@/lib/soi-sim
 import { analyzeOperationalContext, analyzeHistoricalEffectiveness } from '@/lib/soi-adaptive';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
+import dynamic from 'next/dynamic';
 import './mission-control.css';
+
+// Lazy load 3D component (Three.js is heavy)
+const SpatialField3D = dynamic(() => import('@/components/soi/SpatialField3D').then(m => ({ default: m.SpatialField3D })), { ssr: false });
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
   routeVoiceCommand,
@@ -172,6 +176,7 @@ export default function ManagerDashboard() {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
+  const [spatialMode, setSpatialMode] = useState<'2d' | '3d'>('2d');
 
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
@@ -2287,24 +2292,45 @@ export default function ManagerDashboard() {
               </div>
             </div>
 
-            {/* Spatial gate map */}
-            <SpatialField
-              assessment={operationalAssessment}
-              gates={ALL_GATES}
-              incidents={temporalIncidents}
-              recoveryActions={temporalRecoveryActions}
-              events={temporalEvents}
-              flightWorld={flightWorldMap}
-              selectedZoneId={selectedZoneId}
-              selectedGateId={selectedGateId}
-              liveExec={liveExec}
-              activePlan={cmdMemory.activePlan}
-              onGateClick={gateId => {
-                setSelectedGateId(gateId === selectedGateId ? null : gateId);
-                const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
-                if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
-              }}
-            />
+            {/* Spatial gate map — 2D/3D toggle */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 24px 4px', gap: 4 }}>
+              <button className={`mc-dock-btn${spatialMode === '2d' ? ' active' : ''}`}
+                style={{ padding: '2px 8px', fontSize: 7 }} onClick={() => setSpatialMode('2d')}>2D Tactical</button>
+              <button className={`mc-dock-btn${spatialMode === '3d' ? ' active' : ''}`}
+                style={{ padding: '2px 8px', fontSize: 7 }} onClick={() => setSpatialMode('3d')}>3D Command</button>
+            </div>
+
+            {spatialMode === '2d' ? (
+              <SpatialField
+                assessment={operationalAssessment}
+                gates={ALL_GATES}
+                incidents={temporalIncidents}
+                recoveryActions={temporalRecoveryActions}
+                events={temporalEvents}
+                flightWorld={flightWorldMap}
+                selectedZoneId={selectedZoneId}
+                selectedGateId={selectedGateId}
+                liveExec={liveExec}
+                activePlan={cmdMemory.activePlan}
+                onGateClick={gateId => {
+                  setSelectedGateId(gateId === selectedGateId ? null : gateId);
+                  const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
+                  if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
+                }}
+              />
+            ) : (
+              <SpatialField3D
+                assessment={operationalAssessment}
+                flightWorld={flightWorldMap}
+                selectedGateId={selectedGateId}
+                selectedZoneId={selectedZoneId}
+                onGateClick={gateId => {
+                  setSelectedGateId(gateId === selectedGateId ? null : gateId);
+                  const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
+                  if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
+                }}
+              />
+            )}
 
             {/* View tabs below spatial field */}
             <div style={{
