@@ -1,19 +1,26 @@
 'use client';
 
 /**
- * SOI Spatial Operations Field
+ * SOI Spatial Operations Field v2
  *
- * SVG gate topology with pressure-colored overlays,
- * cascade path visualization, and incident markers.
- * Uses real operational state data.
+ * Living operational environment with:
+ * - Data-driven pressure heat rendering
+ * - Cascade flow animation on cross-zone paths
+ * - Recovery chain visualization
+ * - Incident markers with severity glow
+ * - Environmental depth and motion
  */
 
 import type { OperationalAssessment, ZoneAssessment } from '@/lib/soi-intelligence/operational-reasoning';
+import type { LiveExecutionState } from '@/lib/soi-execution/live-execution-engine';
+import type { ExecutionPlan } from '@/lib/soi-agentic/execution-planner';
 
 interface Props {
   assessment: OperationalAssessment;
   gates: string[];
   selectedZoneId?: string | null;
+  liveExec?: LiveExecutionState | null;
+  activePlan?: ExecutionPlan | null;
   onGateClick?: (gateId: string) => void;
 }
 
@@ -23,29 +30,22 @@ const GATE_LABELS: Record<string, string> = {
   '52G': 'Golf', '52H': 'Hotel', '52I': 'India',
 };
 
-// Gate positions in SVG viewBox (1000x600)
 const GATE_POS: Record<string, { x: number; y: number }> = {
   '52A': { x: 140, y: 130 }, '52B': { x: 320, y: 100 }, '52C': { x: 500, y: 130 },
   '52D': { x: 180, y: 300 }, '52E': { x: 400, y: 280 }, '52F': { x: 620, y: 300 },
   '52G': { x: 220, y: 470 }, '52H': { x: 500, y: 450 }, '52I': { x: 740, y: 470 },
 };
 
-// Zone boundaries for grouping
 const ZONE_GATES: Record<string, string[]> = {
   'GATES-52ABC': ['52A', '52B', '52C'],
   'GATES-52DEF': ['52D', '52E', '52F'],
   'GATES-52GHI': ['52G', '52H', '52I'],
 };
 
-// Taxiway paths connecting gates
 const TAXIWAYS: Array<{ from: string; to: string }> = [
-  // Within zone A-C
   { from: '52A', to: '52B' }, { from: '52B', to: '52C' },
-  // Within zone D-F
   { from: '52D', to: '52E' }, { from: '52E', to: '52F' },
-  // Within zone G-I
   { from: '52G', to: '52H' }, { from: '52H', to: '52I' },
-  // Cross-zone connectors (main taxiway)
   { from: '52B', to: '52E' }, { from: '52E', to: '52H' },
   { from: '52A', to: '52D' }, { from: '52D', to: '52G' },
   { from: '52C', to: '52F' }, { from: '52F', to: '52I' },
@@ -58,99 +58,165 @@ function gateZone(gateId: string): string | undefined {
   return undefined;
 }
 
-function pressureColor(pressure: number): string {
-  if (pressure >= 80) return '#ff5c5c';
-  if (pressure >= 55) return '#f5b13d';
-  if (pressure >= 30) return '#f5b13d';
-  return '#3ed598';
+function pressureColor(p: number): string {
+  if (p >= 80) return '#ff5c5c';
+  if (p >= 55) return '#f5b13d';
+  if (p >= 30) return '#d4a04a';
+  return '#2a9d6a';
 }
 
-export function SpatialField({ assessment, gates, selectedZoneId, onGateClick }: Props) {
-  // Build pressure map per zone
+function pressureGlowRadius(p: number): number {
+  return 20 + (p / 100) * 40;
+}
+
+function pressureGlowOpacity(p: number): number {
+  if (p >= 80) return 0.18;
+  if (p >= 55) return 0.12;
+  if (p >= 30) return 0.06;
+  return 0.03;
+}
+
+export function SpatialField({ assessment, gates, selectedZoneId, liveExec, activePlan, onGateClick }: Props) {
   const zoneMap = new Map<string, ZoneAssessment>();
   for (const za of assessment.zoneAssessments) {
     zoneMap.set(za.zoneId, za);
+  }
+
+  // Recovery step targets for visualization
+  const activeStepTargets = new Set<string>();
+  const completedStepTargets = new Set<string>();
+  const stalledStepTargets = new Set<string>();
+  if (liveExec && activePlan) {
+    for (let i = 0; i < activePlan.steps.length; i++) {
+      const step = activePlan.steps[i];
+      const ls = liveExec.steps[i];
+      const gate = step.target;
+      if (ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged') activeStepTargets.add(gate);
+      else if (ls?.phase === 'completed') completedStepTargets.add(gate);
+      else if (ls?.phase === 'stalled') stalledStepTargets.add(gate);
+    }
   }
 
   return (
     <div className="mc-spatial">
       <svg viewBox="0 0 1000 600" style={{ width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid meet">
         <defs>
-          {/* Glow filters */}
-          <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="12" result="blur" />
-            <feFlood floodColor="#ff5c5c" floodOpacity="0.3" />
-            <feComposite in2="blur" operator="in" />
-            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+          {/* Pressure heat gradients — one per zone, data-driven */}
+          {Object.entries(ZONE_GATES).map(([zoneId, zoneGateIds]) => {
+            const za = zoneMap.get(zoneId);
+            const p = za?.pressure ?? 0;
+            const positions = zoneGateIds.map(g => GATE_POS[g]).filter(Boolean);
+            if (positions.length === 0) return null;
+            const cx = positions.reduce((s, pos) => s + pos.x, 0) / positions.length;
+            const cy = positions.reduce((s, pos) => s + pos.y, 0) / positions.length;
+            return (
+              <radialGradient key={`heat-${zoneId}`} id={`heat-${zoneId}`}
+                cx={cx / 1000} cy={cy / 600} r="0.35" fx={cx / 1000} fy={cy / 600}>
+                <stop offset="0%" stopColor={pressureColor(p)} stopOpacity={pressureGlowOpacity(p)} />
+                <stop offset="60%" stopColor={pressureColor(p)} stopOpacity={pressureGlowOpacity(p) * 0.3} />
+                <stop offset="100%" stopColor={pressureColor(p)} stopOpacity="0" />
+              </radialGradient>
+            );
+          })}
+
+          {/* Glow filter for nodes */}
+          <filter id="node-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <filter id="glow-amber" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="10" result="blur" />
-            <feFlood floodColor="#f5b13d" floodOpacity="0.2" />
-            <feComposite in2="blur" operator="in" />
-            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-          <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="8" result="blur" />
-            <feFlood floodColor="#3ed598" floodOpacity="0.15" />
-            <feComposite in2="blur" operator="in" />
-            <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
+
+          {/* Cascade flow dot */}
+          <circle id="flow-dot" r="3" fill="#f5b13d" opacity="0.7" />
         </defs>
 
-        {/* Background grid */}
-        <g opacity="0.04">
-          {[100, 200, 300, 400, 500].map(y => (
-            <line key={`hg-${y}`} x1="0" y1={y} x2="1000" y2={y} stroke="#fff" strokeWidth="0.5" />
+        {/* ── Layer 0: Environmental vignette ── */}
+        <rect width="1000" height="600" fill="url(#vignette)" opacity="0.5" />
+        <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.6">
+          <stop offset="0%" stopColor="transparent" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.4" />
+        </radialGradient>
+
+        {/* ── Layer 1: Tactical grid ── */}
+        <g opacity="0.03" strokeWidth="0.5" stroke="#8899aa">
+          {[80, 160, 240, 320, 400, 480, 560].map(y => (
+            <line key={`g-h-${y}`} x1="40" y1={y} x2="960" y2={y} />
           ))}
-          {[100, 200, 300, 400, 500, 600, 700, 800, 900].map(x => (
-            <line key={`vg-${x}`} x1={x} y1="0" x2={x} y2="600" stroke="#fff" strokeWidth="0.5" />
+          {[80, 160, 240, 320, 400, 480, 560, 640, 720, 800, 880, 960].map(x => (
+            <line key={`g-v-${x}`} x1={x} y1="40" x2={x} y2="560" />
           ))}
         </g>
 
-        {/* Zone boundary regions */}
-        {Object.entries(ZONE_GATES).map(([zoneId, zoneGates]) => {
+        {/* ── Layer 2: Pressure heat fields ── */}
+        {Object.entries(ZONE_GATES).map(([zoneId]) => {
           const za = zoneMap.get(zoneId);
-          const positions = zoneGates.map(g => GATE_POS[g]).filter(Boolean);
-          if (positions.length < 2) return null;
-          const minX = Math.min(...positions.map(p => p.x)) - 60;
-          const maxX = Math.max(...positions.map(p => p.x)) + 60;
-          const minY = Math.min(...positions.map(p => p.y)) - 50;
-          const maxY = Math.max(...positions.map(p => p.y)) + 50;
-          const isSelected = selectedZoneId === zoneId;
-          const pColor = za ? pressureColor(za.pressure) : '#2a3442';
-
+          if (!za || za.pressure < 10) return null;
           return (
-            <rect key={zoneId} x={minX} y={minY} width={maxX - minX} height={maxY - minY}
-              rx="4" fill={pColor} fillOpacity={isSelected ? 0.08 : 0.03}
-              stroke={isSelected ? pColor : '#1f2733'} strokeWidth={isSelected ? 1.5 : 0.5}
-              strokeDasharray={isSelected ? 'none' : '4 4'} />
+            <rect key={`hf-${zoneId}`} width="1000" height="600" fill={`url(#heat-${zoneId})`}>
+              {za.pressure >= 60 && (
+                <animate attributeName="opacity" values="0.8;1;0.8" dur={za.pressure >= 80 ? '3s' : '5s'} repeatCount="indefinite" />
+              )}
+            </rect>
           );
         })}
 
-        {/* Taxiway paths */}
-        {TAXIWAYS.map(({ from, to }) => {
+        {/* ── Layer 3: Zone boundary regions ── */}
+        {Object.entries(ZONE_GATES).map(([zoneId, zoneGateIds]) => {
+          const za = zoneMap.get(zoneId);
+          const positions = zoneGateIds.map(g => GATE_POS[g]).filter(Boolean);
+          if (positions.length < 2) return null;
+          const minX = Math.min(...positions.map(p => p.x)) - 55;
+          const maxX = Math.max(...positions.map(p => p.x)) + 55;
+          const minY = Math.min(...positions.map(p => p.y)) - 45;
+          const maxY = Math.max(...positions.map(p => p.y)) + 45;
+          const isSelected = selectedZoneId === zoneId;
+          const pColor = za ? pressureColor(za.pressure) : '#1f2733';
+
+          return (
+            <rect key={`zb-${zoneId}`} x={minX} y={minY} width={maxX - minX} height={maxY - minY}
+              rx="3" fill="none"
+              stroke={isSelected ? pColor : 'rgba(255,255,255,.04)'}
+              strokeWidth={isSelected ? 1.5 : 0.5}
+              strokeDasharray={isSelected ? 'none' : '8 6'}
+              opacity={isSelected ? 0.8 : 0.4} />
+          );
+        })}
+
+        {/* ── Layer 4: Taxiway paths + cascade flow ── */}
+        {TAXIWAYS.map(({ from, to }, i) => {
           const p1 = GATE_POS[from];
           const p2 = GATE_POS[to];
           if (!p1 || !p2) return null;
 
-          // Color cascade paths between zones
           const z1 = gateZone(from);
           const z2 = gateZone(to);
           const isCrossZone = z1 !== z2;
           const za1 = z1 ? zoneMap.get(z1) : null;
           const za2 = z2 ? zoneMap.get(z2) : null;
           const bothPressured = za1 && za2 && za1.pressure >= 50 && za2.pressure >= 50;
+          const cascadeActive = bothPressured && isCrossZone;
 
           return (
-            <line key={`${from}-${to}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-              stroke={bothPressured && isCrossZone ? '#f5b13d' : '#1f2733'}
-              strokeWidth={bothPressured && isCrossZone ? 1.5 : 1}
-              strokeDasharray={isCrossZone ? '6 4' : 'none'}
-              opacity={bothPressured && isCrossZone ? 0.5 : 0.25} />
+            <g key={`tw-${i}`}>
+              {/* Base taxiway */}
+              <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke={cascadeActive ? pressureColor(Math.max(za1?.pressure ?? 0, za2?.pressure ?? 0)) : 'rgba(255,255,255,.06)'}
+                strokeWidth={cascadeActive ? 1.5 : 0.8}
+                strokeDasharray={isCrossZone ? '8 5' : 'none'}
+                opacity={cascadeActive ? 0.4 : 0.3} />
+
+              {/* Cascade flow animation */}
+              {cascadeActive && (
+                <circle r="2.5" fill="#f5b13d" opacity="0.6">
+                  <animateMotion dur="3s" repeatCount="indefinite"
+                    path={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} />
+                  <animate attributeName="opacity" values="0.2;0.7;0.2" dur="3s" repeatCount="indefinite" />
+                </circle>
+              )}
+            </g>
           );
         })}
 
-        {/* Gate nodes */}
+        {/* ── Layer 5: Gate nodes ── */}
         {gates.map(gateId => {
           const pos = GATE_POS[gateId];
           if (!pos) return null;
@@ -159,86 +225,123 @@ export function SpatialField({ assessment, gates, selectedZoneId, onGateClick }:
           const pressure = za?.pressure ?? 0;
           const incidents = za ? Math.ceil(za.unresolvedCount / 3) : 0;
           const pColor = pressureColor(pressure);
-          const glowFilter = pressure >= 80 ? 'url(#glow-red)' : pressure >= 50 ? 'url(#glow-amber)' : pressure >= 20 ? 'url(#glow-green)' : 'none';
+          const isRecoveryActive = activeStepTargets.has(gateId) || activeStepTargets.has(zoneId ?? '');
+          const isRecoveryDone = completedStepTargets.has(gateId) || completedStepTargets.has(zoneId ?? '');
+          const isRecoveryStalled = stalledStepTargets.has(gateId) || stalledStepTargets.has(zoneId ?? '');
+
+          const nodeStroke = isRecoveryActive ? '#5aa9ff' : isRecoveryStalled ? '#f5b13d' : isRecoveryDone ? '#3ed598' : pColor;
+          const nodeStrokeWidth = isRecoveryActive || isRecoveryStalled ? 2.5 : 1.5;
 
           return (
             <g key={gateId} onClick={() => onGateClick?.(gateId)} style={{ cursor: 'pointer' }}>
-              {/* Pressure glow */}
-              <circle cx={pos.x} cy={pos.y} r={pressure >= 50 ? 32 : 24} fill={pColor} fillOpacity={0.08} filter={glowFilter} />
+              {/* Pressure heat bloom */}
+              <circle cx={pos.x} cy={pos.y} r={pressureGlowRadius(pressure)}
+                fill={pColor} fillOpacity={pressureGlowOpacity(pressure)}
+                filter={pressure >= 40 ? 'url(#node-glow)' : undefined}>
+                {pressure >= 60 && (
+                  <animate attributeName="r" values={`${pressureGlowRadius(pressure) - 4};${pressureGlowRadius(pressure) + 4};${pressureGlowRadius(pressure) - 4}`}
+                    dur={pressure >= 80 ? '2.5s' : '4s'} repeatCount="indefinite" />
+                )}
+              </circle>
 
-              {/* Gate node */}
-              <circle cx={pos.x} cy={pos.y} r={20} fill="var(--rq-bg-1)" stroke={pColor} strokeWidth={1.5} />
+              {/* Gate circle */}
+              <circle cx={pos.x} cy={pos.y} r={21}
+                fill="#0a0d12" stroke={nodeStroke} strokeWidth={nodeStrokeWidth} />
 
-              {/* Gate ID */}
-              <text x={pos.x} y={pos.y - 2} textAnchor="middle" dominantBaseline="middle"
-                fill={pColor} fontSize="13" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
+              {/* Recovery ring animation */}
+              {isRecoveryActive && (
+                <circle cx={pos.x} cy={pos.y} r={26} fill="none" stroke="#5aa9ff" strokeWidth="1"
+                  strokeDasharray="4 4" opacity="0.5">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from={`0 ${pos.x} ${pos.y}`} to={`360 ${pos.x} ${pos.y}`} dur="8s" repeatCount="indefinite" />
+                </circle>
+              )}
+
+              {/* Gate letter */}
+              <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
+                fill={nodeStroke} fontSize="14" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
                 {gateId.replace('52', '')}
               </text>
 
               {/* NATO label */}
-              <text x={pos.x} y={pos.y + 32} textAnchor="middle"
-                fill="#6b7585" fontSize="7" letterSpacing="0.1em" fontFamily="'JetBrains Mono', monospace">
+              <text x={pos.x} y={pos.y + 34} textAnchor="middle"
+                fill="#4a5568" fontSize="7" letterSpacing="0.12em" fontFamily="'JetBrains Mono', monospace"
+                textDecoration="none">
                 {GATE_LABELS[gateId]?.toUpperCase()}
               </text>
 
-              {/* Pressure value */}
-              <text x={pos.x} y={pos.y + 44} textAnchor="middle"
-                fill={pColor} fontSize="9" fontWeight="600" fontFamily="'JetBrains Mono', monospace">
-                {pressure}
-              </text>
+              {/* Pressure score */}
+              {pressure > 0 && (
+                <text x={pos.x} y={pos.y + 46} textAnchor="middle"
+                  fill={pColor} fontSize="9" fontWeight="600" fontFamily="'JetBrains Mono', monospace"
+                  opacity="0.8">
+                  {pressure}
+                </text>
+              )}
 
-              {/* Incident count badge */}
+              {/* Incident badge */}
               {incidents > 0 && (
-                <>
-                  <circle cx={pos.x + 16} cy={pos.y - 16} r={8} fill={pColor} fillOpacity={0.9} />
-                  <text x={pos.x + 16} y={pos.y - 16} textAnchor="middle" dominantBaseline="central"
+                <g>
+                  <circle cx={pos.x + 18} cy={pos.y - 18} r={9} fill={pColor} fillOpacity={0.85} />
+                  <text x={pos.x + 18} y={pos.y - 18} textAnchor="middle" dominantBaseline="central"
                     fill="#fff" fontSize="8" fontWeight="700" fontFamily="'JetBrains Mono', monospace">
                     {incidents}
                   </text>
-                </>
+                </g>
               )}
             </g>
           );
         })}
 
-        {/* Zone labels */}
-        {Object.entries(ZONE_GATES).map(([zoneId, zoneGates]) => {
-          const positions = zoneGates.map(g => GATE_POS[g]).filter(Boolean);
+        {/* ── Layer 6: Zone labels ── */}
+        {Object.entries(ZONE_GATES).map(([zoneId, zoneGateIds]) => {
+          const positions = zoneGateIds.map(g => GATE_POS[g]).filter(Boolean);
           if (positions.length === 0) return null;
           const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
           const minY = Math.min(...positions.map(p => p.y));
           const za = zoneMap.get(zoneId);
 
           return (
-            <text key={`lbl-${zoneId}`} x={cx} y={minY - 40} textAnchor="middle"
-              fill="#454e5d" fontSize="8" letterSpacing="0.14em" fontFamily="'JetBrains Mono', monospace">
+            <text key={`lbl-${zoneId}`} x={cx} y={minY - 38} textAnchor="middle"
+              fill="#3a4454" fontSize="8" letterSpacing="0.16em" fontFamily="'JetBrains Mono', monospace">
               {za?.zoneLabel?.toUpperCase() ?? zoneId}
             </text>
           );
         })}
 
-        {/* Elevated badge on worst zone */}
+        {/* ── Layer 7: Status badge on worst zone ── */}
         {(() => {
           const worst = [...assessment.zoneAssessments].sort((a, b) => b.pressure - a.pressure)[0];
           if (!worst || worst.pressure < 50) return null;
-          const zoneGates = ZONE_GATES[worst.zoneId];
-          if (!zoneGates) return null;
-          const positions = zoneGates.map(g => GATE_POS[g]).filter(Boolean);
+          const zg = ZONE_GATES[worst.zoneId];
+          if (!zg) return null;
+          const positions = zg.map(g => GATE_POS[g]).filter(Boolean);
           const maxX = Math.max(...positions.map(p => p.x));
           const minY = Math.min(...positions.map(p => p.y));
-          const label = worst.stability.toUpperCase();
           const color = pressureColor(worst.pressure);
+          const label = worst.stability.toUpperCase();
 
           return (
             <g>
-              <rect x={maxX + 30} y={minY - 10} width={80} height={22} rx={2} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1} />
-              <text x={maxX + 70} y={minY + 3} textAnchor="middle" dominantBaseline="middle"
-                fill={color} fontSize="8" fontWeight="700" letterSpacing="0.1em" fontFamily="'JetBrains Mono', monospace">
+              <rect x={maxX + 35} y={minY - 12} width={84} height={24} rx={2}
+                fill={color} fillOpacity={0.1} stroke={color} strokeWidth={0.8} />
+              <text x={maxX + 77} y={minY + 2} textAnchor="middle" dominantBaseline="middle"
+                fill={color} fontSize="8" fontWeight="700" letterSpacing="0.12em" fontFamily="'JetBrains Mono', monospace">
                 {label}
               </text>
+              {worst.pressure >= 80 && (
+                <rect x={maxX + 35} y={minY - 12} width={84} height={24} rx={2}
+                  fill="none" stroke={color} strokeWidth={0.5} opacity="0.4">
+                  <animate attributeName="opacity" values="0.2;0.5;0.2" dur="2s" repeatCount="indefinite" />
+                </rect>
+              )}
             </g>
           );
         })()}
+
+        {/* ── Layer 8: Coordinate markers ── */}
+        <text x="30" y="580" fill="#2a3040" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em">LAX T5 RAMP</text>
+        <text x="930" y="580" fill="#2a3040" fontSize="7" fontFamily="'JetBrains Mono', monospace" letterSpacing="0.1em" textAnchor="end">52A–I</text>
       </svg>
     </div>
   );

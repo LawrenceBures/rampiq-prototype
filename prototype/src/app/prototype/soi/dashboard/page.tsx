@@ -2037,6 +2037,8 @@ export default function ManagerDashboard() {
               assessment={operationalAssessment}
               gates={ALL_GATES}
               selectedZoneId={selectedZoneId}
+              liveExec={liveExec}
+              activePlan={cmdMemory.activePlan}
               onGateClick={gateId => {
                 const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
                 if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);

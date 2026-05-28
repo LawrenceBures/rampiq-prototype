@@ -130,13 +130,13 @@
 .mc-rail {
   overflow-y: auto;
   padding: 18px 16px;
-  background: rgba(6,10,16,.6);
-  border-right: 1px solid rgba(255,255,255,.04);
+  background: linear-gradient(180deg, rgba(8,12,20,.7) 0%, rgba(6,10,16,.5) 100%);
+  border-right: 1px solid rgba(255,255,255,.03);
 }
 
 .mc-rail:last-child {
   border-right: none;
-  border-left: 1px solid rgba(255,255,255,.04);
+  border-left: 1px solid rgba(255,255,255,.03);
 }
 
 .mc-rail-title {
@@ -444,40 +444,77 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 20px;
+  height: 22px;
   flex-shrink: 0;
-  padding: 0 4px;
+  padding: 0 6px;
 }
 
 .mc-waveform-bar {
   width: 2px;
   background: var(--rq-accent);
-  opacity: 0.2;
+  opacity: 0.15;
   border-radius: 1px;
-  transition: height .3s;
+  transition: all .4s ease;
+  animation: mc-breathe 4s ease-in-out infinite;
+}
+
+/* Idle: slow gentle breathing */
+@keyframes mc-breathe {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.12; }
+  50% { transform: scaleY(0.7); opacity: 0.2; }
 }
 
 .mc-waveform.active .mc-waveform-bar {
-  animation: mc-wave 1.2s ease-in-out infinite;
-  opacity: 0.6;
+  animation: mc-wave-listen 0.9s ease-in-out infinite;
+  opacity: 0.7;
+  background: var(--rq-red);
 }
 
-.mc-waveform.speaking .mc-waveform-bar {
-  animation: mc-wave 0.8s ease-in-out infinite;
-  opacity: 0.8;
-  background: var(--rq-blue);
-}
-
-@keyframes mc-wave {
-  0%, 100% { transform: scaleY(0.3); }
+@keyframes mc-wave-listen {
+  0%, 100% { transform: scaleY(0.25); }
   50% { transform: scaleY(1); }
 }
 
+.mc-waveform.speaking .mc-waveform-bar {
+  animation: mc-wave-speak 0.6s ease-in-out infinite;
+  opacity: 0.85;
+  background: var(--rq-blue);
+}
+
+@keyframes mc-wave-speak {
+  0%, 100% { transform: scaleY(0.3); }
+  30% { transform: scaleY(1); }
+  60% { transform: scaleY(0.5); }
+}
+
 .mc-waveform-bar:nth-child(1) { animation-delay: 0s; height: 8px; }
-.mc-waveform-bar:nth-child(2) { animation-delay: 0.1s; height: 14px; }
-.mc-waveform-bar:nth-child(3) { animation-delay: 0.2s; height: 20px; }
-.mc-waveform-bar:nth-child(4) { animation-delay: 0.3s; height: 12px; }
-.mc-waveform-bar:nth-child(5) { animation-delay: 0.4s; height: 7px; }
+.mc-waveform-bar:nth-child(2) { animation-delay: 0.08s; height: 14px; }
+.mc-waveform-bar:nth-child(3) { animation-delay: 0.16s; height: 22px; }
+.mc-waveform-bar:nth-child(4) { animation-delay: 0.24s; height: 12px; }
+.mc-waveform-bar:nth-child(5) { animation-delay: 0.32s; height: 7px; }
+
+/* ── SOI presence shimmer behind dock ── */
+.mc-dock::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rq-accent), transparent);
+  opacity: 0.15;
+  transform: translateX(-50%);
+  animation: mc-shimmer 6s ease-in-out infinite;
+}
+
+.mc-dock {
+  position: relative;
+}
+
+@keyframes mc-shimmer {
+  0%, 100% { opacity: 0.08; width: 100px; }
+  50% { opacity: 0.2; width: 300px; }
+}
 
 /* ── Response panel ── */
 .mc-response {
