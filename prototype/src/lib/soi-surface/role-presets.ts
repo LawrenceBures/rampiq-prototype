@@ -65,6 +65,19 @@ const EXECUTIVE_SLOTS: Partial<Record<SlotId, ModuleInstance>> = {
   U1: m('quick-kpi-ribbon', 'compact'),
 };
 
+// Crisis layout: essentials only, recommendation expanded, risk promoted
+const CRISIS_SLOTS: Partial<Record<SlotId, ModuleInstance>> = {
+  L1: m('op-snapshot', 'normal', true),
+  L2: m('recovery-status', 'normal', true),
+  L3: m('staffing', 'compact'),
+  // L4 intentionally empty — deferred
+  R1: m('op-intelligence', 'normal', true),
+  R2: m('recovery-confidence', 'normal', true),
+  R3: m('cross-zone-forecast', 'compact'),
+  // R4 intentionally empty — deferred
+  // U1, U2 hidden in crisis
+};
+
 const PRESETS: Record<RoleId, Partial<Record<SlotId, ModuleInstance>>> = {
   crew_chief: CREW_CHIEF_SLOTS,
   ramp_manager: RAMP_MANAGER_SLOTS,
@@ -78,6 +91,10 @@ const PRESETS: Record<RoleId, Partial<Record<SlotId, ModuleInstance>>> = {
 
 export function getRolePreset(role: RoleId): Partial<Record<SlotId, ModuleInstance>> {
   return PRESETS[role] ?? CREW_CHIEF_SLOTS;
+}
+
+export function getCrisisPreset(): Partial<Record<SlotId, ModuleInstance>> {
+  return CRISIS_SLOTS;
 }
 
 export function createDefaultLayout(userId: string, role: RoleId, stationId: string): LayoutState {

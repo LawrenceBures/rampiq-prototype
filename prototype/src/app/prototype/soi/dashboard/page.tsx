@@ -105,7 +105,7 @@ import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import { ModuleFrame } from '@/components/soi-surface/ModuleFrame';
 import { type LayoutState, type RoleId, type SlotId, type LayoutName, LEFT_SLOTS, RIGHT_SLOTS, UTILITY_SLOTS, MODULE_REGISTRY, getModuleDef, loadLayout, saveLayout, getLastUsedLayoutName, setLastUsedLayoutName } from '@/lib/soi-surface';
-import { getRolePreset, createDefaultLayout, ROLE_LABELS } from '@/lib/soi-surface';
+import { getRolePreset, getCrisisPreset, createDefaultLayout, ROLE_LABELS } from '@/lib/soi-surface';
 import dynamic from 'next/dynamic';
 import './surface.css';
 
@@ -252,6 +252,11 @@ export default function ManagerDashboard() {
       const slots = getRolePreset(activeRole);
       setLayoutSlots(slots);
       setSavedSlots(slots);
+    } else if (name === 'Crisis') {
+      const saved = loadLayout(operator.userId, activeRole, 'LAX', 'Crisis');
+      const slots = saved?.slots ?? getCrisisPreset();
+      setLayoutSlots(slots);
+      setSavedSlots(slots);
     } else {
       const saved = loadLayout(operator.userId, activeRole, 'LAX', name);
       const slots = saved?.slots ?? getRolePreset(activeRole);
@@ -322,6 +327,22 @@ export default function ManagerDashboard() {
     });
   }
 
+  function moveModuleCrossRail(slotId: SlotId, targetRegion: 'L' | 'R' | 'U') {
+    const inst = layoutSlots[slotId];
+    if (!inst) return;
+    const def = getModuleDef(inst.moduleId);
+    if (def && !def.allowedRegions.includes(targetRegion)) return;
+    const targetSlots = targetRegion === 'L' ? LEFT_SLOTS : targetRegion === 'R' ? RIGHT_SLOTS : UTILITY_SLOTS;
+    const emptySlot = targetSlots.find(s => !layoutSlots[s]);
+    if (!emptySlot) return; // no room
+    setLayoutSlots(prev => {
+      const next = { ...prev };
+      next[emptySlot] = next[slotId];
+      delete next[slotId];
+      return next;
+    });
+  }
+
   function removeModule(slotId: SlotId) {
     setLayoutSlots(prev => { const next = { ...prev }; delete next[slotId]; return next; });
   }
@@ -332,6 +353,20 @@ export default function ManagerDashboard() {
     setLayoutSlots(prev => ({ ...prev, [slotId]: { moduleId, size: def.defaultSize, emphasized: false } }));
     setShowModuleGallery(false);
     setGalleryTarget(null);
+  }
+
+  function exportLayout(): string {
+    return JSON.stringify({ version: 1, role: activeRole, layoutName: activeLayoutName, slots: layoutSlots, exportedAt: Date.now() });
+  }
+
+  function importLayout(json: string): boolean {
+    try {
+      const data = JSON.parse(json);
+      if (data.version !== 1 || !data.slots) return false;
+      setLayoutSlots(data.slots);
+      setActiveLayoutName(data.layoutName ?? 'Personal Custom');
+      return true;
+    } catch { return false; }
   }
 
   function toggleCrisis() {
@@ -2320,6 +2355,62 @@ export default function ManagerDashboard() {
           <span>I:{temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length}</span>
           <span>R:{recoveryProgress.active}</span>
         </div>);
+      case 'weather-impact': {
+        return (<div style={mono}>LAX: Clear, 57°F, W at 4 kt. No weather-driven disruption modeled. <span style={{ fontSize: 8, color: 'var(--sf-ink-4)' }}>Open-Meteo</span></div>);
+      }
+      case 'incident-history': {
+        const resolved = temporalIncidents.filter(i => i.status === 'RESOLVED' || i.status === 'CLOSED');
+        return (<div style={mono}>{resolved.length} resolved incidents this session.{resolved.slice(0, 2).map(i => (<div key={i.id} style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 3 }}>· {i.title.slice(0, 40)}</div>))}</div>);
+      }
+      case 'resource-utilization': {
+        const ws = workforceState;
+        const util = ws.totalOnShift > 0 ? Math.round(((ws.assigned.length + ws.recovering.length) / ws.totalOnShift) * 100) : 0;
+        return (<div style={mono}>Workforce utilization: <span style={{ ...val, fontSize: 14, color: util > 80 ? 'var(--sf-amber)' : 'var(--sf-green)' }}>{util}%</span><div style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 2 }}>{ws.assigned.length + ws.recovering.length}/{ws.totalOnShift} active</div></div>);
+      }
+      case 'inbound-surge':
+        return (<div style={mono}>{[...flightWorldMap.values()].filter(f => f.turnPhase === 'arrival' || f.turnPhase === 'pre_arrival').length} inbound · {[...flightWorldMap.values()].filter(f => f.minutesToDeparture < 20 && f.minutesToDeparture > 0).length} departing soon</div>);
+      case 'gate-conflicts': {
+        const conflicts = [...flightWorldMap.values()].filter(f => f.departureRisk === 'CRITICAL' || f.departureRisk === 'HIGH');
+        return (<div style={mono}>{conflicts.length > 0 ? conflicts.map(f => (<div key={f.gateId} style={{ fontSize: 9, marginBottom: 2 }}><span style={{ color: f.departureRisk === 'CRITICAL' ? 'var(--sf-red)' : 'var(--sf-amber)' }}>{f.gateId}</span> · {f.flightNumber} · {f.departureRisk}</div>)) : <span style={{ color: 'var(--sf-ink-3)' }}>No gate conflicts</span>}</div>);
+      }
+      case 'governance-audit':
+        return (<div style={mono}>{temporalEvents.filter(e => e.event_type.includes('audit') || e.event_type.includes('escalation')).length} governance events · {temporalRecoveryActions.filter(ra => ra.status === 'ESCALATED').length} escalated</div>);
+      case 'cost-impact':
+        return (<div style={mono}>Delay cost estimate: <span style={{ color: 'var(--sf-amber)' }}>${Math.round(operationalAssessment.globalPressure * 120)}</span>/hr projected · demo model</div>);
+      case 'cross-station':
+        return (<div style={mono}>LAX operational. No cross-station data available. <span style={{ fontSize: 8, color: 'var(--sf-ink-4)' }}>Single-station mode</span></div>);
+      case 'throughput': {
+        const resolved = temporalIncidents.filter(i => i.status === 'RESOLVED' || i.status === 'CLOSED').length;
+        const total = temporalIncidents.length;
+        return (<div style={mono}>Resolution rate: <span style={{ ...val, fontSize: 14, color: 'var(--sf-green)' }}>{total > 0 ? Math.round((resolved / total) * 100) : 0}%</span><div style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 2 }}>{resolved}/{total} incidents resolved</div></div>);
+      }
+      case 'historical-trend':
+        return (<div style={mono}>Pressure trend: {forecast?.globalTrend === 'rising' ? '↑ rising' : forecast?.globalTrend === 'falling' ? '↓ falling' : '→ stable'}</div>);
+      case 'notification-stream':
+        return (<div style={mono}>{getVisibleNarratives(narrativeFeed, 2).map(n => (<div key={n.id} style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginBottom: 2 }}>{n.narrative.slice(0, 60)}...</div>))}</div>);
+      case 'recovery-coord':
+        return (<div style={mono}>{temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE').length} active · {temporalRecoveryActions.filter(ra => ra.status === 'BLOCKED').length} blocked · {temporalRecoveryActions.filter(ra => ra.status === 'PROPOSED').length} proposed</div>);
+      case 'cross-zone-forecast':
+        return (<div style={mono}>{cascadeRisks.length > 0 ? cascadeRisks.slice(0, 2).map((cr, i) => (<div key={i} style={{ fontSize: 9, marginBottom: 3 }}><span style={{ color: 'var(--sf-amber)' }}>{cr.direction}</span> · {cr.transferLikelihood}% · ~{cr.estimatedMinutes}m</div>)) : <span style={{ color: 'var(--sf-ink-3)' }}>No cascade risk detected</span>}</div>);
+      case 'predictive-summary':
+        return (<div style={mono}>{forecast ? (<><div>Global: {forecast.globalTrend} · conf: {forecast.globalConfidence}</div>{forecast.zones.filter(z => z.trend !== 'stable').map(z => (<div key={z.zoneId} style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 2 }}>{z.zoneLabel}: {z.currentPressure}→{z.pressure15m}</div>))}</>) : 'No forecast data'}</div>);
+      case 'stabilization-forecast':
+        return (<div style={mono}>Est. stabilization: <span style={val}>{recoveryConf.estimatedStabilizationMin}m</span><div style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 2 }}>Confidence: {recoveryConf.overallConfidence}{recoveryConf.weaknesses[0] ? ` · ${recoveryConf.weaknesses[0]}` : ''}</div></div>);
+      case 'inbound-coord':
+        return (<div style={mono}>{[...flightWorldMap.values()].filter(f => f.turnPhase === 'arrival').length} arriving · {[...flightWorldMap.values()].filter(f => f.turnPhase === 'servicing').length} servicing</div>);
+      case 'coordination-msgs':
+        return (<div style={mono}><span style={{ color: 'var(--sf-ink-3)' }}>No active coordination messages</span></div>);
+      case 'resource-movement':
+        return (<div style={mono}>{temporalRecoveryActions.filter(ra => ra.action_type === 'DISPATCH' && ra.status === 'ACTIVE').length} active dispatches · {temporalRecoveryActions.filter(ra => ra.action_type === 'EQUIPMENT_SWAP').length} equipment moves</div>);
+      case 'kpi-strip': {
+        const ai = temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length;
+        return (<div style={{ display: 'flex', gap: 16, ...mono }}>
+          <div><div style={label}>Pressure</div><div style={{ ...val, color: operationalAssessment.globalPressure >= 70 ? 'var(--sf-red)' : 'var(--sf-green)' }}>{operationalAssessment.globalPressure}</div></div>
+          <div><div style={label}>Active</div><div style={val}>{ai}</div></div>
+          <div><div style={label}>Recovery</div><div style={val}>{recoveryProgress.pct}%</div></div>
+          <div><div style={label}>Cascade</div><div style={{ ...val, color: cascadeRisks.length > 0 ? 'var(--sf-amber)' : 'var(--sf-green)' }}>{cascadeRisks.length}</div></div>
+        </div>);
+      }
       default:
         return (<div style={{ ...mono, color: 'var(--sf-ink-4)' }}>{moduleId}</div>);
     }
@@ -2345,6 +2436,8 @@ export default function ManagerDashboard() {
           <div style={{ display: 'flex', gap: 3, justifyContent: 'center', padding: '3px 0', opacity: .5 }}>
             <button onClick={() => moveModuleInRail(slotId, 'up')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>↑</button>
             <button onClick={() => moveModuleInRail(slotId, 'down')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>↓</button>
+            {slotId.startsWith('R') && <button onClick={() => moveModuleCrossRail(slotId, 'L')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 7, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>→L</button>}
+            {slotId.startsWith('L') && <button onClick={() => moveModuleCrossRail(slotId, 'R')} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 7, color: 'var(--sf-ink-4)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>→R</button>}
             <button onClick={() => removeModule(slotId)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, padding: '1px 6px', fontSize: 8, color: 'var(--sf-red,#ff5564)', cursor: 'pointer', fontFamily: 'var(--sf-mono)' }}>×</button>
           </div>
         )}
@@ -2470,8 +2563,10 @@ export default function ManagerDashboard() {
           <div className="sf-edit-banner">
             <div className="sf-edit-pill"><div className="dot" /><div className="label">Edit Layout</div></div>
             <span style={{ flex: 1 }} />
-            <button onClick={() => { setLayoutSlots(getRolePreset(activeRole)); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
-            <button onClick={() => setEditMode(false)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
+            <button onClick={resetLayout} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
+            <button onClick={() => { setLayoutSlots(savedSlots); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
+            <button onClick={() => { navigator.clipboard.writeText(exportLayout()); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Export</button>
+            <button onClick={() => { const json = prompt('Paste layout JSON:'); if (json && !importLayout(json)) alert('Invalid layout'); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Import</button>
             {activeLayoutName !== 'Default' ? (
               <button onClick={saveCurrentLayout} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
             ) : (

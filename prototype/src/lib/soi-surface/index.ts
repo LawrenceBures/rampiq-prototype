@@ -14,5 +14,5 @@ export {
 } from './layout-state';
 
 export {
-  getRolePreset, createDefaultLayout, ROLE_LABELS,
+  getRolePreset, getCrisisPreset, createDefaultLayout, ROLE_LABELS,
 } from './role-presets';
