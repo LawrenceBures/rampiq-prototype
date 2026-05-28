@@ -60,14 +60,15 @@ export function generateAnswer(
       return answerSummary(ctx);
     default:
       return {
-        title: 'Unable to interpret',
-        answer: "I don't have enough context to answer that. Try asking about stability timing, risks, recovery plans, or operational status.",
+        title: 'Clarification needed',
+        answer: "I can help with that. Could you clarify — are you asking about a specific gate or zone, operational risk, a recovery plan, weather, or current status?",
         confidence: 'low',
         bullets: [
-          'Try: "how long until full stability"',
-          'Try: "what is our biggest risk"',
-          'Try: "what should we do"',
-          'Try: "give me the situation"',
+          'Gates and zones: "show me 52C" or "what\'s happening at 52E"',
+          'Risk: "what should I worry about"',
+          'Recovery: "what\'s the best move" or "stabilize 52A-C"',
+          'Status: "brief me" or "bring me up to speed"',
+          'Weather: "is weather affecting us"',
         ],
         assumptions: [],
         source: 'deterministic_operational_model',

@@ -48,6 +48,7 @@ VALID INTENTS:
 - cancel_action: operator cancels (e.g., "cancel", "abort", "nevermind")
 - briefing: operator wants a status summary (e.g., "brief me", "what's happening", "bring me up to speed")
 - plan_status: operator asks about execution progress (e.g., "where are we on recovery", "what step are we on")
+- weather_query: operator asks about weather (e.g., "what's the weather", "is wind affecting us", "weather report")
 
 GATE PATTERNS: Gates are like "52A", "52B", "52C", "52D", "52E", "52F", "52G", "52H", "52I"
 ZONE PATTERNS: Zones group gates: 52A-C, 52D-F, 52G-I
@@ -124,7 +125,8 @@ export async function POST(req: NextRequest) {
     const validIntents = [
       'focus_gate', 'focus_zone', 'explain_gate', 'explain_zone',
       'stabilize_zone', 'stabilize_worst', 'recovery_plan', 'risk_assessment',
-      'approval_dispatch', 'cancel_action', 'briefing', 'plan_status', 'unknown',
+      'approval_dispatch', 'cancel_action', 'briefing', 'plan_status',
+      'weather_query', 'unknown',
     ];
     if (!validIntents.includes(parsed.intent)) {
       parsed.intent = 'unknown';

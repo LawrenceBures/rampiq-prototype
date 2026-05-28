@@ -94,6 +94,8 @@ import {
   type NarrativeFeed,
 } from '@/lib/soi-narrative';
 import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
+import { validateAccessCode, getStoredIdentity, storeIdentity, clearIdentity, generateGreeting, getRoleLabel } from '@/lib/soi-identity/access-code-identity';
+import { isWeatherQuestion, getDemoWeather, generateWeatherAnswer } from '@/lib/soi-context/weather-context';
 import {
   isVoiceInputAvailable, startListening, stopListening, onVoiceResult, onVoiceStateChange,
   routeVoiceCommand,
@@ -131,7 +133,21 @@ const OPERATORS = FIXTURE_OPERATORS;
 export default function ManagerDashboard() {
   const { events, loading, lastUpdated, refresh } = useLiveEvents(3000);
   const [view, setView] = useState<View>('feed');
-  const [operator, setOperator] = useState<AuthenticatedOperator>(OPERATORS[0]);
+  const [operator, setOperator] = useState<AuthenticatedOperator>(() => getStoredIdentity() ?? OPERATORS[0]);
+  const [showAccessPrompt, setShowAccessPrompt] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
+  const [accessError, setAccessError] = useState('');
+  const [greeting, setGreeting] = useState<string | null>(null);
+
+  // Check identity on mount
+  useEffect(() => {
+    const stored = getStoredIdentity();
+    if (stored) {
+      setOperator(stored);
+    } else {
+      setShowAccessPrompt(true);
+    }
+  }, []);
   const [filters, setFilters] = useState<EventFilters>(EMPTY_FILTERS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -683,7 +699,24 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
-        // D. Copilot deterministic answer first
+        // D. Weather check (before copilot)
+        if (isWeatherQuestion(raw)) {
+          const weather = getDemoWeather(operator.station);
+          const wa = generateWeatherAnswer(weather, raw);
+          setCopilotAnswer({
+            title: wa.title,
+            answer: wa.answer,
+            confidence: 'high',
+            bullets: wa.bullets,
+            assumptions: weather.isDemo ? ['Demo weather context — not live data'] : [],
+            source: 'deterministic_operational_model',
+          });
+          setCommandResponse(null);
+          setCommandInput('');
+          return;
+        }
+
+        // E. Copilot deterministic answer first
         setCommandResponse(null);
         const opCtx = {
           assessment: operationalAssessment,
@@ -1015,6 +1048,20 @@ export default function ManagerDashboard() {
       }
       case 'plan_status': {
         handleCommand('show plan status');
+        break;
+      }
+      case 'weather_query': {
+        const weather = getDemoWeather(operator.station);
+        const wa = generateWeatherAnswer(weather, _raw);
+        setCopilotAnswer({
+          title: wa.title,
+          answer: wa.answer,
+          confidence: 'high',
+          bullets: wa.bullets,
+          assumptions: weather.isDemo ? ['Demo weather context — not live data'] : [],
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
         break;
       }
       default: {
@@ -1724,8 +1771,197 @@ export default function ManagerDashboard() {
     .filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action' || e.severity === 'CRITICAL' || e.severity === 'HIGH' || isOpen(e))
     .slice(0, 20);
 
+  // Access code handler
+  function handleAccessCode() {
+    const op = validateAccessCode(accessCode);
+    if (op) {
+      storeIdentity(op);
+      setOperator(op);
+      setShowAccessPrompt(false);
+      setAccessError('');
+      const g = generateGreeting(op);
+      setGreeting(g);
+      if (ttsOn) speakDirect(g);
+      setTimeout(() => setGreeting(null), 12000);
+    } else {
+      setAccessError('Invalid access code. Try: CHIEF52, MGRLAX, OPSDIR, or AGENT14');
+    }
+  }
+
   return (
     <>
+      {/* Access code prompt */}
+      {showAccessPrompt && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            width: 340, padding: '32px 24px',
+            background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <div style={{ fontSize: 8, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 8 }}>
+              SOI Access
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--rq-ink)', marginBottom: 16 }}>
+              Enter your operational access code.
+            </div>
+            <input
+              type="text"
+              value={accessCode}
+              onChange={e => setAccessCode(e.target.value.toUpperCase())}
+              onKeyDown={e => { if (e.key === 'Enter') handleAccessCode(); }}
+              placeholder="ACCESS CODE"
+              autoFocus
+              style={{
+                width: '100%', padding: '8px 12px', marginBottom: 8,
+                background: 'var(--rq-bg)', border: '1px solid var(--rq-line)',
+                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 14,
+                letterSpacing: '.1em', textAlign: 'center',
+              }}
+            />
+            {accessError && (
+              <div style={{ fontSize: 9, color: 'var(--rq-red)', marginBottom: 8, textAlign: 'center' }}>
+                {accessError}
+              </div>
+            )}
+            <button onClick={handleAccessCode} style={{
+              width: '100%', padding: '8px', fontSize: 10, letterSpacing: '.08em',
+              textTransform: 'uppercase', fontFamily: 'inherit',
+              background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
+              cursor: 'pointer',
+            }}>
+              Authenticate
+            </button>
+            <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 12 }}>
+              Demo codes: CHIEF52 · MGRLAX · OPSDIR · AGENT14
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Greeting banner */}
+      {greeting && (
+        <div style={{
+          padding: '8px 16px',
+          background: 'rgba(201,255,58,.04)', borderBottom: '1px solid var(--rq-line)',
+          fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: 'var(--rq-accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span>{greeting}</span>
+          <button onClick={() => setGreeting(null)} style={{
+            background: 'none', border: 'none', color: 'var(--rq-ink-4)', cursor: 'pointer', fontSize: 10,
+          }}>✕</button>
+        </div>
+      )}
+
+      {/* ── PERSISTENT SOI COMMAND BAR ── */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 25,
+        padding: '6px 16px',
+        background: 'var(--rq-bg)', borderBottom: '1px solid var(--rq-line)',
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontFamily: "'JetBrains Mono', monospace",
+      }}>
+        {/* Identity */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600 }}>{operator.displayName}</span>
+          <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{getRoleLabel(operator)}</span>
+        </div>
+
+        {/* Divider */}
+        <span style={{ width: 1, height: 16, background: 'var(--rq-line)', flexShrink: 0 }} />
+
+        {/* Command input */}
+        <input
+          type="text"
+          value={commandInput}
+          onChange={e => setCommandInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+          placeholder="Ask SOI..."
+          style={{
+            flex: 1, padding: '5px 10px', minWidth: 0,
+            background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+            color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 11,
+            outline: 'none',
+          }}
+        />
+
+        {/* Run button */}
+        <button
+          type="button"
+          onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
+          disabled={!commandInput.trim()}
+          style={{
+            padding: '5px 8px', fontSize: 9, letterSpacing: '.06em', textTransform: 'uppercase',
+            fontFamily: 'inherit',
+            background: 'none', border: `1px solid ${commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-line)'}`,
+            color: commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
+            cursor: commandInput.trim() ? 'pointer' : 'default', flexShrink: 0,
+          }}
+        >
+          Run
+        </button>
+
+        {/* Voice push-to-talk */}
+        {isVoiceInputAvailable() && (
+          <button
+            type="button"
+            onMouseDown={() => startListening()}
+            onMouseUp={() => stopListening()}
+            onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
+            style={{
+              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: voiceState === 'listening' ? 'rgba(255,92,92,.15)' : 'none',
+              border: `1px solid ${voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-line)'}`,
+              color: voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-ink-3)',
+              cursor: 'pointer', fontSize: 12, flexShrink: 0,
+            }}
+            title="Push to talk (hold)"
+          >
+            {voiceState === 'listening' ? '●' : '🎙'}
+          </button>
+        )}
+
+        {/* Voice/ambient controls */}
+        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+          {isTTSAvailable() && ttsOn && (
+            <button type="button" onClick={() => speakDirect('SOI voice channel online.')}
+              style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
+              title="Test voice">Test</button>
+          )}
+          {isTTSAvailable() && (
+            <button type="button" onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
+              style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ttsOn ? 'rgba(90,169,255,.08)' : 'none', border: `1px solid ${ttsOn ? 'var(--rq-blue)' : 'var(--rq-line)'}`, color: ttsOn ? 'var(--rq-blue)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
+              title="Toggle voice">{ttsOn ? 'Voice' : 'Voice'}</button>
+          )}
+          <button type="button" onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}
+            style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ambientOn ? 'rgba(201,255,58,.06)' : 'none', border: `1px solid ${ambientOn ? 'var(--rq-accent)' : 'var(--rq-line)'}`, color: ambientOn ? 'var(--rq-accent)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
+            title="Toggle ambient">Ambient</button>
+        </div>
+
+        {/* Status indicator */}
+        {(voiceState !== 'idle' || ttsState === 'speaking') && (
+          <span style={{
+            fontSize: 7, letterSpacing: '.08em', textTransform: 'uppercase', flexShrink: 0,
+            color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-amber)',
+          }}>
+            {ttsState === 'speaking' ? 'speaking' : voiceState}
+          </span>
+        )}
+        {interimTranscript && (
+          <span style={{ fontSize: 8, color: 'var(--rq-ink-3)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+            {interimTranscript}
+          </span>
+        )}
+
+        {/* Sign out */}
+        <button type="button" onClick={() => { clearIdentity(); setShowAccessPrompt(true); setOperator(OPERATORS[0]); }}
+          style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em', flexShrink: 0 }}
+          title="Sign out">Out</button>
+      </div>
+
       {/* Command bar — full width */}
       <CommandBar
         station={selectedZone ? `LAX · ${selectedZone.label}` : 'LAX'}
@@ -2190,138 +2426,7 @@ export default function ManagerDashboard() {
             {view === 'patterns' && renderPatterns()}
             {view === 'intelligence' && renderIntelligence()}
 
-            {/* SOI Voice Control */}
-            <div style={{
-              margin: '4px 16px 0', display: 'flex', alignItems: 'center', gap: 6,
-              fontFamily: "'JetBrains Mono', monospace",
-            }}>
-              {/* Push-to-talk */}
-              {isVoiceInputAvailable() && (
-                <button
-                  type="button"
-                  onMouseDown={() => startListening()}
-                  onMouseUp={() => stopListening()}
-                  onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
-                  style={{
-                    width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: voiceState === 'listening' ? 'rgba(255,92,92,.15)' : 'var(--rq-bg-1)',
-                    border: `1px solid ${voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-line)'}`,
-                    color: voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-ink-3)',
-                    cursor: 'pointer', fontSize: 14, flexShrink: 0,
-                    transition: 'all .15s',
-                  }}
-                  title="Push to talk (hold)"
-                >
-                  {voiceState === 'listening' ? '●' : '🎙'}
-                </button>
-              )}
-
-              {/* Interim transcript */}
-              {interimTranscript && (
-                <span style={{ fontSize: 9, color: 'var(--rq-ink-3)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {interimTranscript}
-                </span>
-              )}
-
-              {/* Voice state indicator */}
-              {(voiceState !== 'idle' || ttsState === 'speaking') && !interimTranscript && (
-                <span style={{
-                  fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
-                  color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : voiceState === 'processing' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
-                }}>
-                  {ttsState === 'speaking' ? 'speaking' : voiceState}
-                </span>
-              )}
-
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                {/* Test Voice */}
-                {isTTSAvailable() && ttsOn && (
-                  <button type="button" onClick={() => { speakDirect('SOI voice channel online.'); }}
-                    style={{
-                      padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
-                      fontFamily: 'inherit',
-                      background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
-                      cursor: 'pointer',
-                    }}
-                    title="Test voice output"
-                  >
-                    Test
-                  </button>
-                )}
-
-                {/* TTS toggle */}
-                {isTTSAvailable() && (
-                  <button type="button" onClick={() => {
-                    if (ttsOn) { disableTTS(); setTtsOn(false); }
-                    else { enableTTS(); setTtsOn(true); }
-                  }}
-                    style={{
-                      padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
-                      fontFamily: 'inherit',
-                      background: ttsOn ? 'rgba(90,169,255,.08)' : 'none',
-                      border: `1px solid ${ttsOn ? 'var(--rq-blue)' : 'var(--rq-line)'}`,
-                      color: ttsOn ? 'var(--rq-blue)' : 'var(--rq-ink-4)',
-                      cursor: 'pointer',
-                    }}
-                    title="Toggle spoken responses"
-                  >
-                    {ttsOn ? 'Voice On' : 'Voice'}
-                  </button>
-                )}
-                {!isTTSAvailable() && (
-                  <span style={{ fontSize: 7, color: 'var(--rq-ink-4)' }}>Speech unavailable</span>
-                )}
-
-                {/* Ambient toggle */}
-                <button type="button" onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}
-                  style={{
-                    padding: '3px 6px', fontSize: 8, letterSpacing: '.06em', textTransform: 'uppercase',
-                    fontFamily: 'inherit',
-                    background: ambientOn ? 'rgba(201,255,58,.06)' : 'none',
-                    border: `1px solid ${ambientOn ? 'var(--rq-accent)' : 'var(--rq-line)'}`,
-                    color: ambientOn ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
-                    cursor: 'pointer',
-                  }}
-                  title="Toggle ambient operational cues"
-                >
-                  {ambientOn ? 'Ambient On' : 'Ambient'}
-                </button>
-              </div>
-            </div>
-
-            {/* SOI Command Input */}
-            <div style={{
-              margin: '4px 16px 0', display: 'flex', gap: 4,
-            }}>
-              <input
-                type="text"
-                value={commandInput}
-                onChange={e => setCommandInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-                placeholder="Ask SOI... show zone, explain instability, recommend recovery"
-                style={{
-                  flex: 1, padding: '6px 10px',
-                  background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-                  color: 'var(--rq-ink)', fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                  outline: 'none',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-                disabled={!commandInput.trim()}
-                style={{
-                  padding: '6px 10px',
-                  background: 'none', border: '1px solid var(--rq-line)',
-                  color: commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 9, letterSpacing: '.06em',
-                  cursor: commandInput.trim() ? 'pointer' : 'default',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Run
-              </button>
-            </div>
+            {/* Voice/Command controls moved to persistent top bar */}
 
             {/* Command response */}
             {commandResponse && (
