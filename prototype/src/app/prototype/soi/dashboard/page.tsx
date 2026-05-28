@@ -103,8 +103,11 @@ import { analyzeOperationalContext, analyzeHistoricalEffectiveness } from '@/lib
 import { computeWorkforceState, recommendTeamForGate, type WorkforceState } from '@/lib/soi-context/workforce-model';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
+import { ModuleFrame } from '@/components/soi-surface/ModuleFrame';
+import { type LayoutState, type RoleId, type SlotId, type LayoutName, LEFT_SLOTS, RIGHT_SLOTS, UTILITY_SLOTS, getModuleDef, loadLayout, saveLayout, getLastUsedLayoutName, setLastUsedLayoutName } from '@/lib/soi-surface';
+import { getRolePreset, createDefaultLayout, ROLE_LABELS } from '@/lib/soi-surface';
 import dynamic from 'next/dynamic';
-import './mission-control.css';
+import './surface.css';
 
 // Lazy load 3D component (Three.js is heavy)
 const SpatialField3D = dynamic(() => import('@/components/soi/SpatialField3D').then(m => ({ default: m.SpatialField3D })), { ssr: false });
@@ -179,6 +182,24 @@ export default function ManagerDashboard() {
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [spatialMode, setSpatialMode] = useState<'2d' | '3d'>('2d');
   const [pendingAssignment, setPendingAssignment] = useState<{ gate: string; members: string[]; reasoning: string } | null>(null);
+
+  // ── Surface layout state ──
+  const [activeRole, setActiveRole] = useState<RoleId>('crew_chief');
+  const [activeLayoutName, setActiveLayoutName] = useState<LayoutName>('Default');
+  const [layoutSlots, setLayoutSlots] = useState(() => getRolePreset('crew_chief'));
+  const [editMode, setEditMode] = useState(false);
+  const [crisisMode, setCrisisMode] = useState(false);
+
+  function switchRole(role: RoleId) {
+    setActiveRole(role);
+    setLayoutSlots(getRolePreset(role));
+    setActiveLayoutName('Default');
+    setEditMode(false);
+  }
+
+  function toggleCrisis() {
+    setCrisisMode(prev => !prev);
+  }
 
   // ── SOI Command Input ──
   const [commandInput, setCommandInput] = useState('');
@@ -2069,319 +2090,230 @@ export default function ManagerDashboard() {
     return { active: active.length, completed: completed.length, total, pct: total > 0 ? Math.round((completed.length / total) * 100) : 0 };
   })();
 
+  // ── Module content renderer ──
+  function renderModuleContent(moduleId: string): React.ReactNode {
+    const mono: React.CSSProperties = { fontFamily: 'var(--sf-mono)', fontSize: 11, color: 'var(--sf-ink-2)' };
+    const label: React.CSSProperties = { fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.16em', textTransform: 'uppercase' as const, color: 'var(--sf-ink-4)', marginBottom: 4 };
+    const val: React.CSSProperties = { fontFamily: 'var(--sf-mono)', fontSize: 16, fontWeight: 700 };
+
+    switch (moduleId) {
+      case 'op-snapshot': {
+        const ai = temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length;
+        return (<div style={mono}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div><div style={label}>Pressure</div><div style={{ ...val, color: operationalAssessment.globalPressure >= 70 ? 'var(--sf-red)' : operationalAssessment.globalPressure >= 40 ? 'var(--sf-amber)' : 'var(--sf-green)' }}>{operationalAssessment.globalPressure}</div></div>
+            <div><div style={label}>Incidents</div><div style={val}>{ai}</div></div>
+            <div><div style={label}>Recovery</div><div style={val}>{recoveryProgress.active}</div></div>
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--sf-ink-3)' }}>{operationalAssessment.globalStability.toUpperCase()}</div>
+        </div>);
+      }
+      case 'zone-health':
+        return (<div>{operationalAssessment.zoneAssessments.map(za => (
+          <div key={za.zoneId} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--sf-line)', ...mono }}>
+            <span style={{ color: 'var(--sf-ink)' }}>{za.zoneLabel}</span>
+            <span style={{ color: za.pressure >= 70 ? 'var(--sf-red)' : za.pressure >= 40 ? 'var(--sf-amber)' : 'var(--sf-green)', fontWeight: 700 }}>{za.pressure}</span>
+          </div>
+        ))}</div>);
+      case 'staffing':
+        return (<div style={mono}>{workforceState.rampAgentsOnShift} agents · {workforceState.available.length} available{workforceState.isDemo ? ' · demo' : ''}</div>);
+      case 'recovery-status':
+        return (<div style={mono}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 6 }}><span>{recoveryProgress.completed}/{recoveryProgress.total} complete</span><span style={{ color: 'var(--sf-cyan)' }}>{recoveryProgress.pct}%</span></div>
+          <div style={{ height: 3, background: 'var(--sf-line)', borderRadius: 1 }}><div style={{ height: '100%', width: `${recoveryProgress.pct}%`, background: 'var(--sf-cyan)', borderRadius: 1 }} /></div>
+        </div>);
+      case 'op-intelligence':
+        return (<div style={mono}>{soiRecommendations.length > 0 ? soiRecommendations.slice(0, 2).map(r => (
+          <div key={r.id} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid var(--sf-line)' }}>
+            <div style={{ color: 'var(--sf-ink)', fontWeight: 600, marginBottom: 2 }}>{r.title}</div>
+            <div style={{ fontSize: 9, color: 'var(--sf-ink-3)' }}>{r.summary.slice(0, 80)}...</div>
+          </div>
+        )) : <span style={{ color: 'var(--sf-ink-3)' }}>No active recommendations</span>}</div>);
+      case 'recovery-confidence':
+        return (<div style={mono}>
+          <div style={{ ...val, color: recoveryConf.score >= 70 ? 'var(--sf-green)' : recoveryConf.score >= 40 ? 'var(--sf-amber)' : 'var(--sf-red)' }}>{recoveryConf.score}%</div>
+          <div style={{ fontSize: 9, color: 'var(--sf-ink-3)', marginTop: 2 }}>Est. stabilization: {recoveryConf.estimatedStabilizationMin}m</div>
+        </div>);
+      case 'recommended-next':
+        return (<div style={mono}>{soiRecommendations[0]?.title ?? 'No recommendation'}</div>);
+      case 'equipment-roster':
+        return (<div style={mono}>{temporalEvents.filter(e => e.equipment_id && e.operational_status !== 'RESOLVED').length > 0 ? 'Equipment issues active' : 'All equipment operational'}</div>);
+      case 'crew-assignments':
+        return (<div style={mono}>{workforceState.assigned.length} assigned · {workforceState.recovering.length} recovering</div>);
+      case 'all-zones':
+        return (<div>{operationalAssessment.zoneAssessments.map(za => (
+          <div key={za.zoneId} style={{ padding: '6px 0', borderBottom: '1px solid var(--sf-line)', ...mono }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--sf-ink)' }}>{za.zoneLabel}</span>
+              <span style={{ color: za.stability === 'critical' ? 'var(--sf-red)' : za.stability === 'stable' ? 'var(--sf-green)' : 'var(--sf-amber)' }}>{za.stability}</span>
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--sf-ink-3)' }}>{za.unresolvedCount} incidents · {za.activeRecoveryCount} recovery</div>
+          </div>
+        ))}</div>);
+      case 'workforce-dist':
+        return (<div style={mono}>{workforceState.roster.filter(m => m.status !== 'off_shift').map(m => (
+          <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 10 }}>
+            <span>{m.name}</span><span style={{ color: m.status === 'available' ? 'var(--sf-green)' : m.status === 'recovering' ? 'var(--sf-amber)' : 'var(--sf-ink-3)' }}>{m.status}</span>
+          </div>
+        ))}</div>);
+      case 'assignment-queue':
+      case 'pending-dispatches':
+        return (<div style={mono}>{temporalRecoveryActions.filter(ra => ra.status === 'PROPOSED').length} pending dispatch{temporalRecoveryActions.filter(ra => ra.status === 'PROPOSED').length !== 1 ? 'es' : ''}</div>);
+      case 'flight-schedule':
+        return (<div style={mono}>{[...flightWorldMap.values()].filter(f => f.departureRisk !== 'LOW').length} flights at elevated risk</div>);
+      case 'incident-timeline':
+      case 'audit-trail':
+        return (<div style={mono}>{temporalEvents.slice(0, 3).map(e => (
+          <div key={e.id} style={{ fontSize: 9, padding: '2px 0', color: 'var(--sf-ink-3)' }}>{e.event_type.replace(/_/g, ' ')} · {e.gate_id ?? ''}</div>
+        ))}</div>);
+      case 'quick-kpi-ribbon':
+        return (<div style={{ display: 'flex', gap: 16, ...mono }}>
+          <span>P:{operationalAssessment.globalPressure}</span>
+          <span>I:{temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length}</span>
+          <span>R:{recoveryProgress.active}</span>
+        </div>);
+      default:
+        return (<div style={{ ...mono, color: 'var(--sf-ink-4)' }}>{moduleId}</div>);
+    }
+  }
+
+  function renderSlot(slotId: SlotId) {
+    const inst = layoutSlots[slotId];
+    if (!inst) return editMode ? <div key={slotId} style={{ padding: 8, border: '1px dashed var(--sf-amber)', borderRadius: 8, opacity: .3, fontSize: 9, color: 'var(--sf-ink-4)', textAlign: 'center' as const }}>— empty —</div> : null;
+    const def = getModuleDef(inst.moduleId);
+    return (
+      <ModuleFrame key={slotId} moduleId={inst.moduleId} name={def?.name ?? inst.moduleId} size={inst.size} emphasized={inst.emphasized} editMode={editMode}>
+        {renderModuleContent(inst.moduleId)}
+      </ModuleFrame>
+    );
+  }
+
+
   return (
     <>
       {/* Access code prompt */}
       {showAccessPrompt && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            width: 380, padding: '40px 32px',
-            background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--rq-accent)', letterSpacing: '.02em', marginBottom: 4 }}>
-              SOI
-            </div>
-            <div style={{ fontSize: 7, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--rq-ink-3)', marginBottom: 24 }}>
-              Operational Intelligence Mission Control
-            </div>
-            <input
-              type="text"
-              value={accessCode}
-              onChange={e => setAccessCode(e.target.value.toUpperCase())}
-              onKeyDown={e => { if (e.key === 'Enter') handleAccessCode(); }}
-              placeholder="ACCESS CODE"
-              autoFocus
-              style={{
-                width: '100%', padding: '10px 14px', marginBottom: 10,
-                background: 'var(--rq-bg)', border: '1px solid var(--rq-line)',
-                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 15,
-                letterSpacing: '.12em', textAlign: 'center',
-              }}
-            />
-            {accessError && (
-              <div style={{ fontSize: 9, color: 'var(--rq-red)', marginBottom: 8, textAlign: 'center' }}>
-                {accessError}
-              </div>
-            )}
-            <button onClick={handleAccessCode} style={{
-              width: '100%', padding: '8px', fontSize: 10, letterSpacing: '.08em',
-              textTransform: 'uppercase', fontFamily: 'inherit',
-              background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
-              cursor: 'pointer',
-            }}>
-              Authenticate
-            </button>
-            <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 12 }}>
-              Demo codes: CHIEF52 · MGRLAX · OPSDIR · AGENT14
-            </div>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 380, padding: '40px 32px', background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', fontFamily: 'var(--sf-sans)' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--sf-cyan,#52d6e6)', letterSpacing: '.06em', marginBottom: 4 }}>SOI</div>
+            <div style={{ fontSize: 7, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--sf-ink-3)', marginBottom: 24 }}>Operational Intelligence Mission Control</div>
+            <input type="text" value={accessCode} onChange={e => setAccessCode(e.target.value.toUpperCase())}
+              onKeyDown={e => { if (e.key === 'Enter') handleAccessCode(); }} placeholder="ACCESS CODE" autoFocus
+              style={{ width: '100%', padding: '10px 14px', marginBottom: 10, background: 'var(--sf-void,#05070a)', border: '1px solid var(--sf-line)', color: 'var(--sf-ink)', fontFamily: 'inherit', fontSize: 15, letterSpacing: '.12em', textAlign: 'center' }} />
+            {accessError && <div style={{ fontSize: 9, color: 'var(--sf-red)', marginBottom: 8, textAlign: 'center' }}>{accessError}</div>}
+            <button onClick={handleAccessCode} style={{ width: '100%', padding: '8px', fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase', fontFamily: 'inherit', background: 'none', border: '1px solid var(--sf-cyan)', color: 'var(--sf-cyan)', cursor: 'pointer', borderRadius: 6 }}>Authenticate</button>
+            <div style={{ fontSize: 8, color: 'var(--sf-ink-4)', textAlign: 'center', marginTop: 12 }}>Demo codes: CHIEF52 · MGRLAX · OPSDIR · AGENT14</div>
           </div>
         </div>
       )}
 
-      {/* ── MISSION CONTROL SHELL ── */}
-      <div className={`mc-shell${replayMode ? ' replay-active' : ''}`}>
+      {/* ═══ SURFACE SHELL ═══ */}
+      <div className={`sf-shell${crisisMode ? ' crisis' : ''}`}>
 
-        {/* ── MISSION HEADER ── */}
-        <div className="mc-header">
-          <div className="mc-brand">
-            <span className="mc-brand-logo">SOI</span>
+        {/* ── A1: HEADER ── */}
+        <header className="sf-header">
+          <div className="sf-brand">
             <div>
-              <div className="mc-brand-sub">Operational Intelligence</div>
-              <div className="mc-brand-sub">Mission Control</div>
+              <div className="sf-brand-name">SOI</div>
+              <div className="sf-brand-sub">Operational Intelligence</div>
             </div>
           </div>
+          <div className="sf-hdr-div" />
+          <div>
+            <div className="sf-station-code">{operator.station}</div>
+            <div className="sf-station-mode">Eagle Operations</div>
+          </div>
+          <div className="sf-hdr-spacer" />
 
-          {greeting && <div className="mc-greeting">{greeting}</div>}
+          {/* Greeting */}
+          {greeting && <div style={{ fontSize: 11, color: 'var(--sf-cyan)', opacity: .7 }}>{greeting}</div>}
 
-          <div className="mc-header-meta">
-            <div className="mc-meta-item">{liveTime}</div>
-            <div className="mc-meta-item"><span className="mc-meta-value">{operator.shiftWindow}</span> Shift</div>
-            <div className="mc-meta-item">{operator.station} <span className="rq-pulse" /></div>
+          {/* Layout selector */}
+          <div className="sf-layout-pill" onClick={() => {
+            const roles: RoleId[] = ['crew_chief', 'ramp_manager', 'dispatcher', 'executive'];
+            const next = roles[(roles.indexOf(activeRole) + 1) % roles.length];
+            switchRole(next);
+          }}>
+            <div className="sf-layout-pip" />
+            <div className="sf-layout-label">{ROLE_LABELS[activeRole]}</div>
           </div>
 
-          <div className="mc-operator">
+          {/* Edit / Crisis toggles */}
+          <button onClick={() => setEditMode(!editMode)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '4px 10px', fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.14em', textTransform: 'uppercase', color: editMode ? 'var(--sf-cyan)' : 'var(--sf-ink-4)', cursor: 'pointer' }}>
+            {editMode ? 'Exit Edit' : 'Edit'}
+          </button>
+          <button onClick={toggleCrisis} style={{ background: crisisMode ? 'rgba(255,125,77,.06)' : 'none', border: `1px solid ${crisisMode ? 'rgba(255,125,77,.3)' : 'var(--sf-line)'}`, borderRadius: 6, padding: '4px 10px', fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.14em', textTransform: 'uppercase', color: crisisMode ? 'var(--sf-orange,#ff7d4d)' : 'var(--sf-ink-4)', cursor: 'pointer' }}>
+            Crisis
+          </button>
+
+          <div className="sf-conditions">{liveTime}</div>
+          <div className="sf-hdr-div" />
+          <div className="sf-operator">
+            <div className="sf-op-avatar">{operator.displayName.charAt(0)}</div>
             <div>
-              <div className="mc-operator-name">{operator.displayName}</div>
-              <div className="mc-operator-role">{getRoleLabel(operator)}</div>
+              <div className="sf-op-name">{operator.displayName}</div>
+              <div className="sf-op-role">{getRoleLabel(operator)}</div>
             </div>
-            <button onClick={() => { clearIdentity(); setShowAccessPrompt(true); setOperator(OPERATORS[0]); }}
-              className="mc-dock-btn" style={{ padding: '4px 8px', fontSize: 7 }}>Out</button>
           </div>
-        </div>
+        </header>
 
-        {/* ── REPLAY TIMELINE ── */}
-        <ReplayTimeline
-          active={replayMode}
-          playing={replayPlaying}
-          currentTimestamp={replayTimestamp}
+        {/* Edit mode banner */}
+        {editMode && (
+          <div className="sf-edit-banner">
+            <div className="sf-edit-pill"><div className="dot" /><div className="label">Edit Layout</div></div>
+            <span style={{ flex: 1 }} />
+            <button onClick={() => { setLayoutSlots(getRolePreset(activeRole)); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
+            <button onClick={() => setEditMode(false)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
+            <button onClick={() => setEditMode(false)} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
+          </div>
+        )}
+
+        {/* Crisis strip */}
+        {crisisMode && (
+          <div className="sf-crisis-strip">
+            <div>
+              <div className="sf-crisis-label">Active Crisis</div>
+              <div className="sf-crisis-title">{soiRecommendations[0]?.title ?? 'Operational instability'}</div>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.2em', color: 'var(--sf-ink-4)', textTransform: 'uppercase' }}>Pressure</div>
+                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 16, fontWeight: 500, color: 'var(--sf-orange,#ff7d4d)' }}>{operationalAssessment.globalPressure}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 7, letterSpacing: '.2em', color: 'var(--sf-ink-4)', textTransform: 'uppercase' }}>Incidents</div>
+                <div style={{ fontFamily: 'var(--sf-mono)', fontSize: 16, fontWeight: 500, color: 'var(--sf-ink)' }}>{temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Replay timeline */}
+        <ReplayTimeline active={replayMode} playing={replayPlaying} currentTimestamp={replayTimestamp}
           startTimestamp={new Date(Math.min(...events.map(e => new Date(e.created_at).getTime()).filter(t => t > 0), Date.now() - 7200000))}
           endTimestamp={new Date()}
-          eventTimestamps={events
-            .filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action')
-            .map(e => new Date(e.created_at).getTime())
-            .filter(t => t > 0)
-          }
-          onScrub={ts => setReplayTimestamp(ts)}
-          onTogglePlay={togglePlayback}
-          onStep={stepReplay}
-          onExit={exitReplay}
-        />
+          eventTimestamps={events.filter(e => e.entity_type === 'incident' || e.entity_type === 'recovery_action').map(e => new Date(e.created_at).getTime()).filter(t => t > 0)}
+          onScrub={ts => setReplayTimestamp(ts)} onTogglePlay={togglePlayback} onStep={stepReplay} onExit={exitReplay} />
 
-        {/* ── THREE-COLUMN GRID ── */}
-        <div className="mc-grid">
+        {/* ── BODY: 3-column grid ── */}
+        <div className="sf-body">
 
-          {/* ── LEFT RAIL: Operations Snapshot ── */}
-          <div className="mc-rail">
-            <div className="mc-rail-title">Operations Snapshot</div>
-
-            {/* Global pressure gauge */}
-            <div className="mc-pressure-gauge">
-              <div className="mc-pressure-value" style={{
-                color: operationalAssessment.globalPressure >= 80 ? 'var(--rq-red)' :
-                  operationalAssessment.globalPressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)',
-              }}>
-                {operationalAssessment.globalPressure}
-              </div>
-              <div className="mc-pressure-label" style={{
-                color: operationalAssessment.globalPressure >= 80 ? 'var(--rq-red)' :
-                  operationalAssessment.globalPressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)',
-              }}>
-                {operationalAssessment.globalStability.toUpperCase()}
-              </div>
-              <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
-                {operationalAssessment.globalPressure} / 100
-              </div>
-            </div>
-
-            {/* Zone cards */}
-            {operationalAssessment.zoneAssessments.map(za => {
-              const pColor = za.pressure >= 80 ? 'var(--rq-red)' : za.pressure >= 50 ? 'var(--rq-amber)' : 'var(--rq-green)';
-              return (
-                <div key={za.zoneId} className="mc-zone-card" data-stability={za.stability}
-                  onClick={() => setSelectedZoneId(za.zoneId === selectedZoneId ? null : za.zoneId)}>
-                  <div className="mc-zone-name">{za.zoneLabel}</div>
-                  <div className="mc-zone-stats">
-                    <span style={{ color: pColor }}>{za.pressure}</span>
-                    <span>{za.unresolvedCount} incident{za.unresolvedCount !== 1 ? 's' : ''}</span>
-                    <span>{za.activeRecoveryCount} recovery</span>
-                  </div>
-                  <div className="mc-zone-pressure-bar">
-                    <div className="mc-zone-pressure-fill" style={{ width: `${za.pressure}%`, background: pColor }} />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Recovery progress */}
-            {/* Forecast */}
-            {forecast && forecast.globalTrend !== 'stable' && (
-              <>
-                <div className="mc-rail-title" style={{ marginTop: 16 }}>Forecast (+15m)</div>
-                {forecast.zones.filter(z => z.trend !== 'stable').map(zf => {
-                  const trendColor = zf.trend === 'rising' ? 'var(--rq-red)' : 'var(--rq-green)';
-                  const arrow = zf.trend === 'rising' ? '↑' : '↓';
-                  return (
-                    <div key={zf.zoneId} style={{
-                      padding: '8px 10px', marginBottom: 6,
-                      background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
-                      border: '1px solid rgba(255,255,255,.04)',
-                      borderLeft: `2px solid ${trendColor}`,
-                      fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                        <span style={{ color: 'var(--rq-ink)', fontWeight: 600 }}>{zf.zoneLabel}</span>
-                        <span style={{ color: trendColor, fontWeight: 700 }}>{zf.currentPressure} {arrow} {zf.pressure15m}</span>
-                      </div>
-                      <div style={{ fontSize: 7, color: 'rgba(255,255,255,.2)' }}>{zf.drivers[0] ?? ''}</div>
-                      <div style={{ fontSize: 7, color: 'rgba(255,255,255,.15)', marginTop: 2 }}>
-                        conf: {zf.confidence}
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-
-            {/* Cascade risks */}
-            {cascadeRisks.length > 0 && (
-              <>
-                <div className="mc-rail-title" style={{ marginTop: 12 }}>Cascade Risk</div>
-                {cascadeRisks.slice(0, 2).map((cr, i) => (
-                  <div key={i} style={{
-                    padding: '8px 10px', marginBottom: 6,
-                    background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
-                    border: '1px solid rgba(255,255,255,.04)',
-                    borderLeft: '2px solid var(--rq-amber)',
-                    fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
-                  }}>
-                    <div style={{ color: 'var(--rq-amber)', fontWeight: 600, fontSize: 9, marginBottom: 2 }}>{cr.direction}</div>
-                    <div style={{ color: 'rgba(255,255,255,.25)' }}>
-                      {cr.transferLikelihood}% likely · ~{cr.estimatedMinutes}m · {cr.confidence}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* Operational Profile */}
-            {opProfile.composition !== 'stable' && (
-              <div style={{
-                padding: '8px 10px', marginBottom: 10,
-                background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
-                border: '1px solid rgba(255,255,255,.04)',
-                fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
-              }}>
-                <div style={{ color: 'rgba(255,255,255,.15)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Pressure Profile</div>
-                <div style={{ color: 'var(--rq-ink-2)', fontSize: 9, fontWeight: 600, marginBottom: 3 }}>{opProfile.composition.replace(/_/g, ' ')}</div>
-                <div style={{ color: 'rgba(255,255,255,.2)' }}>{opProfile.dominantDriver}</div>
-                {historicalEff.patterns.length > 0 && (
-                  <div style={{ color: 'rgba(255,255,255,.15)', marginTop: 4, fontSize: 7 }}>
-                    Pattern: {historicalEff.patterns[0].narrative.slice(0, 60)}...
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Recovery Confidence */}
-            <div className="mc-rail-title" style={{ marginTop: 16 }}>Recovery Confidence</div>
-            <div style={{
-              padding: '10px 12px',
-              background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
-              border: '1px solid rgba(255,255,255,.04)',
-              marginBottom: 10, fontFamily: "'JetBrains Mono', monospace",
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 20, fontWeight: 800,
-                  color: recoveryConf.score >= 70 ? 'var(--rq-green)' : recoveryConf.score >= 40 ? 'var(--rq-amber)' : 'var(--rq-red)',
-                }}>{recoveryConf.score}%</span>
-                <span style={{
-                  fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase',
-                  color: recoveryConf.score >= 70 ? 'var(--rq-green)' : recoveryConf.score >= 40 ? 'var(--rq-amber)' : 'var(--rq-red)',
-                }}>{recoveryConf.overallConfidence}</span>
-              </div>
-              <div style={{ fontSize: 8, color: 'rgba(255,255,255,.2)' }}>
-                Est. stabilization: {recoveryConf.estimatedStabilizationMin}m
-              </div>
-              {recoveryConf.weaknesses.length > 0 && (
-                <div style={{ fontSize: 7, color: 'rgba(255,255,255,.15)', marginTop: 3 }}>
-                  {recoveryConf.weaknesses[0]}
-                </div>
-              )}
-            </div>
-
-            <div className="mc-rail-title" style={{ marginTop: 20 }}>Recovery Progress</div>
-            <div className="mc-recovery-card">
-              <div className="mc-recovery-title">
-                {recoveryProgress.completed} / {recoveryProgress.total} actions complete
-              </div>
-              <div className="mc-recovery-bar">
-                <div className="mc-recovery-fill" style={{ width: `${recoveryProgress.pct}%` }} />
-              </div>
-              <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
-                {recoveryProgress.active} active · {recoveryProgress.pct}%
-              </div>
-            </div>
-
-            {/* Dev controls (collapsed) */}
-            <div style={{ marginTop: 16 }}>
-              <div className="mc-rail-title">Controls</div>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
-                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
-                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { runStressSimulation().then(() => { refresh(); refreshIncidents(); }); }}>Stress</button>
-                <button className="mc-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={refresh}>Refresh</button>
-              </div>
-              <select value={operator.userId} onChange={e => {
-                const op = OPERATORS.find(o => o.userId === e.target.value);
-                if (op) { setOperator(op); storeIdentity(op); }
-              }} style={{
-                width: '100%', marginTop: 6, padding: '3px 6px',
-                background: 'var(--rq-bg-2)', border: '1px solid var(--rq-line)',
-                color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 8,
-              }}>
-                {OPERATORS.map(op => (
-                  <option key={op.userId} value={op.userId}>{op.displayName} ({op.role})</option>
-                ))}
-              </select>
+          {/* LEFT RAIL */}
+          <div className="sf-rail left">
+            {LEFT_SLOTS.map(s => renderSlot(s))}
+            {/* Dev controls */}
+            <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { seedDemoScenario().then(() => { refresh(); refreshIncidents(); }); }}>Seed</button>
+              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={() => { clearDemoData().then(() => { refresh(); refreshIncidents(); }); }}>Clear</button>
+              <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={refresh}>Refresh</button>
+              {!replayMode && <button className="sf-dock-btn" style={{ fontSize: 7, padding: '3px 6px' }} onClick={startReplay}>Replay</button>}
             </div>
           </div>
 
-          {/* ── CENTER: Spatial Operations Field ── */}
-          <div className="mc-center">
-            <div className="mc-center-header">
-              <b>LAX Eagle</b>
-              <span>—</span>
-              <span>Gates 52A–I</span>
-              {selectedZone && <span style={{ color: 'var(--rq-accent)' }}>· Focused: {selectedZone.label}</span>}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-                {replayMode ? (
-                  <span style={{ fontSize: 8, color: 'var(--rq-blue)', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 700 }}>
-                    Operational Memory
-                  </span>
-                ) : (
-                  <>
-                    <span className="rq-pulse" />
-                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,.2)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Live</span>
-                    <button className="mc-dock-btn" style={{ padding: '2px 6px', fontSize: 7 }} onClick={startReplay}>Replay</button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Spatial gate map — 2D/3D toggle */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 24px 4px', gap: 4 }}>
-              <button className={`mc-dock-btn${spatialMode === '2d' ? ' active' : ''}`}
-                style={{ padding: '2px 8px', fontSize: 7 }} onClick={() => setSpatialMode('2d')}>2D Tactical</button>
-              <button className={`mc-dock-btn${spatialMode === '3d' ? ' active' : ''}`}
-                style={{ padding: '2px 8px', fontSize: 7 }} onClick={() => setSpatialMode('3d')}>3D Command</button>
-            </div>
-
-            {spatialMode === '2d' ? (
+          {/* CENTER STAGE */}
+          <div className="sf-stage">
+            {/* M1: Map anchor */}
+            <div className="sf-map">
               <SpatialField
                 assessment={operationalAssessment}
                 gates={ALL_GATES}
@@ -2399,445 +2331,158 @@ export default function ManagerDashboard() {
                   if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
                 }}
               />
-            ) : (
-              <SpatialField3D
-                assessment={operationalAssessment}
-                flightWorld={flightWorldMap}
-                incidents={temporalIncidents}
-                recoveryActions={temporalRecoveryActions}
-                events={temporalEvents}
-                selectedGateId={selectedGateId}
-                selectedZoneId={selectedZoneId}
-                liveExec={liveExec}
-                activePlan={cmdMemory.activePlan}
-                onGateClick={gateId => {
-                  setSelectedGateId(gateId === selectedGateId ? null : gateId);
-                  const zoneId = zones.find(z => z.gate_ids.includes(gateId))?.id;
-                  if (zoneId) setSelectedZoneId(zoneId === selectedZoneId ? null : zoneId);
-                }}
-              />
-            )}
+            </div>
 
-            {/* ── ACTIVE RECOMMENDATION STRIP ── */}
+            {/* A2: Active Recommendation anchor */}
             {soiRecommendations.length > 0 && (() => {
               const rec = soiRecommendations[0];
-              const sevColor = rec.severity === 'critical' ? 'var(--rq-red)' : rec.severity === 'high' ? 'var(--rq-amber)' : 'var(--rq-blue)';
+              const sevColor = rec.severity === 'critical' ? 'var(--sf-red)' : rec.severity === 'high' ? 'var(--sf-amber)' : 'var(--sf-cyan)';
               return (
-                <div style={{
-                  margin: '0 16px', padding: '12px 16px',
-                  background: 'var(--mc-surface)', border: '1px solid var(--mc-border)',
-                  borderLeft: `3px solid ${sevColor}`,
-                  display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  animation: 'mc-fade-in .45s cubic-bezier(.23,1,.32,1) both',
-                }}>
+                <div className="sf-rec" style={crisisMode ? { flex: 1, minHeight: 200 } : undefined}>
                   <div>
-                    <div style={{ fontSize: 7, color: sevColor, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Active Recommendation</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.75)', marginBottom: 3 }}>{rec.title}</div>
-                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,.3)', lineHeight: 1.4 }}>{rec.summary}</div>
-                    <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 8, color: 'rgba(255,255,255,.2)' }}>
-                      <span>confidence <b style={{ color: rec.confidence.score >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>{rec.confidence.score}%</b></span>
-                      <span>stabilization <b style={{ color: 'rgba(255,255,255,.4)' }}>~{rec.estimatedStabilizationMinutes}m</b></span>
-                      <span>pressure <b style={{ color: 'var(--rq-green)' }}>{rec.preview.beforePressure}→{rec.preview.afterPressure}</b></span>
-                    </div>
+                    <div className="sf-rec-label">Active Recommendation</div>
+                    <div className="sf-rec-title">{rec.title}</div>
+                    <div className="sf-rec-body">{rec.summary}</div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <button className="mc-dock-btn primary" style={{ padding: '6px 16px' }}
-                      onClick={() => handleCommand(`stabilize ${rec.affectedGate ?? rec.affectedZone}`)}>
-                      Stabilize
-                    </button>
-                    <button className="mc-dock-btn" style={{ padding: '4px 12px', fontSize: 7 }}
-                      onClick={() => setView('intelligence')}>
-                      Details
+                  <div className="sf-rec-metrics">
+                    <div><div className="sf-rec-metric-k">Confidence</div><div className="sf-rec-metric-v" style={{ color: rec.confidence.score >= 70 ? 'var(--sf-green)' : 'var(--sf-amber)' }}>{rec.confidence.score}%</div></div>
+                    <div><div className="sf-rec-metric-k">Stabilization</div><div className="sf-rec-metric-v">~{rec.estimatedStabilizationMinutes}m</div></div>
+                    <div><div className="sf-rec-metric-k">Pressure</div><div className="sf-rec-metric-v"><span style={{ color: 'var(--sf-red)' }}>{rec.preview.beforePressure}</span> → <span style={{ color: 'var(--sf-green)' }}>{rec.preview.afterPressure}</span></div></div>
+                  </div>
+                  <div className="sf-rec-plan">
+                    <div className="sf-rec-label">Modeled Recovery</div>
+                    {rec.recommendedActions.slice(0, 4).map((a, i) => (
+                      <div key={i} className="sf-rec-step">
+                        <div className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
+                        <span>{a.label}</span>
+                      </div>
+                    ))}
+                    <button className="sf-rec-btn" onClick={() => handleCommand(`stabilize ${rec.affectedGate ?? rec.affectedZone}`)}>
+                      {rec.title}
                     </button>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Minimal view selector — hidden by default, toggled via Details */}
-            {(view as string) !== 'feed' && (<>
-            <div style={{
-              display: 'flex', gap: 0, margin: '6px 16px 0',
-              borderBottom: '1px solid rgba(255,255,255,.025)',
-            }}>
-              {([
-                { key: 'feed' as const, label: 'Feed', count: zoneSummary.total },
-                { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
-                { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
-                { key: 'intelligence' as const, label: 'Intelligence', count: soiRecommendations.length > 0 ? soiRecommendations.length : null },
-              ]).map(tab => (
-                <button key={tab.key} type="button" onClick={() => setView(tab.key)}
-                  style={{
-                    padding: '8px 14px', fontSize: 8, letterSpacing: '.08em', textTransform: 'uppercase',
-                    fontFamily: 'inherit',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: view === tab.key ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
-                    borderBottom: view === tab.key ? '2px solid var(--rq-accent)' : '2px solid transparent',
-                    transition: 'all .15s',
-                  }}>
-                  {tab.label}
-                  {tab.count != null && tab.count > 0 && (
-                    <span style={{ marginLeft: 4, fontSize: 8, color: tab.key === 'intelligence' ? 'var(--rq-blue)' : 'var(--rq-red)' }}>{tab.count}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* View content (scrollable, compact) */}
-            <div style={{ maxHeight: 200, overflow: 'auto' }}>
-              <div className="rq-ops-board" style={{ maxWidth: 'none' }}>
-                {view === 'feed' && renderFeed()}
-                {view === 'unresolved' && renderUnresolved()}
-                {view === 'incidents' && renderIncidents()}
-                {view === 'intelligence' && renderIntelligence()}
-              </div>
-            </div>
-            </> /* end view !== 'feed' */
-            )}
-
             {/* Response panels */}
             {commandResponse && (
-              <div className="mc-response">
-                {commandResponse.map((line, i) => (
-                  <div key={i} style={{ color: i === 0 ? 'var(--rq-ink)' : 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4, fontSize: 10 }}>{line}</div>
+              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-blue,#5a93ff)', borderRadius: 8, fontSize: 10, fontFamily: 'var(--sf-mono)', color: 'var(--sf-ink-2)' }}>
+                {commandResponse.map((line, i) => <div key={i} style={{ padding: '1px 0', color: i === 0 ? 'var(--sf-ink)' : undefined }}>{line}</div>)}
+                <button onClick={() => setCommandResponse(null)} style={{ marginTop: 4, padding: '2px 6px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+              </div>
+            )}
+            {copilotAnswer && copilotAnswer.title !== 'Processing' && (
+              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-blue,#5a93ff)', borderRadius: 8, fontFamily: 'var(--sf-mono)' }}>
+                <div style={{ fontSize: 7, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--sf-blue,#5a93ff)', marginBottom: 4 }}>SOI</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sf-ink)', marginBottom: 4 }}>{copilotAnswer.title}</div>
+                <div style={{ fontSize: 10, color: 'var(--sf-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>{copilotAnswer.answer}</div>
+                {copilotAnswer.bullets.length > 0 && copilotAnswer.bullets.slice(0, 4).map((b, i) => (
+                  <div key={i} style={{ fontSize: 9, color: 'var(--sf-ink-3)', padding: '1px 0' }}>· {b}</div>
                 ))}
-                <button type="button" onClick={() => setCommandResponse(null)}
-                  style={{ marginTop: 4, padding: '2px 6px', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+                {copilotAnswer.recommendedNextAction && <div style={{ fontSize: 9, color: 'var(--sf-cyan)', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>}
+                <button onClick={() => setCopilotAnswer(null)} style={{ marginTop: 6, padding: '2px 6px', background: 'none', border: '1px solid var(--sf-line)', borderRadius: 4, color: 'var(--sf-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
               </div>
             )}
 
-            {copilotAnswer && (
-              <div className="mc-response">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 7, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--rq-blue)' }}>SOI Copilot</span>
-                  <span style={{
-                    fontSize: 7, padding: '1px 5px',
-                    border: `1px solid ${copilotAnswer.confidence === 'high' ? 'var(--rq-green-dim)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber-dim)' : 'var(--rq-line)'}`,
-                    color: copilotAnswer.confidence === 'high' ? 'var(--rq-green)' : copilotAnswer.confidence === 'moderate' ? 'var(--rq-amber)' : 'var(--rq-ink-4)',
-                    letterSpacing: '.08em', textTransform: 'uppercase',
-                  }}>{copilotAnswer.confidence}</span>
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 4 }}>{copilotAnswer.title}</div>
-                <div style={{ fontSize: 10, color: 'var(--rq-ink-2)', lineHeight: 1.5, marginBottom: 6 }}>{copilotAnswer.answer}</div>
-                {copilotAnswer.bullets.length > 0 && copilotAnswer.bullets.map((b, i) => (
-                  <div key={i} style={{ fontSize: 9, color: 'var(--rq-ink-3)', padding: '1px 0', lineHeight: 1.4 }}>· {b}</div>
-                ))}
-                {copilotAnswer.recommendedNextAction && (
-                  <div style={{ fontSize: 9, color: 'var(--rq-blue)', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>
-                )}
-                <button type="button" onClick={() => setCopilotAnswer(null)}
-                  style={{ marginTop: 6, padding: '2px 6px', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
-              </div>
-            )}
-
-            {/* Execution plan panel */}
+            {/* Execution plan */}
             {cmdMemory.activePlan && (
-              <div className="mc-response" style={{ borderLeftColor: 'var(--rq-accent)' }}>
-                <div style={{ fontSize: 7, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
-                  {liveExec && isExecutionActive(liveExec) ? 'Recovery Chain Active' : 'SOI Objective'}
+              <div style={{ margin: '8px 12px', padding: '12px 14px', background: 'var(--sf-elev)', border: '1px solid var(--sf-line)', borderLeft: '2px solid var(--sf-cyan)', borderRadius: 8, fontFamily: 'var(--sf-mono)' }}>
+                <div style={{ fontSize: 7, color: 'var(--sf-cyan)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  {liveExec && isExecutionActive(liveExec) ? 'Recovery Active' : 'SOI Objective'}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>{cmdMemory.activePlan.objective.operationalGoal}</div>
-                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 6 }}>{cmdMemory.activePlan.summary}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sf-ink)', marginBottom: 4 }}>{cmdMemory.activePlan.objective.operationalGoal}</div>
                 {cmdMemory.activePlan.steps.map((step, i) => {
                   const ls = liveExec?.steps[i];
-                  const sc = ls?.phase === 'completed' ? 'var(--rq-green)' : ls?.phase === 'failed' ? 'var(--rq-red)' : ls?.phase === 'stalled' ? 'var(--rq-amber)' : (ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged') ? 'var(--rq-blue)' : 'var(--rq-ink-4)';
+                  const sc = ls?.phase === 'completed' ? 'var(--sf-green)' : ls?.phase === 'failed' ? 'var(--sf-red)' : ls?.phase === 'stalled' ? 'var(--sf-amber)' : (ls?.phase === 'active' || ls?.phase === 'dispatched' || ls?.phase === 'acknowledged') ? 'var(--sf-blue)' : 'var(--sf-ink-4)';
                   return (
-                    <div key={step.stepId} style={{ padding: '3px 8px', marginBottom: 2, background: 'var(--rq-bg-2)', borderLeft: `2px solid ${sc}`, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
+                    <div key={step.stepId} style={{ padding: '3px 8px', marginBottom: 2, background: 'var(--sf-elev)', borderLeft: `2px solid ${sc}`, borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
                       <span style={{ color: sc, fontWeight: 700, width: 12 }}>{ls?.phase === 'completed' ? '✓' : ls?.phase === 'failed' ? '✗' : step.sequence}</span>
-                      <span style={{ color: 'var(--rq-ink-2)', flex: 1 }}>{step.title}</span>
-                      <span style={{ color: 'var(--rq-ink-4)', fontSize: 8 }}>{step.estimatedDurationMinutes}m</span>
+                      <span style={{ color: 'var(--sf-ink-2)', flex: 1 }}>{step.title}</span>
                     </div>
                   );
                 })}
                 {!replayMode && !liveExec && (
                   <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                    <button className="mc-dock-btn primary" style={{ flex: 2 }} onClick={handleApprovePlan}>Approve Execution</button>
-                    <button className="mc-dock-btn" style={{ flex: 1 }} onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}>Cancel</button>
+                    <button className="sf-dock-btn primary" style={{ flex: 2 }} onClick={handleApprovePlan}>Approve</button>
+                    <button className="sf-dock-btn" style={{ flex: 1 }} onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}>Cancel</button>
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* ── RIGHT RAIL: Intelligence Feed ── */}
-          <div className="mc-rail">
-            {/* Replay temporal context */}
-            {replayMode && replayTimestamp && (
-              <div style={{
-                padding: '10px 12px', marginBottom: 12,
-                background: 'rgba(90,169,255,.03)', border: '1px solid rgba(90,169,255,.08)',
-                fontFamily: "'JetBrains Mono', monospace", textAlign: 'center',
-              }}>
-                <div style={{ fontSize: 7, color: 'var(--rq-blue)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Operational State At
-                </div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--rq-blue)', textShadow: '0 0 12px rgba(90,169,255,.15)' }}>
-                  {replayTimestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                </div>
-                <div style={{ fontSize: 8, color: 'rgba(255,255,255,.2)', marginTop: 4 }}>
-                  {temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length} incidents · {temporalRecoveryActions.filter(ra => ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN').length} recoveries
-                </div>
-              </div>
-            )}
+          {/* UTILITY ROW */}
+          <div className="sf-utility">
+            {UTILITY_SLOTS.map(s => renderSlot(s))}
+          </div>
 
-            {/* Incident detail panel (when selected) */}
+          {/* RIGHT RAIL */}
+          <div className="sf-rail right">
+            {/* Incident detail (when selected) */}
             {selectedIncident ? (
               <IncidentDetailPanel
-                incident={selectedIncident}
-                incidentEvents={incidentEvents}
-                recoveryActions={recoveryActions}
+                incident={selectedIncident} incidentEvents={incidentEvents} recoveryActions={recoveryActions}
                 isTransitioning={incidentTransitioning === selectedIncident.id}
-                onTransition={handleIncidentTransition}
-                onBack={() => setSelectedIncidentId(null)}
-                onCreateRecoveryAction={handleCreateRecoveryAction}
-                onRecoveryTransition={handleRecoveryTransition}
-                raTransitioning={raTransitioning}
-                raSubmitting={raSubmitting}
-                showRecoveryForm={showRecoveryForm}
-                onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
+                onTransition={handleIncidentTransition} onBack={() => setSelectedIncidentId(null)}
+                onCreateRecoveryAction={handleCreateRecoveryAction} onRecoveryTransition={handleRecoveryTransition}
+                raTransitioning={raTransitioning} raSubmitting={raSubmitting}
+                showRecoveryForm={showRecoveryForm} onToggleRecoveryForm={() => setShowRecoveryForm(!showRecoveryForm)}
               />
             ) : (
               <>
-            <div className="mc-rail-title">Active Incidents</div>
-
-            {triageIncidents.length === 0 && (
-              <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', padding: '8px 0' }}>No active incidents.</div>
-            )}
-
-            {triageIncidents.slice(0, 8).map(inc => {
-              const sevColor = inc.severity === 'CRITICAL' ? 'var(--rq-red)' : inc.severity === 'HIGH' ? 'var(--rq-amber)' : 'var(--rq-blue)';
-              return (
-                <div key={inc.id} onClick={() => setSelectedIncidentId(inc.id === selectedIncidentId ? null : inc.id)}
-                  style={{
-                    padding: '8px 10px', marginBottom: 6,
-                    background: 'var(--rq-bg-1)',
-                    border: '1px solid var(--rq-line)',
-                    borderLeft: `3px solid ${sevColor}`,
-                    cursor: 'pointer', transition: 'all .15s',
-                  }}>
-                  <div style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600, marginBottom: 2 }}>
-                    {inc.title.length > 40 ? inc.title.slice(0, 40) + '...' : inc.title}
-                  </div>
-                  <div style={{ fontSize: 8, color: 'var(--rq-ink-3)', display: 'flex', gap: 8 }}>
-                    <span style={{ color: sevColor }}>{inc.severity}</span>
-                    <span>{inc.gate_id ?? inc.zone_id ?? ''}</span>
-                    <ElapsedTime since={inc.opened_at} format="relative" />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Recommendations */}
-            {soiRecommendations.length > 0 && (
-              <>
-                <div className="mc-rail-title" style={{ marginTop: 16 }}>SOI Recommendations</div>
-                {soiRecommendations.slice(0, 3).map(rec => (
-                  <div key={rec.id} className="mc-intel-card">
-                    <div className="mc-intel-label">Active Recommendation</div>
-                    <div className="mc-intel-title">{rec.title}</div>
-                    <div className="mc-intel-body">{rec.summary}</div>
-                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', marginTop: 4 }}>
-                      confidence {rec.confidence.score}% · est. {rec.estimatedStabilizationMinutes}m
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* Narrative feed */}
-            {(() => {
-              const visible = getVisibleNarratives(narrativeFeed, 4);
-              if (visible.length === 0) return null;
-              return (
-                <>
-                  <div className="mc-rail-title" style={{ marginTop: 16 }}>SOI Feed</div>
-                  {visible.map(entry => {
-                    const bc = entry.severity === 'critical' ? 'var(--rq-red)' : entry.severity === 'warning' ? 'var(--rq-amber)' : entry.severity === 'success' ? 'var(--rq-green)' : 'var(--rq-ink-4)';
-                    return (
-                      <div key={entry.id} style={{
-                        padding: '6px 10px', marginBottom: 4,
-                        background: 'var(--rq-bg-1)', borderLeft: `2px solid ${bc}`,
-                        fontSize: 9, color: 'var(--rq-ink-3)', lineHeight: 1.4,
-                      }}>
-                        {entry.narrative.length > 100 ? entry.narrative.slice(0, 100) + '...' : entry.narrative}
-                      </div>
-                    );
-                  })}
-                </>
-              );
-            })()}
+                {RIGHT_SLOTS.map(s => renderSlot(s))}
+                {/* Quick incident triage */}
+                {triageIncidents.length > 0 && (
+                  <ModuleFrame moduleId="incidents" name="Priority Incidents" size="normal">
+                    {triageIncidents.slice(0, 4).map(inc => {
+                      const sevC = inc.severity === 'CRITICAL' ? 'var(--sf-red)' : inc.severity === 'HIGH' ? 'var(--sf-amber)' : 'var(--sf-blue)';
+                      return (
+                        <div key={inc.id} onClick={() => setSelectedIncidentId(inc.id)} style={{ padding: '6px 0', borderBottom: '1px solid var(--sf-line)', cursor: 'pointer', fontSize: 10 }}>
+                          <div style={{ color: 'var(--sf-ink)', fontWeight: 500, marginBottom: 2 }}>{inc.title.length > 45 ? inc.title.slice(0, 45) + '...' : inc.title}</div>
+                          <div style={{ fontSize: 8, color: 'var(--sf-ink-3)', display: 'flex', gap: 8 }}>
+                            <span style={{ color: sevC }}>{inc.severity}</span>
+                            <span>{inc.gate_id ?? ''}</span>
+                            <ElapsedTime since={inc.opened_at} format="relative" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </ModuleFrame>
+                )}
               </>
             )}
           </div>
-
         </div>
 
-        {/* ── COMMAND DOCK ── */}
-        <div className="mc-dock">
-          {/* Waveform */}
-          <div className={`mc-waveform${voiceState === 'listening' ? ' active' : ttsState === 'speaking' ? ' speaking' : ''}`}>
-            <div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" /><div className="mc-waveform-bar" />
+        {/* ── A3: COMMAND DOCK ── */}
+        <div className="sf-dock">
+          <div className="sf-waveform">
+            <div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" /><div className="sf-wave-bar" />
           </div>
-
-          {/* Command input */}
-          <input
-            type="text"
-            className="mc-dock-input"
-            value={commandInput}
-            onChange={e => setCommandInput(e.target.value)}
+          <input className="sf-dock-input" type="text" value={commandInput} onChange={e => setCommandInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-            placeholder={`Ask SOI anything... e.g., "What's the play?", "Show me 52C", "What should I worry about?"`}
-          />
-
-          {/* Run */}
-          <button className={`mc-dock-btn${commandInput.trim() ? ' primary' : ''}`}
-            onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-            disabled={!commandInput.trim()}>Run</button>
-
-          {/* Mic */}
+            placeholder="Ask SOI anything... assign a team, show me 52C, what should I worry about?" />
+          <button className="sf-dock-btn primary" onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }} disabled={!commandInput.trim()}>Run</button>
           {isVoiceInputAvailable() && (
-            <button className={`mc-dock-mic${voiceState === 'listening' ? ' listening' : ''}`}
-              onMouseDown={() => startListening()}
-              onMouseUp={() => stopListening()}
-              onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
-              title="Push to talk (hold)">
+            <button className="sf-dock-mic" onMouseDown={() => startListening()} onMouseUp={() => stopListening()} onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }} title="Push to talk">
               {voiceState === 'listening' ? '●' : '🎙'}
             </button>
           )}
-
-          {/* Voice controls */}
-          {isTTSAvailable() && ttsOn && (
-            <button className="mc-dock-btn" onClick={() => soiSpeak('Soi voice channel online.')} title="Test voice">Test</button>
+          {isTTSAvailable() && <button className={`sf-dock-btn${ttsOn ? ' primary' : ''}`} onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}>{ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}</button>}
+          {crisisMode && (
+            <>
+              <button className="sf-dock-btn" style={{ color: 'var(--sf-amber)' }} onClick={() => handleCommand('brief me')}>Brief Team</button>
+              <button className="sf-dock-btn" style={{ color: 'var(--sf-orange,#ff7d4d)' }} onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
+            </>
           )}
-          {isTTSAvailable() && (
-            <button className={`mc-dock-btn${ttsOn ? ' active' : ''}`}
-              onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
-              title={`Voice (${ttsMode})`}>
-              {ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}
-            </button>
-          )}
-          <button className={`mc-dock-btn${ambientOn ? ' active' : ''}`}
-            onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}>Ambient</button>
-
-          {/* Status */}
           {(voiceState !== 'idle' || ttsState === 'speaking') && (
-            <span className="mc-dock-status" style={{
-              color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-amber)',
-            }}>{ttsState === 'speaking' ? 'speaking' : voiceState}</span>
-          )}
-          {interimTranscript && (
-            <span style={{ fontSize: 8, color: 'var(--rq-ink-3)', fontStyle: 'italic', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {interimTranscript}
+            <span style={{ fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.1em', textTransform: 'uppercase', color: ttsState === 'speaking' ? 'var(--sf-blue)' : voiceState === 'listening' ? 'var(--sf-red)' : 'var(--sf-amber)' }}>
+              {ttsState === 'speaking' ? 'speaking' : voiceState}
             </span>
           )}
         </div>
       </div>
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 25,
-        padding: '6px 16px',
-        background: 'var(--rq-bg)', borderBottom: '1px solid var(--rq-line)',
-        display: 'flex', alignItems: 'center', gap: 8,
-        fontFamily: "'JetBrains Mono', monospace",
-      }}>
-        {/* Identity */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 10, color: 'var(--rq-ink)', fontWeight: 600 }}>{operator.displayName}</span>
-          <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{getRoleLabel(operator)}</span>
-        </div>
-
-        {/* Divider */}
-        <span style={{ width: 1, height: 16, background: 'var(--rq-line)', flexShrink: 0 }} />
-
-        {/* Command input */}
-        <input
-          type="text"
-          value={commandInput}
-          onChange={e => setCommandInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-          placeholder="Ask SOI..."
-          style={{
-            flex: 1, padding: '5px 10px', minWidth: 0,
-            background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
-            color: 'var(--rq-ink)', fontFamily: 'inherit', fontSize: 11,
-            outline: 'none',
-          }}
-        />
-
-        {/* Run button */}
-        <button
-          type="button"
-          onClick={() => { if (commandInput.trim()) { lastInputWasVoiceRef.current = false; handleCommand(commandInput); } }}
-          disabled={!commandInput.trim()}
-          style={{
-            padding: '5px 8px', fontSize: 9, letterSpacing: '.06em', textTransform: 'uppercase',
-            fontFamily: 'inherit',
-            background: 'none', border: `1px solid ${commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-line)'}`,
-            color: commandInput.trim() ? 'var(--rq-accent)' : 'var(--rq-ink-4)',
-            cursor: commandInput.trim() ? 'pointer' : 'default', flexShrink: 0,
-          }}
-        >
-          Run
-        </button>
-
-        {/* Voice push-to-talk */}
-        {isVoiceInputAvailable() && (
-          <button
-            type="button"
-            onMouseDown={() => startListening()}
-            onMouseUp={() => stopListening()}
-            onMouseLeave={() => { if (voiceState === 'listening') stopListening(); }}
-            style={{
-              width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: voiceState === 'listening' ? 'rgba(255,92,92,.15)' : 'none',
-              border: `1px solid ${voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-line)'}`,
-              color: voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-ink-3)',
-              cursor: 'pointer', fontSize: 12, flexShrink: 0,
-            }}
-            title="Push to talk (hold)"
-          >
-            {voiceState === 'listening' ? '●' : '🎙'}
-          </button>
-        )}
-
-        {/* Voice/ambient controls */}
-        <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-          {isTTSAvailable() && ttsOn && (
-            <button type="button" onClick={() => soiSpeak('Soi voice channel online.')}
-              style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
-              title="Test voice">Test</button>
-          )}
-          {isTTSAvailable() && (
-            <button type="button" onClick={() => { if (ttsOn) { disableTTS(); setTtsOn(false); } else { enableTTS(); setTtsOn(true); } }}
-              style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ttsOn ? 'rgba(90,169,255,.08)' : 'none', border: `1px solid ${ttsOn ? 'var(--rq-blue)' : 'var(--rq-line)'}`, color: ttsOn ? 'var(--rq-blue)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
-              title={`Toggle voice (${ttsMode})`}>{ttsOn ? (ttsMode === 'openai' ? 'AI Voice' : 'Voice') : 'Voice'}</button>
-          )}
-          <button type="button" onClick={() => { const on = toggleAmbient(); setAmbientOn(on); }}
-            style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: ambientOn ? 'rgba(201,255,58,.06)' : 'none', border: `1px solid ${ambientOn ? 'var(--rq-accent)' : 'var(--rq-line)'}`, color: ambientOn ? 'var(--rq-accent)' : 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em' }}
-            title="Toggle ambient">Ambient</button>
-        </div>
-
-        {/* Status indicator */}
-        {(voiceState !== 'idle' || ttsState === 'speaking') && (
-          <span style={{
-            fontSize: 7, letterSpacing: '.08em', textTransform: 'uppercase', flexShrink: 0,
-            color: ttsState === 'speaking' ? 'var(--rq-blue)' : voiceState === 'listening' ? 'var(--rq-red)' : 'var(--rq-amber)',
-          }}>
-            {ttsState === 'speaking' ? 'speaking' : voiceState}
-          </span>
-        )}
-        {interimTranscript && (
-          <span style={{ fontSize: 8, color: 'var(--rq-ink-3)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
-            {interimTranscript}
-          </span>
-        )}
-
-        {/* Sign out */}
-        <button type="button" onClick={() => { clearIdentity(); setShowAccessPrompt(true); setOperator(OPERATORS[0]); }}
-          style={{ padding: '2px 5px', fontSize: 7, fontFamily: 'inherit', background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '.06em', flexShrink: 0 }}
-          title="Sign out">Out</button>
-      </div>
-
     </>
   );
 }
@@ -2849,4 +2494,3 @@ export default function ManagerDashboard() {
 // statusBorderColor, sevFg, sevBg removed — replaced by
 // SeverityIndicator and OperationalStatus primitives from
 // @/components/soi which derive colors from operational-states.ts.
-
