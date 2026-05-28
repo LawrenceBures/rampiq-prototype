@@ -2418,16 +2418,53 @@ export default function ManagerDashboard() {
               />
             )}
 
-            {/* View tabs below spatial field */}
+            {/* ── ACTIVE RECOMMENDATION STRIP ── */}
+            {soiRecommendations.length > 0 && (() => {
+              const rec = soiRecommendations[0];
+              const sevColor = rec.severity === 'critical' ? 'var(--rq-red)' : rec.severity === 'high' ? 'var(--rq-amber)' : 'var(--rq-blue)';
+              return (
+                <div style={{
+                  margin: '0 16px', padding: '12px 16px',
+                  background: 'var(--mc-surface)', border: '1px solid var(--mc-border)',
+                  borderLeft: `3px solid ${sevColor}`,
+                  display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  animation: 'mc-fade-in .45s cubic-bezier(.23,1,.32,1) both',
+                }}>
+                  <div>
+                    <div style={{ fontSize: 7, color: sevColor, letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Active Recommendation</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.75)', marginBottom: 3 }}>{rec.title}</div>
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,.3)', lineHeight: 1.4 }}>{rec.summary}</div>
+                    <div style={{ display: 'flex', gap: 14, marginTop: 6, fontSize: 8, color: 'rgba(255,255,255,.2)' }}>
+                      <span>confidence <b style={{ color: rec.confidence.score >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>{rec.confidence.score}%</b></span>
+                      <span>stabilization <b style={{ color: 'rgba(255,255,255,.4)' }}>~{rec.estimatedStabilizationMinutes}m</b></span>
+                      <span>pressure <b style={{ color: 'var(--rq-green)' }}>{rec.preview.beforePressure}→{rec.preview.afterPressure}</b></span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <button className="mc-dock-btn primary" style={{ padding: '6px 16px' }}
+                      onClick={() => handleCommand(`stabilize ${rec.affectedGate ?? rec.affectedZone}`)}>
+                      Stabilize
+                    </button>
+                    <button className="mc-dock-btn" style={{ padding: '4px 12px', fontSize: 7 }}
+                      onClick={() => setView('intelligence')}>
+                      Details
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Minimal view selector — hidden by default, toggled via Details */}
+            {(view as string) !== 'feed' && (<>
             <div style={{
-              display: 'flex', gap: 0, margin: '0 20px',
-              borderBottom: '1px solid var(--rq-line)',
+              display: 'flex', gap: 0, margin: '6px 16px 0',
+              borderBottom: '1px solid rgba(255,255,255,.025)',
             }}>
               {([
                 { key: 'feed' as const, label: 'Feed', count: zoneSummary.total },
                 { key: 'unresolved' as const, label: 'Unresolved', count: zoneSummary.openCount },
                 { key: 'incidents' as const, label: 'Incidents', count: zoneScopedIncidents.length },
-                { key: 'patterns' as const, label: 'Patterns', count: null },
                 { key: 'intelligence' as const, label: 'Intelligence', count: soiRecommendations.length > 0 ? soiRecommendations.length : null },
               ]).map(tab => (
                 <button key={tab.key} type="button" onClick={() => setView(tab.key)}
@@ -2447,19 +2484,17 @@ export default function ManagerDashboard() {
               ))}
             </div>
 
-            {/* View content (scrollable) */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+            {/* View content (scrollable, compact) */}
+            <div style={{ maxHeight: 200, overflow: 'auto' }}>
               <div className="rq-ops-board" style={{ maxWidth: 'none' }}>
-                {loading && events.length === 0 && (
-                  <div className="rq-quiet" style={{ padding: '32px 16px' }}>Loading operational state...</div>
-                )}
                 {view === 'feed' && renderFeed()}
                 {view === 'unresolved' && renderUnresolved()}
                 {view === 'incidents' && renderIncidents()}
-                {view === 'patterns' && renderPatterns()}
                 {view === 'intelligence' && renderIntelligence()}
               </div>
             </div>
+            </> /* end view !== 'feed' */
+            )}
 
             {/* Response panels */}
             {commandResponse && (

@@ -197,9 +197,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 24px;
-  border-top: 1px solid var(--mc-border);
-  background: linear-gradient(0deg, #050910 0%, var(--mc-bg) 100%);
+  padding: 12px 28px;
+  margin: 0 20px 10px;
+  border: 1px solid rgba(255,255,255,.04);
+  border-radius: 12px;
+  background: linear-gradient(0deg, rgba(6,10,16,.95) 0%, rgba(8,12,20,.9) 100%);
   flex-shrink: 0;
   box-shadow: 0 -1px 16px rgba(0,0,0,.4);
 }
@@ -222,10 +224,10 @@
 
 .mc-dock-input {
   flex: 1;
-  padding: 10px 16px;
-  background: rgba(8,12,20,.7);
+  padding: 10px 18px;
+  background: rgba(8,12,20,.6);
   border: 1px solid rgba(255,255,255,.04);
-  border-radius: 2px;
+  border-radius: 8px;
   color: var(--rq-ink);
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
