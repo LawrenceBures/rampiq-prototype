@@ -399,6 +399,36 @@
 .sf-edit-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sf-cyan); animation: sf-breathe 1.4s ease-in-out infinite; }
 .sf-edit-pill .label { font-family: var(--sf-mono); font-size: 9px; font-weight: 600; letter-spacing: .2em; color: var(--sf-cyan); text-transform: uppercase; }
 
+/* ── Responsive degradation ── */
+@media (max-width: 1100px) {
+  .sf-body { grid-template-columns: 200px 1fr 240px; }
+}
+@media (max-width: 900px) {
+  .sf-body { grid-template-columns: 1fr 240px; }
+  .sf-rail.left { display: none; }
+  .sf-header { padding: 0 16px; gap: 12px; }
+}
+@media (max-width: 700px) {
+  .sf-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .sf-rail.left, .sf-rail.right { display: none; }
+  .sf-dock { margin: 0 12px 8px; padding: 10px 16px; border-radius: 12px; }
+  .sf-rec { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .sf-shell::after {
+    content: 'SOI command surface optimized for desktop. For mobile operations, use the agent mobile surface.';
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    padding: 12px 20px;
+    background: rgba(5,7,10,.95);
+    border-top: 1px solid var(--sf-line);
+    font-family: var(--sf-mono);
+    font-size: 10px;
+    color: var(--sf-ink-3);
+    text-align: center;
+    letter-spacing: .04em;
+  }
+}
+
 /* ── Scrollbar ── */
 .sf-rail::-webkit-scrollbar { width: 2px; }
 .sf-rail::-webkit-scrollbar-track { background: transparent; }

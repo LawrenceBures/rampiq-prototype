@@ -184,39 +184,89 @@ export default function ManagerDashboard() {
   const [pendingAssignment, setPendingAssignment] = useState<{ gate: string; members: string[]; reasoning: string } | null>(null);
 
   // ── Surface layout state (persisted) ──
+  const ALL_LAYOUT_NAMES: LayoutName[] = ['Default', 'Operational', 'Focus', 'Crisis', 'Personal Custom'];
+
   const [activeRole, setActiveRole] = useState<RoleId>(() => {
     if (typeof window === 'undefined') return 'crew_chief';
     const stored = getStoredIdentity();
     if (stored?.viewerRole === 'manager') return 'ramp_manager';
     if (stored?.viewerRole === 'ops_director') return 'executive';
-    if (stored?.role === 'CREW_CHIEF') return 'crew_chief';
     return 'crew_chief';
   });
-  const [activeLayoutName, setActiveLayoutName] = useState<LayoutName>('Default');
+  const [activeLayoutName, setActiveLayoutName] = useState<LayoutName>(() => {
+    if (typeof window === 'undefined') return 'Default';
+    const stored = getStoredIdentity();
+    const role: RoleId = stored?.viewerRole === 'manager' ? 'ramp_manager' : stored?.viewerRole === 'ops_director' ? 'executive' : 'crew_chief';
+    return getLastUsedLayoutName(stored?.userId ?? 'anon', role, 'LAX');
+  });
   const [layoutSlots, setLayoutSlots] = useState(() => {
     if (typeof window === 'undefined') return getRolePreset('crew_chief');
     try {
       const stored = getStoredIdentity();
       const role: RoleId = stored?.viewerRole === 'manager' ? 'ramp_manager' : stored?.viewerRole === 'ops_director' ? 'executive' : 'crew_chief';
-      const saved = loadLayout(stored?.userId ?? 'anon', role, 'LAX', 'Default');
+      const lastLayout = getLastUsedLayoutName(stored?.userId ?? 'anon', role, 'LAX');
+      if (lastLayout === 'Default') return getRolePreset(role);
+      const saved = loadLayout(stored?.userId ?? 'anon', role, 'LAX', lastLayout);
       return saved?.slots ?? getRolePreset(role);
     } catch { return getRolePreset('crew_chief'); }
   });
+  const [savedSlots, setSavedSlots] = useState(layoutSlots); // snapshot for diff
   const [editMode, setEditMode] = useState(false);
   const [crisisMode, setCrisisMode] = useState(false);
   const [crisisSuggested, setCrisisSuggested] = useState(false);
   const [showModuleGallery, setShowModuleGallery] = useState(false);
   const [galleryTarget, setGalleryTarget] = useState<SlotId | null>(null);
+  const [showLayoutDropdown, setShowLayoutDropdown] = useState(false);
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+
+  // Diff detection
+  const isModified = JSON.stringify(layoutSlots) !== JSON.stringify(savedSlots);
+  const diffSummary = (() => {
+    if (!isModified) return '';
+    const changes: string[] = [];
+    const allSlots = [...LEFT_SLOTS, ...RIGHT_SLOTS, ...UTILITY_SLOTS] as SlotId[];
+    for (const s of allSlots) {
+      const curr = layoutSlots[s];
+      const saved = savedSlots[s];
+      if (!curr && saved) changes.push(`${s}: ${getModuleDef(saved.moduleId)?.name ?? saved.moduleId} removed`);
+      else if (curr && !saved) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? curr.moduleId} added`);
+      else if (curr && saved && curr.moduleId !== saved.moduleId) changes.push(`${s}: swapped`);
+      else if (curr && saved && curr.size !== saved.size) changes.push(`${s}: ${getModuleDef(curr.moduleId)?.name ?? ''} ${saved.size}→${curr.size}`);
+    }
+    return changes.slice(0, 4).join(' · ');
+  })();
 
   function switchRole(role: RoleId) {
     setActiveRole(role);
-    const saved = loadLayout(operator.userId, role, 'LAX', 'Default');
-    setLayoutSlots(saved?.slots ?? getRolePreset(role));
     setActiveLayoutName('Default');
+    const slots = getRolePreset(role);
+    setLayoutSlots(slots);
+    setSavedSlots(slots);
     setEditMode(false);
+    setShowRoleDropdown(false);
+  }
+
+  function switchLayout(name: LayoutName) {
+    setActiveLayoutName(name);
+    if (name === 'Default') {
+      const slots = getRolePreset(activeRole);
+      setLayoutSlots(slots);
+      setSavedSlots(slots);
+    } else {
+      const saved = loadLayout(operator.userId, activeRole, 'LAX', name);
+      const slots = saved?.slots ?? getRolePreset(activeRole);
+      setLayoutSlots(slots);
+      setSavedSlots(slots);
+    }
+    setLastUsedLayoutName(operator.userId, activeRole, 'LAX', name);
+    setEditMode(false);
+    setShowLayoutDropdown(false);
+    if (name === 'Crisis') setCrisisMode(true);
+    else setCrisisMode(false);
   }
 
   function saveCurrentLayout() {
+    if (activeLayoutName === 'Default') return; // can't save over default
     saveLayout({
       userId: operator.userId,
       role: activeRole,
@@ -225,8 +275,36 @@ export default function ManagerDashboard() {
       slots: layoutSlots,
       lastModified: Date.now(),
     });
+    setSavedSlots(layoutSlots);
     setLastUsedLayoutName(operator.userId, activeRole, 'LAX', activeLayoutName);
     setEditMode(false);
+  }
+
+  function saveAsLayout(name: LayoutName) {
+    saveLayout({
+      userId: operator.userId,
+      role: activeRole,
+      stationId: 'LAX',
+      layoutName: name,
+      slots: layoutSlots,
+      lastModified: Date.now(),
+    });
+    setActiveLayoutName(name);
+    setSavedSlots(layoutSlots);
+    setEditMode(false);
+  }
+
+  function resetLayout() {
+    if (activeLayoutName === 'Default') {
+      const slots = getRolePreset(activeRole);
+      setLayoutSlots(slots);
+      setSavedSlots(slots);
+    } else {
+      const saved = loadLayout(operator.userId, activeRole, 'LAX', activeLayoutName);
+      const slots = saved?.slots ?? getRolePreset(activeRole);
+      setLayoutSlots(slots);
+      setSavedSlots(slots);
+    }
   }
 
   function moveModuleInRail(slotId: SlotId, direction: 'up' | 'down') {
@@ -2314,22 +2392,66 @@ export default function ManagerDashboard() {
           {/* Greeting */}
           {greeting && <div style={{ fontSize: 11, color: 'var(--sf-cyan)', opacity: .7 }}>{greeting}</div>}
 
-          {/* Layout selector */}
-          <div className="sf-layout-pill" onClick={() => {
-            const roles: RoleId[] = ['crew_chief', 'ramp_manager', 'dispatcher', 'executive'];
-            const next = roles[(roles.indexOf(activeRole) + 1) % roles.length];
-            switchRole(next);
-          }}>
-            <div className="sf-layout-pip" />
-            <div className="sf-layout-label">{ROLE_LABELS[activeRole]}</div>
+          {/* Role selector */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => { setShowRoleDropdown(!showRoleDropdown); setShowLayoutDropdown(false); }}
+              style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 10px', fontFamily: 'var(--sf-mono)', fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-ink-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {ROLE_LABELS[activeRole]} <span style={{ fontSize: 7, color: 'var(--sf-ink-4)' }}>▾</span>
+            </button>
+            {showRoleDropdown && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, padding: '4px 0', zIndex: 50, minWidth: 140 }}>
+                {(['crew_chief', 'ramp_manager', 'dispatcher', 'executive'] as RoleId[]).map(r => (
+                  <div key={r} onClick={() => switchRole(r)}
+                    style={{ padding: '7px 14px', fontSize: 10, color: r === activeRole ? 'var(--sf-cyan)' : 'var(--sf-ink-2)', cursor: 'pointer', fontFamily: 'var(--sf-sans)', transition: '.1s' }}>
+                    {ROLE_LABELS[r]}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Layout selector */}
+          <div style={{ position: 'relative' }}>
+            <div className="sf-layout-pill" onClick={() => { setShowLayoutDropdown(!showLayoutDropdown); setShowRoleDropdown(false); }}>
+              <div className="sf-layout-pip" style={crisisMode ? { background: 'var(--sf-orange,#ff7d4d)', boxShadow: '0 0 9px rgba(255,125,77,.3)' } : undefined} />
+              <div className="sf-layout-label" style={crisisMode ? { color: 'var(--sf-orange,#ff7d4d)' } : undefined}>{activeLayoutName}</div>
+            </div>
+            {showLayoutDropdown && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--sf-bg,#080b10)', border: '1px solid var(--sf-line)', borderRadius: 8, padding: '4px 0', zIndex: 50, minWidth: 160 }}>
+                {ALL_LAYOUT_NAMES.map(name => (
+                  <div key={name} onClick={() => switchLayout(name)}
+                    style={{ padding: '7px 14px', fontSize: 10, color: name === activeLayoutName ? 'var(--sf-cyan)' : 'var(--sf-ink-2)', cursor: 'pointer', fontFamily: 'var(--sf-sans)', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <span>{name}</span>
+                    {name === activeLayoutName && <span style={{ fontSize: 8, color: 'var(--sf-cyan)' }}>●</span>}
+                  </div>
+                ))}
+                <div style={{ borderTop: '1px solid var(--sf-line)', margin: '4px 0' }} />
+                {activeLayoutName !== 'Default' && (
+                  <div onClick={() => { saveAsLayout(activeLayoutName); setShowLayoutDropdown(false); }}
+                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-cyan)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
+                    Save Current
+                  </div>
+                )}
+                {activeLayoutName === 'Default' && (
+                  <div onClick={() => { saveAsLayout('Operational'); setShowLayoutDropdown(false); }}
+                    style={{ padding: '7px 14px', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', fontFamily: 'var(--sf-mono)', letterSpacing: '.08em' }}>
+                    Save as Operational
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Modified indicator */}
+          {isModified && (
+            <div title={diffSummary} style={{ padding: '3px 8px', background: 'rgba(243,177,60,.06)', border: '1px solid rgba(243,177,60,.15)', borderRadius: 5, fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--sf-amber,#f3b13c)', cursor: 'help' }}>
+              Modified
+            </div>
+          )}
 
           {/* Edit / Crisis toggles */}
           <button onClick={() => setEditMode(!editMode)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '4px 10px', fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.14em', textTransform: 'uppercase', color: editMode ? 'var(--sf-cyan)' : 'var(--sf-ink-4)', cursor: 'pointer' }}>
             {editMode ? 'Exit Edit' : 'Edit'}
-          </button>
-          <button onClick={toggleCrisis} style={{ background: crisisMode ? 'rgba(255,125,77,.06)' : 'none', border: `1px solid ${crisisMode ? 'rgba(255,125,77,.3)' : 'var(--sf-line)'}`, borderRadius: 6, padding: '4px 10px', fontFamily: 'var(--sf-mono)', fontSize: 8, letterSpacing: '.14em', textTransform: 'uppercase', color: crisisMode ? 'var(--sf-orange,#ff7d4d)' : 'var(--sf-ink-4)', cursor: 'pointer' }}>
-            Crisis
           </button>
 
           <div className="sf-conditions">{liveTime}</div>
@@ -2350,7 +2472,11 @@ export default function ManagerDashboard() {
             <span style={{ flex: 1 }} />
             <button onClick={() => { setLayoutSlots(getRolePreset(activeRole)); setEditMode(false); }} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Reset</button>
             <button onClick={() => setEditMode(false)} style={{ background: 'none', border: '1px solid var(--sf-line)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--sf-mono)', fontSize: 9, color: 'var(--sf-ink-3)', cursor: 'pointer', letterSpacing: '.1em', textTransform: 'uppercase' }}>Cancel</button>
-            <button onClick={saveCurrentLayout} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
+            {activeLayoutName !== 'Default' ? (
+              <button onClick={saveCurrentLayout} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save</button>
+            ) : (
+              <button onClick={() => saveAsLayout('Operational')} className="sf-dock-btn primary" style={{ padding: '5px 14px' }}>Save as Operational</button>
+            )}
           </div>
         )}
 
