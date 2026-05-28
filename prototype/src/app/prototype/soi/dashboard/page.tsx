@@ -93,6 +93,7 @@ import {
   getVisibleNarratives,
   type NarrativeFeed,
 } from '@/lib/soi-narrative';
+import { voiceRewrite, isVoiceAvailable, type GroundedData } from '@/lib/soi-llm';
 
 // ============================================================
 // TYPES
@@ -635,16 +636,62 @@ export default function ManagerDashboard() {
 
         // Copilot fallback: route through context-aware operational reasoning
         setCommandResponse(null);
-        const result = answerOperationalQuestion(raw, {
+        const opCtx = {
           assessment: operationalAssessment,
           recommendations: soiRecommendations,
           dispatchPlan,
           activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
           activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
-        }, zones, conversationMemory, true);
+        };
+        const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
         setCopilotAnswer(result.answer);
         setConversationMemory(result.updatedMemory);
         setLastInferredFrom(result.inferredFrom);
+
+        // Async LLM voice rewrite (non-blocking, upgrades answer when ready)
+        if (isVoiceAvailable()) {
+          const isBriefing = /brief|situation|status|summarize|overview/i.test(raw);
+          const grounded: GroundedData = {
+            answer: {
+              title: result.answer.title,
+              content: result.answer.answer,
+              confidence: result.answer.confidence,
+              bullets: result.answer.bullets,
+              assumptions: result.answer.assumptions,
+              recommendedAction: result.answer.recommendedNextAction,
+            },
+            operationalState: {
+              globalPressure: operationalAssessment.globalPressure,
+              globalStability: operationalAssessment.globalStability,
+              activeIncidents: opCtx.activeIncidentCount,
+              activeRecoveries: opCtx.activeRecoveryCount,
+              zoneStates: operationalAssessment.zoneAssessments.map(z => ({
+                zone: z.zoneLabel,
+                pressure: z.pressure,
+                stability: z.stability,
+                unresolved: z.unresolvedCount,
+              })),
+            },
+            executionContext: liveExec ? {
+              objective: cmdMemory.activePlan?.objective.operationalGoal ?? '',
+              phase: liveExec.phase,
+              stepsCompleted: liveExec.steps.filter(s => s.phase === 'completed').length,
+              stepsTotal: liveExec.steps.length,
+              estimatedMinutes: cmdMemory.activePlan?.totalEstimatedMinutes ?? 0,
+            } : undefined,
+            operatorRole: operator.role,
+            operatorName: operator.displayName,
+          };
+          voiceRewrite(raw, grounded, { briefingMode: isBriefing }).then(voiceResult => {
+            if (voiceResult.source === 'llm') {
+              setCopilotAnswer(prev => prev ? {
+                ...prev,
+                answer: voiceResult.text,
+                source: 'deterministic_operational_model' as const,
+              } : prev);
+            }
+          }).catch(() => { /* keep deterministic answer */ });
+        }
       }
     }
     setCommandInput('');
