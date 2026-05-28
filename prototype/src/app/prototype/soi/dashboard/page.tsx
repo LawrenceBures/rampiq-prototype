@@ -99,6 +99,7 @@ import { isWeatherQuestion, fetchLiveWeather, generateWeatherAnswer } from '@/li
 import { computeFlightWorld, getAtRiskFlights, findFlight } from '@/lib/soi-context/flight-context';
 import { forecastPressure, forecastCascades, assessRecoveryConfidence, type OperationalForecast, type CascadeRisk } from '@/lib/soi-predictive';
 import { compareScenarios, simulateScenario, type Scenario } from '@/lib/soi-simulation';
+import { analyzeOperationalContext, analyzeHistoricalEffectiveness } from '@/lib/soi-adaptive';
 import { SpatialField } from '@/components/soi/SpatialField';
 import { ReplayTimeline } from '@/components/soi/ReplayTimeline';
 import './mission-control.css';
@@ -547,6 +548,10 @@ export default function ManagerDashboard() {
   } catch { /* keep null */ }
   const recoveryConf = assessRecoveryConfidence(temporalIncidents, temporalRecoveryActions, selectedZoneId ?? undefined);
 
+  // ── Adaptive Reasoning ──
+  const opProfile = analyzeOperationalContext(temporalIncidents, temporalRecoveryActions, temporalEvents, operationalAssessment, selectedZoneId ?? undefined);
+  const historicalEff = analyzeHistoricalEffectiveness(temporalIncidents, temporalRecoveryActions);
+
   const filteredEvents = filterEvents(zoneScopedEvents, filters);
   const filteredOpen = filterEvents(zoneScopedEvents.filter(isOpen), filters);
   const currentFilterCount = countActiveFilters(filters);
@@ -823,7 +828,7 @@ export default function ManagerDashboard() {
         // F. Scenario simulation queries
         if (/\b(?:compare.*(?:option|recovery|scenario|intervention)|simulate.*(?:stab|recovery|intervention)|what\s+if.*(?:intervene|dispatch|reroute|reassign|delay|nothing)|(?:best|safest|fastest).*(?:recovery|option|move)|which.*(?:recovery|option|intervention).*(?:best|work))/i.test(raw)) {
           if (forecast) {
-            const scenarios = compareScenarios(selectedZoneId ?? undefined, operationalAssessment, forecast, cascadeRisks, recoveryConf);
+            const scenarios = compareScenarios(selectedZoneId ?? undefined, operationalAssessment, forecast, cascadeRisks, recoveryConf, opProfile);
             const bullets = scenarios.map(s => {
               const tgt = s.outcomes.find(o => o.zoneId === (selectedZoneId ?? operationalAssessment.zoneAssessments[0]?.zoneId));
               return `${s.label}: pressure ${tgt?.currentPressure ?? '?'} → ${tgt?.projectedPressure ?? '?'}, stabilize ~${s.overallStabilizationMin}m (${s.overallConfidence})`;
@@ -2174,6 +2179,25 @@ export default function ManagerDashboard() {
                   </div>
                 ))}
               </>
+            )}
+
+            {/* Operational Profile */}
+            {opProfile.composition !== 'stable' && (
+              <div style={{
+                padding: '8px 10px', marginBottom: 10,
+                background: 'linear-gradient(135deg, rgba(12,16,24,.7) 0%, rgba(8,12,18,.8) 100%)',
+                border: '1px solid rgba(255,255,255,.04)',
+                fontSize: 8, fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <div style={{ color: 'rgba(255,255,255,.15)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 4 }}>Pressure Profile</div>
+                <div style={{ color: 'var(--rq-ink-2)', fontSize: 9, fontWeight: 600, marginBottom: 3 }}>{opProfile.composition.replace(/_/g, ' ')}</div>
+                <div style={{ color: 'rgba(255,255,255,.2)' }}>{opProfile.dominantDriver}</div>
+                {historicalEff.patterns.length > 0 && (
+                  <div style={{ color: 'rgba(255,255,255,.15)', marginTop: 4, fontSize: 7 }}>
+                    Pattern: {historicalEff.patterns[0].narrative.slice(0, 60)}...
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Recovery Confidence */}

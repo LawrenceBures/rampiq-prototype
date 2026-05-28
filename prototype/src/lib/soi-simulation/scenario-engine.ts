@@ -9,6 +9,8 @@ import type { OperationalAssessment, ZoneAssessment } from '@/lib/soi-intelligen
 import type { ZoneForecast, ForecastConfidence } from '@/lib/soi-predictive/pressure-forecast';
 import type { CascadeRisk } from '@/lib/soi-predictive/cascade-forecast';
 import type { RecoveryConfidenceReport } from '@/lib/soi-predictive/recovery-confidence';
+import type { OperationalProfile } from '@/lib/soi-adaptive/operational-context-analyzer';
+import { computeAdaptiveModifiers, explainWeighting } from '@/lib/soi-adaptive/dynamic-weighting';
 
 // ============================================================
 // TYPES
@@ -77,6 +79,7 @@ export function simulateScenario(
   forecast: { zones: readonly ZoneForecast[] },
   cascadeRisks: readonly CascadeRisk[],
   recoveryConf: RecoveryConfidenceReport,
+  profile?: OperationalProfile,
 ): Scenario {
   const target = targetZoneId
     ? assessment.zoneAssessments.find(z => z.zoneId === targetZoneId)
@@ -86,7 +89,9 @@ export function simulateScenario(
   const allZones = assessment.zoneAssessments;
 
   // Intervention modifiers
-  const mod = getModifiers(intervention);
+  // Use adaptive modifiers when operational profile available, else static
+  const mod = profile ? computeAdaptiveModifiers(intervention, profile) : getModifiers(intervention);
+  const weightExplanation = profile ? explainWeighting(intervention, profile) : null;
 
   const outcomes: ScenarioOutcome[] = allZones.map(za => {
     const fc = forecast.zones.find(z => z.zoneId === za.zoneId);
@@ -143,7 +148,8 @@ export function simulateScenario(
   const confScore = recoveryConf.score + mod.confidenceDelta;
   const overallConfidence: ForecastConfidence = confScore >= 70 ? 'high' : confScore >= 40 ? 'moderate' : 'low';
 
-  const narrative = generateNarrative(intervention, target, targetOutcome, tradeoffs, overallStab, overallConfidence);
+  let narrative = generateNarrative(intervention, target, targetOutcome, tradeoffs, overallStab, overallConfidence);
+  if (weightExplanation) narrative += ` ${weightExplanation}`;
 
   return {
     id: `sim-${intervention}-${Date.now()}`,
@@ -168,12 +174,21 @@ export function compareScenarios(
   forecast: { zones: readonly ZoneForecast[] },
   cascadeRisks: readonly CascadeRisk[],
   recoveryConf: RecoveryConfidenceReport,
+  profile?: OperationalProfile,
 ): Scenario[] {
-  return [
-    simulateScenario('no_action', targetZoneId, assessment, forecast, cascadeRisks, recoveryConf),
-    simulateScenario('dispatch_recovery', targetZoneId, assessment, forecast, cascadeRisks, recoveryConf),
-    simulateScenario('reroute_staffing', targetZoneId, assessment, forecast, cascadeRisks, recoveryConf),
-  ];
+  // Choose best comparison set based on operational composition
+  const interventions: InterventionType[] = ['no_action', 'dispatch_recovery'];
+  if (profile?.composition === 'equipment_driven') {
+    interventions.push('reassign_equipment');
+  } else if (profile?.composition === 'staffing_driven') {
+    interventions.push('reroute_staffing');
+  } else if (profile?.composition === 'cascade_propagation') {
+    interventions.push('split_resources');
+  } else {
+    interventions.push('reroute_staffing');
+  }
+
+  return interventions.map(i => simulateScenario(i, targetZoneId, assessment, forecast, cascadeRisks, recoveryConf, profile));
 }
 
 // ============================================================
