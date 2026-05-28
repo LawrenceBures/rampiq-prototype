@@ -17,6 +17,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrthographicCamera, Line, Text, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { OperationalAssessment, ZoneAssessment } from '@/lib/soi-intelligence/operational-reasoning';
+import { computeGateWorld, getGateCascadeRisks, type GateWorld } from '@/lib/soi-context/gate-world';
 import type { FlightWorld } from '@/lib/soi-context/flight-context';
 import type { LiveExecutionState } from '@/lib/soi-execution/live-execution-engine';
 import type { ExecutionPlan } from '@/lib/soi-agentic/execution-planner';
@@ -24,6 +25,9 @@ import type { ExecutionPlan } from '@/lib/soi-agentic/execution-planner';
 interface Props {
   assessment: OperationalAssessment;
   flightWorld?: Map<string, FlightWorld>;
+  incidents?: readonly import('@/lib/lifecycle-types').Incident[];
+  recoveryActions?: readonly import('@/lib/lifecycle-types').RecoveryAction[];
+  events?: readonly import('@/lib/soi-types').SoiEvent[];
   selectedGateId?: string | null;
   selectedZoneId?: string | null;
   liveExec?: LiveExecutionState | null;
@@ -260,10 +264,17 @@ function AtmosphericGrid() {
 // MAIN
 // ============================================================
 
-export function SpatialField3D({ assessment, flightWorld, selectedGateId, selectedZoneId, liveExec, activePlan, onGateClick }: Props) {
+export function SpatialField3D({ assessment, flightWorld, incidents, recoveryActions, events, selectedGateId, selectedZoneId, liveExec, activePlan, onGateClick }: Props) {
   const [hoveredGate, setHoveredGate] = useState<string | null>(null);
   const zoneMap = new Map<string, ZoneAssessment>();
   for (const za of assessment.zoneAssessments) zoneMap.set(za.zoneId, za);
+
+  // Gate-level operational reality
+  const ALL_GATES = Object.keys(GATE_3D);
+  const gateWorldMap = (incidents && recoveryActions && events)
+    ? computeGateWorld(ALL_GATES, incidents, recoveryActions, events, assessment, flightWorld)
+    : null;
+  const gateCascades = gateWorldMap ? getGateCascadeRisks(gateWorldMap) : [];
 
   const hasSelection = selectedGateId != null;
 
@@ -331,16 +342,17 @@ export function SpatialField3D({ assessment, flightWorld, selectedGateId, select
 
         {/* Gate nodes */}
         {Object.entries(GATE_3D).map(([gateId, pos]) => {
+          const gw = gateWorldMap?.get(gateId);
           const zoneId = gateZone(gateId);
           const za = zoneId ? zoneMap.get(zoneId) : null;
-          const pressure = za?.pressure ?? 0;
-          const incidents = za ? Math.ceil(za.unresolvedCount / 3) : 0;
+          const pressure = gw?.pressure ?? za?.pressure ?? 0;
+          const incidentCount = gw?.incidents ?? (za ? Math.ceil(za.unresolvedCount / 3) : 0);
           const fw = flightWorld?.get(gateId);
           const focused = !!(hasSelection ? selectedGateId === gateId : true);
           const hovered = hoveredGate === gateId;
 
           return (
-            <GateNode key={gateId} gateId={gateId} pos={pos} pressure={pressure} incidents={incidents}
+            <GateNode key={gateId} gateId={gateId} pos={pos} pressure={pressure} incidents={incidentCount}
               isFocused={focused} isHovered={hovered} flightNumber={fw?.flightNumber}
               departureRisk={fw?.departureRisk} fw={fw ?? undefined}
               onClick={() => onGateClick?.(gateId)}

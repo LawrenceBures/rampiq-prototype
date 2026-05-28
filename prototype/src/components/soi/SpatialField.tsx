@@ -20,6 +20,7 @@ import type { Incident } from '@/lib/lifecycle-types';
 import type { RecoveryAction } from '@/lib/lifecycle-types';
 import type { SoiEvent } from '@/lib/soi-types';
 import type { FlightWorld } from '@/lib/soi-context/flight-context';
+import { computeGateWorld, getGateCascadeRisks, type GateWorld, type TurnState } from '@/lib/soi-context/gate-world';
 
 // ============================================================
 // TYPES
@@ -39,22 +40,7 @@ interface Props {
   onGateClick?: (gateId: string) => void;
 }
 
-type TurnState = 'empty' | 'inbound' | 'active_turn' | 'boarding' | 'delayed' | 'push_ready' | 'departed' | 'recovery';
-
-interface GateWorld {
-  gateId: string;
-  pressure: number;
-  incidents: number;
-  criticalCount: number;
-  highCount: number;
-  turnState: TurnState;
-  hasAircraft: boolean;
-  equipmentIds: string[];
-  hasEquipmentFailure: boolean;
-  staffingLevel: number; // 0-3: none, light, normal, heavy
-  activeRecoveries: number;
-  oldestIncidentMin: number;
-}
+// GateWorld and TurnState imported from @/lib/soi-context/gate-world
 
 // ============================================================
 // CONSTANTS
@@ -104,75 +90,20 @@ function pColor(p: number): string {
 }
 
 const TURN_LABEL: Record<TurnState, string> = {
-  empty: 'EMPTY', inbound: 'INBOUND', active_turn: 'TURN', boarding: 'BOARD',
-  delayed: 'DELAY', push_ready: 'PUSH', departed: 'DEPT', recovery: 'RCVRY',
+  empty: 'EMPTY', inbound: 'INBOUND', deplaning: 'DEPLANE', servicing: 'SERVICE', boarding: 'BOARD',
+  delayed: 'DELAY', push_ready: 'PUSH', departed: 'DEPT', recovery: 'RCVRY', stabilized: 'STABLE',
 };
 
 const TURN_COLOR: Record<TurnState, string> = {
-  empty: '#2a3442', inbound: '#5aa9ff', active_turn: '#3ed598', boarding: '#3ed598',
-  delayed: '#f5b13d', push_ready: '#c9ff3a', departed: '#2a3442', recovery: '#ff5c5c',
+  empty: '#2a3442', inbound: '#5aa9ff', deplaning: '#5aa9ff', servicing: '#3ed598', boarding: '#3ed598',
+  delayed: '#f5b13d', push_ready: '#c9ff3a', departed: '#2a3442', recovery: '#ff5c5c', stabilized: '#2a9d6a',
 };
 
 // ============================================================
 // WORLD STATE COMPUTATION
 // ============================================================
 
-function computeGateWorld(
-  gates: string[],
-  incidents: readonly Incident[],
-  recoveryActions: readonly RecoveryAction[],
-  events: readonly SoiEvent[],
-  assessment: OperationalAssessment,
-): Map<string, GateWorld> {
-  const map = new Map<string, GateWorld>();
-  const now = Date.now();
-
-  for (const gateId of gates) {
-    const gi = incidents.filter(i => i.gate_id === gateId && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
-    const ge = events.filter(e => e.gate_id === gateId);
-    const gr = recoveryActions.filter(ra => (ra.gate_id === gateId || ra.zone_id === gateZone(gateId)) && ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN' && ra.status !== 'ESCALATED');
-    const zoneId = gateZone(gateId);
-    const za = zoneId ? assessment.zoneAssessments.find(z => z.zoneId === zoneId) : null;
-
-    const incPressure = gi.reduce((s, i) => s + (SEV_W[i.severity] ?? 1) * 12, 0);
-    const agePressure = gi.reduce((s, i) => s + Math.min((now - new Date(i.opened_at).getTime()) / 180000, 15), 0);
-    const pressure = Math.max(0, Math.min(100, Math.round(incPressure + agePressure + (za ? za.pressure * 0.2 : 0))));
-
-    // Turnaround state derivation
-    const hasService = ge.some(e => (e.event_type === 'service.started' || e.event_type === 'service.confirmed') && e.operational_status !== 'RESOLVED');
-    const hasScan = ge.some(e => e.event_type === 'gate.scanned');
-    const hasRecovery = gr.length > 0;
-    let turnState: TurnState = 'empty';
-    if (hasRecovery && gi.length > 0) turnState = 'recovery';
-    else if (gi.some(i => i.severity === 'CRITICAL' || i.severity === 'HIGH')) turnState = 'delayed';
-    else if (hasService) turnState = 'active_turn';
-    else if (hasScan) turnState = 'inbound';
-    else if (gi.length > 0) turnState = 'delayed';
-
-    // Equipment
-    const equipIds = [...new Set(ge.filter(e => e.equipment_id && e.operational_status !== 'RESOLVED').map(e => e.equipment_id!))];
-    const equipFail = ge.some(e => e.equipment_id && e.severity !== 'LOW' && e.operational_status !== 'RESOLVED');
-
-    // Staffing: count unique reporters at this gate as proxy
-    const reporters = new Set(ge.filter(e => e.operational_status !== 'RESOLVED').map(e => e.reported_by));
-    const staffing = reporters.size >= 3 ? 3 : reporters.size >= 2 ? 2 : reporters.size >= 1 ? 1 : 0;
-
-    map.set(gateId, {
-      gateId, pressure,
-      incidents: gi.length,
-      criticalCount: gi.filter(i => i.severity === 'CRITICAL').length,
-      highCount: gi.filter(i => i.severity === 'HIGH').length,
-      turnState,
-      hasAircraft: turnState !== 'empty' && (turnState as string) !== 'departed',
-      equipmentIds: equipIds,
-      hasEquipmentFailure: equipFail,
-      staffingLevel: staffing,
-      activeRecoveries: gr.length,
-      oldestIncidentMin: gi.length > 0 ? Math.round(Math.max(...gi.map(i => (now - new Date(i.opened_at).getTime()) / 60000))) : 0,
-    });
-  }
-  return map;
-}
+// computeGateWorld imported from @/lib/soi-context/gate-world
 
 // ============================================================
 // COMPONENT
@@ -183,7 +114,7 @@ export function SpatialField({ assessment, gates, incidents, recoveryActions, ev
   const zoneMap = new Map<string, ZoneAssessment>();
   for (const za of assessment.zoneAssessments) zoneMap.set(za.zoneId, za);
 
-  const gateWorld = computeGateWorld(gates, incidents, recoveryActions ?? [], events, assessment);
+  const gateWorld = computeGateWorld(gates, incidents, recoveryActions ?? [], events, assessment, flightWorld);
 
   // Recovery targets
   const activeTargets = new Set<string>();

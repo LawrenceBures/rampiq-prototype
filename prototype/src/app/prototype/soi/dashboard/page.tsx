@@ -2322,6 +2322,9 @@ export default function ManagerDashboard() {
               <SpatialField3D
                 assessment={operationalAssessment}
                 flightWorld={flightWorldMap}
+                incidents={temporalIncidents}
+                recoveryActions={temporalRecoveryActions}
+                events={temporalEvents}
                 selectedGateId={selectedGateId}
                 selectedZoneId={selectedZoneId}
                 liveExec={liveExec}
