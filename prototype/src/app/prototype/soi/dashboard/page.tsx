@@ -55,6 +55,29 @@ import {
   type CopilotAnswer,
   type ConversationContext,
 } from '@/lib/soi-intelligence';
+import {
+  parseAgenticIntent,
+  buildObjective,
+  buildExecutionPlan,
+  buildAlternativePlan,
+  authorizeExecution,
+  createExecutionState,
+  approveExecution,
+  cancelExecution,
+  executeNextStep,
+  executionProgress,
+  monitorPostExecution,
+  createCommandMemory,
+  stagePlan,
+  updateExecution,
+  completePlan,
+  clearCommandMemory,
+  hasActivePlan,
+  hasActiveExecution,
+  type CommandMemory,
+  type ExecutionPlan,
+  type ExecutionState,
+} from '@/lib/soi-agentic';
 
 // ============================================================
 // TYPES
@@ -97,6 +120,8 @@ export default function ManagerDashboard() {
   const [conversationMemory, setConversationMemory] = useState<ConversationContext>(createEmptyContext());
   const [lastInferredFrom, setLastInferredFrom] = useState<string[]>([]);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
+  const [cmdMemory, setCmdMemory] = useState<CommandMemory>(createCommandMemory());
+  const [executingPlan, setExecutingPlan] = useState(false);
   const [approveResult, setApproveResult] = useState<Record<string, 'success' | 'error' | 'duplicate'>>({});
   const [expandedSimId, setExpandedSimId] = useState<string | null>(null);
 
@@ -515,6 +540,73 @@ export default function ManagerDashboard() {
         break;
       }
       default: {
+        // Try agentic intent first
+        const agenticParsed = parseAgenticIntent(raw, zones);
+
+        if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
+          handleApprovePlan();
+          break;
+        }
+        if (agenticParsed.intent === 'cancel_plan') {
+          setCmdMemory(clearCommandMemory(cmdMemory));
+          setCommandResponse(['Execution plan cancelled.']);
+          setCopilotAnswer(null);
+          break;
+        }
+        if (agenticParsed.intent === 'show_plan_status') {
+          if (cmdMemory.activeExecution) {
+            const prog = executionProgress(cmdMemory.activeExecution);
+            setCommandResponse([
+              `Execution: ${prog.completed}/${prog.total} steps (${prog.percentage}%)`,
+              `Status: ${cmdMemory.activeExecution.status}`,
+              ...(prog.failed > 0 ? [`${prog.failed} steps failed`] : []),
+            ]);
+          } else if (cmdMemory.activePlan) {
+            setCommandResponse([`Plan staged: ${cmdMemory.activePlan.summary}`, 'Say "execute" or "approve" to begin.']);
+          } else {
+            setCommandResponse(['No active plan. Give an operational objective like "stabilize 52A-C".']);
+          }
+          setCopilotAnswer(null);
+          break;
+        }
+        if (agenticParsed.intent === 'show_alternatives' && cmdMemory.activePlan) {
+          const altPlan = buildAlternativePlan(
+            cmdMemory.activePlan.objective, operationalAssessment,
+            soiRecommendations, temporalIncidents, temporalRecoveryActions,
+          );
+          setCmdMemory(stagePlan(cmdMemory, altPlan, altPlan.objective, operationalAssessment));
+          setCommandResponse(null);
+          setCopilotAnswer(null);
+          break;
+        }
+        if (agenticParsed.intent === 'continue_recovery' && hasActiveExecution(cmdMemory)) {
+          handleExecuteNextStep();
+          break;
+        }
+
+        if (agenticParsed.intent && agenticParsed.intent !== 'execute_plan') {
+          // Build execution plan from agentic intent
+          const objective = buildObjective(agenticParsed, operationalAssessment, zones);
+          const plan = buildExecutionPlan(
+            objective, operationalAssessment,
+            soiRecommendations, temporalIncidents, temporalRecoveryActions,
+          );
+          const auth = authorizeExecution(plan.steps, operator.viewerRole as 'coordinator' | 'manager' | 'ops_director');
+
+          setCmdMemory(stagePlan(cmdMemory, plan, objective, operationalAssessment));
+          setCommandResponse(null);
+          setCopilotAnswer(null);
+
+          if (!auth.authorized && auth.deniedReasons.length > 0) {
+            setCommandResponse([
+              `Plan staged with ${auth.deniedSteps.length} restricted step${auth.deniedSteps.length > 1 ? 's' : ''}:`,
+              ...auth.deniedReasons.map(r => `· ${r}`),
+              ...(auth.escalationPath ? [`Escalation: ${auth.escalationPath}`] : []),
+            ]);
+          }
+          break;
+        }
+
         // Copilot fallback: route through context-aware operational reasoning
         setCommandResponse(null);
         const result = answerOperationalQuestion(raw, {
@@ -568,6 +660,44 @@ export default function ManagerDashboard() {
 
     setApprovingRecId(null);
     setApproveResult(prev => ({ ...prev, [rec.id]: result ? 'success' : 'error' }));
+    refreshRecovery();
+    refresh();
+  }
+
+  // ── Agentic plan execution ──
+  async function handleApprovePlan() {
+    if (!cmdMemory.activePlan) return;
+    setExecutingPlan(true);
+    let state = createExecutionState(cmdMemory.activePlan);
+    state = approveExecution(state);
+    setCmdMemory(updateExecution(cmdMemory, state));
+
+    // Execute all steps sequentially
+    for (let i = 0; i < cmdMemory.activePlan.steps.length; i++) {
+      state = await executeNextStep(state, cmdMemory.activePlan, operator.userId, operator.role);
+      setCmdMemory(prev => updateExecution(prev, state));
+    }
+
+    setExecutingPlan(false);
+    if (state.status === 'completed' || state.status === 'failed') {
+      const report = monitorPostExecution(cmdMemory.activePlan, state, cmdMemory.preExecutionAssessment ?? operationalAssessment, operationalAssessment);
+      setCommandResponse([
+        `Execution ${state.status}. ${report.observations[0] ?? ''}`,
+        ...report.observations.slice(1).map(o => `· ${o}`),
+        ...(report.recommendedAction ? [`→ ${report.recommendedAction}`] : []),
+      ]);
+      setCmdMemory(prev => completePlan(prev));
+    }
+    refreshRecovery();
+    refresh();
+  }
+
+  async function handleExecuteNextStep() {
+    if (!cmdMemory.activePlan || !cmdMemory.activeExecution) return;
+    setExecutingPlan(true);
+    const state = await executeNextStep(cmdMemory.activeExecution, cmdMemory.activePlan, operator.userId, operator.role);
+    setCmdMemory(prev => updateExecution(prev, state));
+    setExecutingPlan(false);
     refreshRecovery();
     refresh();
   }
@@ -1794,6 +1924,127 @@ export default function ManagerDashboard() {
                 >
                   dismiss
                 </button>
+              </div>
+            )}
+
+            {/* SOI Command Center — staged execution plan */}
+            {cmdMemory.activePlan && !cmdMemory.activeExecution?.status?.startsWith('complet') && (
+              <div style={{
+                margin: '6px 16px 0', padding: '12px',
+                background: 'var(--rq-bg-1)', border: '1px solid var(--rq-line)',
+                borderLeft: '3px solid var(--rq-accent)',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <div style={{ fontSize: 8, color: 'var(--rq-accent)', letterSpacing: '.14em', textTransform: 'uppercase', marginBottom: 6 }}>
+                  SOI Objective
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rq-ink)', marginBottom: 4 }}>
+                  {cmdMemory.activePlan.objective.operationalGoal}
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--rq-ink-3)', marginBottom: 8 }}>
+                  {cmdMemory.activePlan.summary}
+                </div>
+
+                {/* Steps */}
+                <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Modeled Recovery Plan
+                </div>
+                {cmdMemory.activePlan.steps.map((step, i) => {
+                  const stepState = cmdMemory.activeExecution?.steps[i];
+                  const statusColor = stepState?.status === 'completed' ? 'var(--rq-green)'
+                    : stepState?.status === 'failed' ? 'var(--rq-red)'
+                    : stepState?.status === 'executing' ? 'var(--rq-amber)'
+                    : 'var(--rq-ink-4)';
+                  return (
+                    <div key={step.stepId} style={{
+                      padding: '4px 8px', marginBottom: 2,
+                      background: 'var(--rq-bg-2)',
+                      borderLeft: `2px solid ${statusColor}`,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <span style={{ fontSize: 10, color: statusColor, fontWeight: 700, width: 16, flexShrink: 0 }}>
+                        {stepState?.status === 'completed' ? '✓' : stepState?.status === 'failed' ? '✗' : step.sequence}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 10, color: 'var(--rq-ink)' }}>{step.title}</div>
+                        <div style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedImpact}</div>
+                      </div>
+                      <span style={{ fontSize: 8, color: 'var(--rq-ink-4)' }}>{step.estimatedDurationMinutes}m</span>
+                    </div>
+                  );
+                })}
+
+                {/* Metrics */}
+                <div style={{ display: 'flex', gap: 16, margin: '8px 0', fontSize: 9 }}>
+                  <div>
+                    <span style={{ color: 'var(--rq-ink-4)' }}>est. stabilization </span>
+                    <span style={{ color: 'var(--rq-ink-2)' }}>{cmdMemory.activePlan.totalEstimatedMinutes}m</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--rq-ink-4)' }}>confidence </span>
+                    <span style={{ color: cmdMemory.activePlan.confidence >= 70 ? 'var(--rq-green)' : 'var(--rq-amber)' }}>
+                      {cmdMemory.activePlan.confidence}%
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--rq-ink-4)' }}>pressure −</span>
+                    <span style={{ color: 'var(--rq-green)' }}>{cmdMemory.activePlan.estimatedPressureReduction}</span>
+                  </div>
+                </div>
+
+                {/* Tradeoffs */}
+                {cmdMemory.activePlan.tradeoffs.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 8, color: 'var(--rq-ink-4)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 2 }}>Tradeoffs</div>
+                    {cmdMemory.activePlan.tradeoffs.map((t, i) => (
+                      <div key={i} style={{ fontSize: 8, color: 'var(--rq-amber)', lineHeight: 1.3 }}>· {t}</div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                {!replayMode && (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {(!cmdMemory.activeExecution || cmdMemory.activeExecution.status === 'staged') && (
+                      <button type="button" disabled={executingPlan}
+                        onClick={() => { handleApprovePlan(); }}
+                        style={{
+                          flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
+                          textTransform: 'uppercase', fontFamily: 'inherit',
+                          background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
+                          cursor: executingPlan ? 'default' : 'pointer', opacity: executingPlan ? 0.5 : 1,
+                        }}>
+                        {executingPlan ? 'Executing...' : 'Approve Execution'}
+                      </button>
+                    )}
+                    {hasActiveExecution(cmdMemory) && (
+                      <button type="button" disabled={executingPlan}
+                        onClick={handleExecuteNextStep}
+                        style={{
+                          flex: 2, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
+                          textTransform: 'uppercase', fontFamily: 'inherit',
+                          background: 'none', border: '1px solid var(--rq-accent)', color: 'var(--rq-accent)',
+                          cursor: executingPlan ? 'default' : 'pointer', opacity: executingPlan ? 0.5 : 1,
+                        }}>
+                        {executingPlan ? 'Executing...' : 'Continue Recovery'}
+                      </button>
+                    )}
+                    <button type="button"
+                      onClick={() => { setCmdMemory(clearCommandMemory(cmdMemory)); }}
+                      style={{
+                        flex: 1, padding: '6px 10px', fontSize: 9, letterSpacing: '.06em',
+                        textTransform: 'uppercase', fontFamily: 'inherit',
+                        background: 'none', border: '1px solid var(--rq-line)', color: 'var(--rq-ink-4)',
+                        cursor: 'pointer',
+                      }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ fontSize: 7, color: 'var(--rq-ink-4)', textAlign: 'center', marginTop: 6, letterSpacing: '.06em' }}>
+                  Deterministic operational model — not guaranteed outcome.
+                </div>
               </div>
             )}
 
