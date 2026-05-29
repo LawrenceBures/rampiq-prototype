@@ -484,7 +484,7 @@ export function useLiveEvents(intervalMs = 3000): {
         setLoading(false);
         setLastUpdated(new Date());
       }
-    }).catch(() => {});
+    }).catch(err => console.error('[store]', err));
   }, []);
 
   useEffect(() => {
@@ -500,42 +500,41 @@ export function useLiveEvents(intervalMs = 3000): {
           setLoading(false);
           setLastUpdated(new Date());
         }
-      } catch { /* silent */ }
+      } catch (err) { console.error('[store] poll error:', err); }
       if (mountedRef.current) {
         timer = setTimeout(poll, intervalMs);
       }
     }
     poll();
 
-    // Supabase Realtime
+    // Supabase Realtime — debounced to prevent query storms during seed/bulk operations
     const sb = getSupabase();
     type Channel = ReturnType<NonNullable<typeof sb>['channel']>;
     let channel: Channel | null = null;
+    let realtimeDebounce: ReturnType<typeof setTimeout> | null = null;
 
     if (sb) {
+      const debouncedRefresh = () => {
+        if (realtimeDebounce) clearTimeout(realtimeDebounce);
+        realtimeDebounce = setTimeout(() => {
+          fetchEvents().then(data => {
+            if (mountedRef.current) { setEvents(data); setLastUpdated(new Date()); }
+          }).catch(err => console.error('[store] realtime refresh error:', err));
+        }, 400);
+      };
+
       channel = sb
         .channel('soi_events_live')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rampiq_events' }, () => {
-          fetchEvents().then(data => {
-            if (mountedRef.current) { setEvents(data); setLastUpdated(new Date()); }
-          }).catch(() => {});
-        })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rampiq_events' }, () => {
-          fetchEvents().then(data => {
-            if (mountedRef.current) { setEvents(data); setLastUpdated(new Date()); }
-          }).catch(() => {});
-        })
-        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rampiq_events' }, () => {
-          fetchEvents().then(data => {
-            if (mountedRef.current) { setEvents(data); setLastUpdated(new Date()); }
-          }).catch(() => {});
-        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rampiq_events' }, debouncedRefresh)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rampiq_events' }, debouncedRefresh)
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rampiq_events' }, debouncedRefresh)
         .subscribe();
     }
 
     return () => {
       mountedRef.current = false;
       clearTimeout(timer);
+      if (realtimeDebounce) clearTimeout(realtimeDebounce);
       if (channel) channel.unsubscribe();
     };
   }, [intervalMs]);
@@ -577,7 +576,7 @@ export function useRealtimeIncidents(station = 'LAX'): {
         setLoading(false);
         setLastSync(new Date());
       }
-    }).catch(() => {});
+    }).catch(err => console.error('[store]', err));
   }, [station]);
 
   // Debounced refetch — collapses bursts (create emits 2 writes: incident + event)
@@ -657,7 +656,7 @@ export function useRecoveryActions(incidentId: string | null): {
         setActions(data);
         setLoading(false);
       }
-    }).catch(() => {});
+    }).catch(err => console.error('[store]', err));
   }, []);
 
   const debouncedRefresh = useCallback(() => {

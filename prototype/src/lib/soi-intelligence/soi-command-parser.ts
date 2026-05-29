@@ -33,27 +33,43 @@ const NATO_TO_LETTER: Record<string, string> = {
 };
 
 // Also support standalone NATO words as gate references
-const STANDALONE_NATO = /\b(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india)\b/gi;
+// Standalone NATO words preceded by operational context words
+// "at delta" → "at 52D", "to echo" → "to 52E", "gate alpha" → "gate 52A"
+// But NOT "delta airlines", "echo chamber", "hotel room"
+const CONTEXTUAL_NATO = /\b(?:at|to|from|gate|show|focus|stabilize|fix|assign|check|explain|about|near|toward|for)\s+(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india)\b/gi;
+
+// Standalone NATO at end of sentence (common in voice: "what about delta")
+const TRAILING_NATO = /\b(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india)\s*[?.!]?\s*$/gi;
 
 /** Normalize NATO phonetic gate references to gate IDs.
  *  "52 alpha" → "52A", "52 bravo" → "52B", "gate 52 charlie" → "gate 52C"
- *  Also handles "52-alpha", "52alpha", and standalone "delta" → "52D". */
+ *  "at delta" → "at 52D", "to echo" → "to 52E"
+ *  Standalone NATO only converts with operational context, not in arbitrary text. */
 export function normalizeNatoGates(input: string): string {
-  // First: "52 alpha" style
+  // First: "52 alpha" style (always safe — number prefix is unambiguous)
   let result = input.replace(
     /\b(\d{2})\s*[-]?\s*(alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india)\b/gi,
     (_, num, nato) => `${num}${NATO_TO_LETTER[nato.toLowerCase()]}`,
   );
 
-  // Second: standalone NATO words (only when no number prefix already handled)
-  // "what's happening at delta" → "what's happening at 52D"
-  // "assign a team to echo" → "assign a team to 52E"
-  // But NOT "delta airlines" or "echo chamber" — check context
-  result = result.replace(STANDALONE_NATO, (match) => {
-    const letter = NATO_TO_LETTER[match.toLowerCase()];
+  // Second: NATO words with operational context prefix
+  // "assign a team to delta" → "assign a team to 52D"
+  result = result.replace(CONTEXTUAL_NATO, (match, nato) => {
+    const letter = NATO_TO_LETTER[nato.toLowerCase()];
     if (!letter) return match;
-    return `52${letter}`;
+    return match.replace(new RegExp(nato, 'i'), `52${letter}`);
   });
+
+  // Third: trailing NATO word (end of input, common in voice)
+  // "what about delta" → "what about 52D"
+  // Only if no 52X already present (avoid double-converting)
+  if (!/52[A-I]/i.test(result)) {
+    result = result.replace(TRAILING_NATO, (match, nato) => {
+      const letter = NATO_TO_LETTER[nato.toLowerCase()];
+      if (!letter) return match;
+      return match.replace(new RegExp(nato, 'i'), `52${letter}`);
+    });
+  }
 
   return result;
 }

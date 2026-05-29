@@ -1660,9 +1660,17 @@ export default function ManagerDashboard() {
     });
   }, []);
 
-  /** Speak using best available TTS (OpenAI preferred, browser fallback). */
+  /** Speak using best available TTS (OpenAI preferred, browser fallback).
+   *  Sets handlerSpokeRef so the copilotAnswer useEffect won't double-speak. */
+  const handlerSpokeRef = useRef(false);
   async function soiSpeak(text: string) {
     if (!ttsOn) return;
+    handlerSpokeRef.current = true;
+    // Cancel any in-progress speech to prevent overlap
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    stopOpenAI();
     if (ttsMode === 'openai') {
       const used = await speakWithOpenAI(text);
       if (used) return;
@@ -1687,8 +1695,16 @@ export default function ManagerDashboard() {
   }, []);
 
   // ── Speak copilot answers and command responses when TTS is on ──
+  // Skips if a handler already called soiSpeak() this render cycle.
   useEffect(() => {
     if (!ttsOn) return;
+    // If handler already spoke for this interaction, skip to prevent double-speak
+    if (handlerSpokeRef.current) {
+      // Still track the answer so we don't re-speak it later
+      if (copilotAnswer) prevCopilotAnswerRef.current = copilotAnswer.answer;
+      handlerSpokeRef.current = false;
+      return;
+    }
     let spoken = false;
     if (copilotAnswer && copilotAnswer.answer !== prevCopilotAnswerRef.current) {
       prevCopilotAnswerRef.current = copilotAnswer.answer;
@@ -1702,9 +1718,9 @@ export default function ManagerDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [copilotAnswer, commandResponse]);
 
-  // ── Speak narratives that qualify ──
+  // ── Speak narratives that qualify (skip if handler just spoke) ──
   useEffect(() => {
-    if (!ttsOn) return;
+    if (!ttsOn || handlerSpokeRef.current) return;
     const visible = getVisibleNarratives(narrativeFeed, 1);
     if (visible.length === 0) return;
     const latest = visible[0];
