@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useLiveEvents, useRealtimeIncidents, useRecoveryActions, updateEventStatus, resetEvents, fetchZones } from '@/lib/store';
+import { useLiveEvents, useRealtimeIncidents, useRecoveryActions, updateEventStatus, resetEvents, fetchZones, postAuditEvent, postEvent } from '@/lib/store';
 import { durationLabel } from '@/lib/soi-types';
 import type { SoiEvent, Severity, OperationalStatus } from '@/lib/soi-types';
 import type { Zone } from '@/lib/soi-types';
@@ -50,6 +50,8 @@ import {
   assessOperation,
   answerOperationalQuestion,
   createEmptyContext,
+  updateContext,
+  isContextActive,
   contextSummary,
   type SoiRecommendation,
   type CommandIntent,
@@ -856,6 +858,27 @@ export default function ManagerDashboard() {
     // Audit: log all commands
     logAuditEvent('command', { input: rawInput, normalized: raw });
 
+    // Context resolution: replace pronouns/references with last active gate/zone
+    // "what about it" → "what about 52D" if Delta was last discussed
+    // "fix that" → "stabilize 52D"
+    // "over there" → last gate
+    if (isContextActive(conversationMemory) && conversationMemory.activeGate) {
+      const lower = raw.toLowerCase();
+      const hasGateRef = /\b52[A-I]\b/i.test(raw);
+      if (!hasGateRef && /\b(?:it|that|there|this|that\s+gate|over\s+there|same\s+one|that\s+one)\b/i.test(lower)) {
+        // Inject last active gate
+        const gate = conversationMemory.activeGate;
+        // Replace pronoun-like reference with gate
+        const injected = raw
+          .replace(/\b(?:over\s+there|that\s+gate|that\s+one|same\s+one)\b/i, gate)
+          .replace(/\b(?:it|that|there|this)\b/i, gate);
+        if (injected !== raw) {
+          console.log('[SOI Context] Resolved reference:', raw, '→', injected);
+          return handleCommand(injected);
+        }
+      }
+    }
+
     // A-1. Agent selection mode — intercept number/name input
     if (agentSelection && agentSelection.phase === 'picking') {
       // Check if input looks like agent selection (numbers, names, or "assign")
@@ -913,6 +936,28 @@ export default function ManagerDashboard() {
           gate_id: pa.gate,
           description: `SOI dispatch: ${pa.reasoning}. Agents: ${memberNames.join(', ')}. Confirmed by ${operator.displayName}.`,
         }).then(() => { refreshRecovery(); refresh(); });
+      }
+      // Emit dispatch notification event (mobile surfaces pick this up via realtime)
+      for (const agentId of pa.members) {
+        postEvent({
+          event_type: 'dispatch.assignment',
+          event_subtype: 'team_dispatch',
+          severity: 'HIGH' as const,
+          station: operator.station,
+          gate_id: pa.gate,
+          reported_by: operator.userId,
+          role_type: operator.role,
+          shift_window: 'AM',
+          device_id: 'soi-dashboard',
+          source_platform: 'DESKTOP',
+          qr_target_type: 'GATE',
+          qr_target_id: `LAX-GATE-${pa.gate}`,
+          entity_type: 'dispatch_notification',
+          entity_id: agentId,
+          state_after: 'DISPATCHED',
+          notes: `You have been dispatched to Gate ${pa.gate}. Report immediately.`,
+          details_json: { agentId, agentName: memberNames[pa.members.indexOf(agentId)], gate: pa.gate, dispatchedBy: operator.displayName, allAgents: memberNames },
+        }).catch(err => console.error('[dispatch notification]', err));
       }
       // Audit: log the dispatch
       logAuditEvent('dispatch_confirmed', { gate: pa.gate, agents: pa.members, agentNames: memberNames, reasoning: pa.reasoning });
@@ -1324,10 +1369,25 @@ export default function ManagerDashboard() {
         // Voice rewrite handled by the copilot answer useEffect
       }
     }
+
+    // Update conversation context with any gate/zone from this command
+    const gateInCmd = raw.match(/\b(52[A-I])\b/i);
+    if (gateInCmd) {
+      const gate = gateInCmd[1].toUpperCase();
+      const zoneForGate = zones.find(z => z.gate_ids.includes(gate));
+      setConversationMemory(prev => updateContext(prev, {
+        activeGate: gate,
+        activeZone: zoneForGate?.id,
+        activeZoneLabel: zoneForGate?.label,
+      }));
+    } else if (selectedGateId) {
+      setConversationMemory(prev => updateContext(prev, { activeGate: selectedGateId }));
+    }
+
     setCommandInput('');
   }
 
-  // ── Audit Logging ──
+  // ── Audit Logging (localStorage + Supabase) ──
   function logAuditEvent(action: string, details: Record<string, unknown>) {
     const entry = {
       timestamp: new Date().toISOString(),
@@ -1343,11 +1403,19 @@ export default function ManagerDashboard() {
       const key = 'soi_audit_log';
       const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
       existing.push(entry);
-      // Keep last 500 entries
       if (existing.length > 500) existing.splice(0, existing.length - 500);
       localStorage.setItem(key, JSON.stringify(existing));
     } catch { /* silently fail */ }
-    // Log to console for observability
+    // Persist to Supabase (non-blocking)
+    postAuditEvent({
+      action,
+      operator_id: operator.userId,
+      operator_name: operator.displayName,
+      role: operator.role,
+      station: operator.station,
+      gate_id: (details.gate as string) ?? undefined,
+      details,
+    });
     console.log('[SOI Audit]', action, details);
   }
 
@@ -1647,6 +1715,47 @@ export default function ManagerDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveExec?.phase, ambientOn]);
 
+  // ── Proactive SOI alerts for rising pressure ──
+  const lastAlertedPressureRef = useRef<number>(0);
+  const lastAlertTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (!ttsOn) return;
+    const pressure = operationalAssessment.globalPressure;
+    const now = Date.now();
+    const cooldown = 60000; // 60s minimum between proactive alerts
+
+    // Only alert on threshold crossings, with cooldown
+    if (now - lastAlertTimeRef.current < cooldown) return;
+
+    if (pressure >= 80 && lastAlertedPressureRef.current < 80) {
+      // Critical threshold crossed
+      const worstZone = operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b);
+      soiSpeak(`Attention. System pressure has reached critical at ${pressure}. ${worstZone.zoneLabel} is the highest risk area. Recommend immediate intervention.`);
+      setCopilotAnswer({
+        title: 'Pressure Alert — Critical',
+        answer: `System pressure at ${pressure}/100. ${worstZone.zoneLabel} at ${worstZone.pressure}. Immediate action recommended.`,
+        confidence: 'high',
+        bullets: operationalAssessment.zoneAssessments.filter(z => z.pressure >= 60).map(z => `${z.zoneLabel}: ${z.pressure}`),
+        assumptions: [], source: 'deterministic_operational_model',
+        recommendedNextAction: `Stabilize ${worstZone.zoneLabel}`,
+      });
+      lastAlertedPressureRef.current = pressure;
+      lastAlertTimeRef.current = now;
+    } else if (pressure >= 60 && lastAlertedPressureRef.current < 60) {
+      // High threshold crossed
+      const worstZone = operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b);
+      soiSpeak(`Advisory. System pressure elevated to ${pressure}. ${worstZone.zoneLabel} showing increased load. Monitoring.`);
+      lastAlertedPressureRef.current = pressure;
+      lastAlertTimeRef.current = now;
+    } else if (pressure < 40 && lastAlertedPressureRef.current >= 60) {
+      // Pressure dropped back to stable
+      soiSpeak('System pressure returning to normal. Operations stabilizing.');
+      lastAlertedPressureRef.current = pressure;
+      lastAlertTimeRef.current = now;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationalAssessment.globalPressure, ttsOn]);
+
   // ── Route LLM-interpreted intents into SOI engines ──
   function routeLLMIntent(li: { intent: string; gate?: string; zone?: string; resource?: string; confidence: number; reasoning: string }, _raw: string) {
     // Resolve gate → zone
@@ -1654,6 +1763,17 @@ export default function ManagerDashboard() {
     const targetGate = li.gate?.toUpperCase();
     if (!targetZone && targetGate) {
       targetZone = resolveZonePattern(targetGate, zones) ?? undefined;
+    }
+
+    // Update conversation context with LLM-resolved targets
+    if (targetGate || targetZone) {
+      const zoneLabel = targetZone ? zones.find(z => z.id === targetZone)?.label : undefined;
+      setConversationMemory(prev => updateContext(prev, {
+        activeGate: targetGate,
+        activeZone: targetZone,
+        activeZoneLabel: zoneLabel,
+        lastIntent: li.intent,
+      }));
     }
 
     switch (li.intent) {

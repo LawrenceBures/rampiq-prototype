@@ -271,6 +271,56 @@ export async function updateEventStatus(
   return events[idx];
 }
 
+/**
+ * Post an audit event to Supabase (or localStorage fallback).
+ * Uses rampiq_events table with entity_type='audit'.
+ * Non-blocking — errors are logged but never thrown.
+ */
+export async function postAuditEvent(audit: {
+  action: string;
+  operator_id: string;
+  operator_name: string;
+  role: string;
+  station: string;
+  gate_id?: string;
+  zone_id?: string;
+  details: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const sb = getSupabase();
+    const row = {
+      event_type: `audit.${audit.action}`,
+      event_subtype: audit.action,
+      severity: 'LOW',
+      station: audit.station,
+      gate_id: audit.gate_id ?? null,
+      zone_id: audit.zone_id ?? null,
+      reported_by: audit.operator_id,
+      role_type: audit.role,
+      operational_status: 'OPEN',
+      sync_status: 'SYNCED',
+      entity_type: 'audit',
+      entity_id: audit.operator_id,
+      state_after: audit.action,
+      event_version: 1,
+      details_json: JSON.stringify({ ...audit.details, operator_name: audit.operator_name }),
+      notes: `SOI audit: ${audit.action}`,
+      source_platform: 'SOI_DASHBOARD',
+    };
+    if (sb) {
+      const { error } = await sb.from('rampiq_events').insert(row);
+      if (error) console.error('[audit] Supabase insert error:', error.message);
+    } else {
+      // localStorage fallback
+      const events = lsRead();
+      events.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() } as unknown as SoiEvent);
+      lsWrite(events);
+    }
+  } catch (err) {
+    console.error('[audit] postAuditEvent error:', err);
+  }
+}
+
 export async function resetEvents(): Promise<void> {
   const sb = getSupabase();
   if (sb) {

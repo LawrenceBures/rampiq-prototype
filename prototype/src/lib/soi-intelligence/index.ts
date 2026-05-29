@@ -73,6 +73,7 @@ export {
 export {
   createEmptyContext,
   isContextActive,
+  updateContext,
   contextSummary,
   type ConversationContext,
 } from './operational-conversation-memory';

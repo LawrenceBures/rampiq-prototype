@@ -19,6 +19,7 @@ export default function AgentMobile() {
   const [stationIncidents, setStationIncidents] = useState<Incident[]>([]);
   const [assignedActions, setAssignedActions] = useState<(RecoveryAction & { incidentTitle?: string })[]>([]);
   const [raTransitioning, setRaTransitioning] = useState<string | null>(null);
+  const [dispatchNotifications, setDispatchNotifications] = useState<{ id: string; gate: string; dispatchedBy: string; notes: string; timestamp: string; dismissed: boolean }[]>([]);
 
   // Load identity + users
   useEffect(() => {
@@ -75,6 +76,37 @@ export default function AgentMobile() {
       window.removeEventListener('offline', onOffline);
     };
   }, []);
+
+  // Poll for dispatch notifications targeting this agent
+  useEffect(() => {
+    if (!identity) return;
+    const checkDispatches = async () => {
+      try {
+        const { useLiveEvents } = await import('@/lib/store');
+        // Read events from localStorage (or Supabase) and find dispatch notifications for this agent
+        const key = 'soi_events';
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const events = JSON.parse(raw) as { id: string; event_type: string; entity_type: string; entity_id: string; gate_id: string; notes: string; created_at: string; details_json?: string }[];
+        const dispatches = events
+          .filter(e => e.entity_type === 'dispatch_notification' && e.entity_id === identity.user_id)
+          .map(e => {
+            const details = e.details_json ? JSON.parse(e.details_json) : {};
+            return { id: e.id, gate: e.gate_id, dispatchedBy: details.dispatchedBy ?? 'SOI', notes: e.notes ?? '', timestamp: e.created_at, dismissed: false };
+          });
+        if (dispatches.length > 0) {
+          setDispatchNotifications(prev => {
+            const existingIds = new Set(prev.map(d => d.id));
+            const newOnes = dispatches.filter(d => !existingIds.has(d.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
+      } catch { /* silently fail */ }
+    };
+    checkDispatches();
+    const interval = setInterval(checkDispatches, 5000);
+    return () => clearInterval(interval);
+  }, [identity]);
 
   async function handleSelectUser(userId: string) {
     const user = users.find(u => u.id === userId);
@@ -195,6 +227,40 @@ export default function AgentMobile() {
           {queueDepth > 0 && <> &middot; <span style={{ color: 'var(--rq-amber)' }}>{queueDepth} pending</span></>}
         </div>
       </div>
+
+      {/* Dispatch notification banner */}
+      {dispatchNotifications.filter(d => !d.dismissed).map(d => (
+        <div key={d.id} style={{
+          margin: '0 16px 8px', padding: '12px 14px',
+          border: '1px solid var(--rq-green)', borderLeft: '3px solid var(--rq-green)',
+          background: 'rgba(63,212,137,.06)', borderRadius: 4,
+          animation: 'fadeIn .3s',
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700,
+            color: 'var(--rq-green)', letterSpacing: '.08em', textTransform: 'uppercase',
+            marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--rq-green)', boxShadow: '0 0 8px var(--rq-green)', animation: 'pulse 1.5s infinite' }} />
+            Dispatch Assignment
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--rq-ink)', marginBottom: 4 }}>
+            Report to Gate {d.gate}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--rq-ink-2)', marginBottom: 6 }}>
+            {d.notes}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--rq-ink-4)', marginBottom: 8 }}>
+            Dispatched by {d.dispatchedBy} · {new Date(d.timestamp).toLocaleTimeString()}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setDispatchNotifications(prev => prev.map(n => n.id === d.id ? { ...n, dismissed: true } : n))}
+              style={{ flex: 1, padding: '8px', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', background: 'var(--rq-green)', color: '#000', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              Acknowledge
+            </button>
+          </div>
+        </div>
+      ))}
 
       {/* Incident awareness banner */}
       {stationIncidents.length > 0 && (
