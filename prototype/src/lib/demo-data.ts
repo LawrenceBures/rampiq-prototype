@@ -7,7 +7,10 @@ export type EquipSeverity = 'watch' | 'needs-attention' | 'out-of-service';
 export type EquipIssueType = 'wont-start' | 'belt-not-moving' | 'hydraulic' | 'battery' | 'unsafe-damaged' | 'missing' | 'other';
 
 // ——————————————————————————————
-// GATE DEFINITIONS (9 gates, no state — state comes from events)
+// GATE DEFINITIONS — PROTOTYPE SAMPLE SCHEDULE
+// Flight numbers, aircraft types, and routes are sample data.
+// They do NOT represent a live AODB feed or real flight schedule.
+// All operational state (pressure, incidents, recovery) is live.
 // ——————————————————————————————
 export interface GateDefinition {
   id: string;

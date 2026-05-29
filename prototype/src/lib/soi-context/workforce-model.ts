@@ -10,8 +10,12 @@ import type { Incident } from '@/lib/lifecycle-types';
 import type { RecoveryAction } from '@/lib/lifecycle-types';
 
 // ============================================================
-// DEMO WORKFORCE ROSTER
+// PROTOTYPE CAPACITY MODEL
 // ============================================================
+// This is a prototype staffing model — not connected to a live workforce
+// management system. Capacity pools represent operational roles, not
+// individual employees. Status is computed live from recovery actions
+// and events. Names are prototype identifiers, not real personnel.
 
 export interface CrewMember {
   id: string;
@@ -22,19 +26,20 @@ export interface CrewMember {
   currentGate?: string;
   currentZone?: string;
   workload: number; // 0-3
+  isPrototype: true; // always true — this is not a live roster
 }
 
 const BASE_ROSTER: CrewMember[] = [
-  { id: 'RA14', name: 'Okafor D.', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0 },
-  { id: 'RA03', name: 'Singh P.', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52DEF', workload: 0 },
-  { id: 'RA08', name: 'Torres L.', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52GHI', workload: 0 },
-  { id: 'RA22', name: 'Chen W.', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0 },
-  { id: 'RA11', name: 'Jackson M.', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52DEF', workload: 0 },
-  { id: 'RA17', name: 'Park J.', role: 'Ramp Agent', shift: 'PM', status: 'off_shift', workload: 0 },
-  { id: 'LT02', name: 'Rivera A.', role: 'LT Runner', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0 },
-  { id: 'LT05', name: 'Adams T.', role: 'LT Runner', shift: 'AM', status: 'available', currentZone: 'GATES-52GHI', workload: 0 },
-  { id: 'CC01', name: 'Martinez J.', role: 'Crew Chief', shift: 'AM', status: 'assigned', currentZone: 'GATES-52ABC', workload: 2 },
-  { id: 'CC02', name: 'Reyes M.', role: 'Crew Chief', shift: 'AM', status: 'assigned', currentZone: 'GATES-52DEF', workload: 2 },
+  { id: 'RA-01', name: 'Ramp Agent 1', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0, isPrototype: true },
+  { id: 'RA-02', name: 'Ramp Agent 2', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52DEF', workload: 0, isPrototype: true },
+  { id: 'RA-03', name: 'Ramp Agent 3', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52GHI', workload: 0, isPrototype: true },
+  { id: 'RA-04', name: 'Ramp Agent 4', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0, isPrototype: true },
+  { id: 'RA-05', name: 'Ramp Agent 5', role: 'Ramp Agent', shift: 'AM', status: 'available', currentZone: 'GATES-52DEF', workload: 0, isPrototype: true },
+  { id: 'RA-06', name: 'Ramp Agent 6', role: 'Ramp Agent', shift: 'PM', status: 'off_shift', workload: 0, isPrototype: true },
+  { id: 'LT-01', name: 'LT Runner 1', role: 'LT Runner', shift: 'AM', status: 'available', currentZone: 'GATES-52ABC', workload: 0, isPrototype: true },
+  { id: 'LT-02', name: 'LT Runner 2', role: 'LT Runner', shift: 'AM', status: 'available', currentZone: 'GATES-52GHI', workload: 0, isPrototype: true },
+  { id: 'CC-01', name: 'Crew Chief 1', role: 'Crew Chief', shift: 'AM', status: 'assigned', currentZone: 'GATES-52ABC', workload: 2, isPrototype: true },
+  { id: 'CC-02', name: 'Crew Chief 2', role: 'Crew Chief', shift: 'AM', status: 'assigned', currentZone: 'GATES-52DEF', workload: 2, isPrototype: true },
 ];
 
 // ============================================================

@@ -3201,31 +3201,54 @@ export default function ManagerDashboard() {
                     })}
                   </div>
                 </div>,
-                // 2: Staffing
+                // 2: Staffing (prototype capacity model)
                 <div key="staff">
-                  <div className="block-head"><span className="tac">Staffing</span><span className="meta">RAMP</span></div>
+                  <div className="block-head"><span className="tac">Staffing Capacity</span><span className="meta">PROTOTYPE</span></div>
                   <div className="staff">
                     <div className="grp"><span className="n num">{workforceState.assigned.length + workforceState.recovering.length}</span><span className="l">Deployed</span></div>
                     <div className="grp"><span className="n num c-cyan">{workforceState.available.length}</span><span className="l">Available</span></div>
                     <div className="grp"><span className="n num c-amber">{workforceState.recovering.length}</span><span className="l">Recovery</span></div>
                   </div>
+                  <div style={{ fontSize: 8, color: 'var(--ink-4)', fontFamily: 'var(--mono)', letterSpacing: '.08em', marginTop: 8, textTransform: 'uppercase' }}>Capacity model · status from live events</div>
                 </div>,
-                // 3: Recovery Status
+                // 3: Recovery Status — uses actual recovery action statuses when available
                 <div key="recov">
                   <div className="block-head"><span className="tac">Recovery Status</span></div>
                   <div className="recov">
-                    {soiRecommendations.length > 0 && soiRecommendations[0].recommendedActions.slice(0, 4).map((a, i) => (
-                      <div key={i} className="step">
-                        <span className={`marker ${i === 0 ? 'done' : i === 1 ? 'active' : 'wait'}`} />
-                        <div className="txt">
-                          <span className="t">{a.label}</span>
-                          <span className="s">{i === 0 ? 'Complete' : i === 1 ? 'In progress' : `Est. ${a.expectedImpact?.slice(0, 30) ?? 'Queued'}`}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {soiRecommendations.length === 0 && (
-                      <div className="step"><span className="marker done" /><div className="txt"><span className="t">No active recovery</span><span className="s">Operations nominal</span></div></div>
-                    )}
+                    {(() => {
+                      // Show ACTUAL recovery actions if any exist
+                      const activeRAs = temporalRecoveryActions.filter(ra => ra.status !== 'COMPLETE' && ra.status !== 'WITHDRAWN' && ra.status !== 'ESCALATED');
+                      if (activeRAs.length > 0) {
+                        return activeRAs.slice(0, 4).map((ra, i) => {
+                          const statusClass = ra.status === 'ACTIVE' ? 'active' : ra.status === 'COMPLETE' ? 'done' : 'wait';
+                          const statusLabel = ra.status === 'ACTIVE' ? 'Executing' : ra.status === 'ACKNOWLEDGED' ? 'Acknowledged' : ra.status === 'BLOCKED' ? 'Blocked' : 'Pending execution';
+                          return (
+                            <div key={ra.id ?? i} className="step">
+                              <span className={`marker ${statusClass}`} />
+                              <div className="txt">
+                                <span className="t">{ra.title?.slice(0, 50) ?? 'Recovery action'}</span>
+                                <span className="s">{statusLabel}{ra.gate_id ? ` · ${ra.gate_id}` : ''}</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                      }
+                      // Fall back to recommended actions (not yet executed)
+                      if (soiRecommendations.length > 0) {
+                        return soiRecommendations[0].recommendedActions.slice(0, 4).map((a, i) => (
+                          <div key={i} className="step">
+                            <span className="marker wait" />
+                            <div className="txt">
+                              <span className="t">{a.label}</span>
+                              <span className="s">Recommended{a.expectedImpact ? ` · ${a.expectedImpact.slice(0, 30)}` : ''}</span>
+                            </div>
+                          </div>
+                        ));
+                      }
+                      return (
+                        <div className="step"><span className="marker done" /><div className="txt"><span className="t">No active recovery</span><span className="s">Operations nominal</span></div></div>
+                      );
+                    })()}
                   </div>
                 </div>,
               ];
@@ -3288,7 +3311,8 @@ export default function ManagerDashboard() {
             <div className="stage-inner">
               <div className="spatial-cap">
                 <span className="ttl">{operator.station} · Pressure Field</span>
-                <span className="pill">Spatial Mode</span>
+                <span className="pill" style={{ background: 'rgba(82,214,230,.08)', fontSize: 7 }}>Live Pressure</span>
+                <span className="pill" style={{ background: 'rgba(255,255,255,.03)', borderColor: 'var(--line)', color: 'var(--ink-4)', fontSize: 7 }}>Prototype Map</span>
                 <div className="legend-inline">
                   <div className="li"><span className="d" style={{ background: 'var(--red)', boxShadow: '0 0 8px var(--glow-red)' }} />Critical</div>
                   <div className="li"><span className="d" style={{ background: 'var(--orange)', boxShadow: '0 0 8px var(--glow-orange)' }} />High</div>
@@ -3506,17 +3530,18 @@ export default function ManagerDashboard() {
                     )}
                   </div>
                 </div>,
-                // 1: Recovery Confidence
+                // 1: Recovery Confidence (prototype model)
                 <div key="conf">
-                  <div className="block-head"><span className="tac">Recovery Confidence</span><span className="meta">FORECAST</span></div>
+                  <div className="block-head"><span className="tac">Recovery Confidence</span><span className="meta">PROTOTYPE MODEL</span></div>
                   <div className="predict">
                     <div className="spark">
                       {Array.from({ length: 9 }).map((_, i) => (
                         <span key={i} style={{ height: `${Math.min(95, 30 + recoveryConf.score * (i + 1) / 9)}%` }} />
                       ))}
                     </div>
-                    <div className="pr"><span>If plan executes now</span><span className="num c-cyan">{recoveryConf.score}%</span></div>
-                    <div className="pr"><span>If delayed 10 min</span><span className="num c-amber">{Math.max(20, recoveryConf.score - 28)}%</span></div>
+                    <div className="pr"><span>Current projection</span><span className="num c-cyan">{recoveryConf.score}%</span></div>
+                    <div className="pr"><span>Delayed scenario (est.)</span><span className="num c-amber">{Math.max(20, recoveryConf.score - 28)}%</span></div>
+                    <div style={{ fontSize: 7, color: 'var(--ink-4)', fontFamily: 'var(--mono)', letterSpacing: '.06em', marginTop: 6, textTransform: 'uppercase' }}>Score from live incidents · weights require calibration</div>
                   </div>
                 </div>,
                 // 2: Recommended Next

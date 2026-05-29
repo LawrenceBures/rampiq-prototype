@@ -1,8 +1,14 @@
 /**
- * SOI Predictive — Recovery Confidence Scoring
+ * SOI Predictive — Recovery Confidence Scoring (PROTOTYPE MODEL)
  *
  * Estimates likelihood of successful stabilization given
  * current recovery state, staffing, equipment, and timing.
+ *
+ * IMPORTANT: Weighting formula is a prototype heuristic.
+ * Bonuses (+8 per action) and penalties (-15 per critical incident)
+ * are not calibrated against historical operational data.
+ * The "delayed scenario" penalty (-28) is an estimated projection.
+ * Production use requires calibration against real recovery outcomes.
  */
 
 import type { Incident } from '@/lib/lifecycle-types';
