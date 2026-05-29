@@ -60,14 +60,15 @@ export function generateAnswer(
       return answerSummary(ctx);
     default:
       return {
-        title: 'Clarification needed',
-        answer: "I can help with that. Could you clarify — are you asking about a specific gate or zone, operational risk, a recovery plan, weather, or current status?",
-        confidence: 'low',
+        title: 'I think I understand',
+        answer: "I'm interpreting your request. Here's what I can help with — just say the word.",
+        confidence: 'moderate',
         bullets: [
-          'Gates and zones: "show me 52C" or "what\'s happening at 52E"',
-          'Risk: "what should I worry about"',
-          'Recovery: "what\'s the best move" or "stabilize 52A-C"',
-          'Status: "brief me" or "bring me up to speed"',
+          'Gates: "show me Delta" or "what\'s happening at Echo"',
+          'Risk: "what should I worry about" or "where are we exposed"',
+          'Recovery: "what\'s the play" or "stabilize Delta"',
+          'Staffing: "who\'s available" or "assign a team to Delta"',
+          'Status: "brief me" or "how are we doing"',
           'Weather: "is weather affecting us"',
         ],
         assumptions: [],

@@ -804,9 +804,9 @@ const FALLBACK_TEAM_MEMBERS: TeamMember[] = [
 ];
 
 const FALLBACK_ZONES: Zone[] = [
-  { id: 'GATES-52ABC', label: 'Gates 52A\u2013C', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
-  { id: 'GATES-52DEF', label: 'Gates 52D\u2013F', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
-  { id: 'GATES-52GHI', label: 'Gates 52G\u2013I', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
+  { id: 'GATES-52ABC', label: 'Alpha–Charlie Block', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+  { id: 'GATES-52DEF', label: 'Delta–Foxtrot Block', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+  { id: 'GATES-52GHI', label: 'Golf–India Block', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
 ];
 
 const FALLBACK_SHIFT_STATUSES: ShiftStatusRecord[] = [
@@ -1382,8 +1382,8 @@ const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
     status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
-    notes: 'AM ramp crew covering gates 52A through 52C',
-    team_label: 'Ramp AM', zone_label: 'Gates 52A\u2013C', assigned_by_name: 'Martinez J.',
+    notes: 'AM ramp crew covering Alpha through Charlie',
+    team_label: 'Ramp AM', zone_label: 'Alpha–Charlie Block', assigned_by_name: 'Martinez J.',
   },
   {
     id: 'seed-ramp-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
@@ -1393,8 +1393,8 @@ const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
     recommendation_id: null, recommended_team_id: null, recommendation_reason: null,
     override_used: false, override_reason: null, override_by: null,
     status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
-    notes: 'PM ramp crew covering gates 52G through 52I',
-    team_label: 'Ramp PM', zone_label: 'Gates 52G\u2013I', assigned_by_name: 'Okafor D.',
+    notes: 'PM ramp crew covering Golf through India',
+    team_label: 'Ramp PM', zone_label: 'Golf–India Block', assigned_by_name: 'Okafor D.',
   },
 ];
 

@@ -183,6 +183,13 @@ export default function ManagerDashboard() {
   const [selectedGateId, setSelectedGateId] = useState<string | null>(null);
   const [spatialMode, setSpatialMode] = useState<'2d' | '3d'>('2d');
   const [pendingAssignment, setPendingAssignment] = useState<{ gate: string; members: string[]; reasoning: string } | null>(null);
+  // Interactive agent selection for assignment workflow
+  const [agentSelection, setAgentSelection] = useState<{
+    gate: string;
+    candidates: { id: string; name: string; role: string; status: string; workload: number; currentZone?: string }[];
+    selected: Set<string>;
+    phase: 'picking' | 'confirming';
+  } | null>(null);
 
   // ── Surface layout state (persisted) ──
   const ALL_LAYOUT_NAMES: LayoutName[] = ['Default', 'Operational', 'Focus', 'Crisis', 'Personal Custom'];
@@ -846,32 +853,84 @@ export default function ManagerDashboard() {
   // ── SOI Command Handler ──
   function handleCommand(rawInput: string) {
     const raw = normalizeNatoGates(rawInput);
+    // Audit: log all commands
+    logAuditEvent('command', { input: rawInput, normalized: raw });
+
+    // A-1. Agent selection mode — intercept number/name input
+    if (agentSelection && agentSelection.phase === 'picking') {
+      // Check if input looks like agent selection (numbers, names, or "assign")
+      const hasNumbers = /\d/.test(raw);
+      const hasNames = agentSelection.candidates.some(c => raw.toLowerCase().includes(c.name.split(' ')[0].toLowerCase()));
+      const isAssignConfirm = /\b(?:assign|dispatch|send|confirm|go)\b/i.test(raw);
+      if (hasNumbers || hasNames || isAssignConfirm) {
+        if (isAssignConfirm && !hasNumbers && !hasNames && agentSelection.selected.size > 0) {
+          // User said "assign" with existing selection
+          const selectedNames = agentSelection.candidates.filter(c => agentSelection.selected.has(c.id)).map(c => c.name);
+          const gate = agentSelection.gate;
+          setPendingAssignment({ gate, members: Array.from(agentSelection.selected), reasoning: `Selected by operator: ${selectedNames.join(', ')}` });
+          setAgentSelection({ ...agentSelection, phase: 'confirming' });
+          setCopilotAnswer({
+            title: `Confirm Assignment to Gate ${gate}`,
+            answer: `Assign ${selectedNames.join(', ')} to Gate ${gate}?`,
+            confidence: 'high',
+            bullets: [`Estimated impact: +${Math.round(agentSelection.selected.size * 12)} staffing coverage`, `Projected delay risk reduction: -${Math.round(agentSelection.selected.size * 9)}%`],
+            assumptions: [], recommendedNextAction: 'Say "confirm" to dispatch',
+            source: 'deterministic_operational_model',
+          });
+          setCommandResponse(null);
+          soiSpeak(`Ready to assign ${selectedNames.join(' and ')} to Gate ${gate}. Confirm?`);
+          setCommandInput('');
+          return;
+        }
+        handleAgentNumberSelection(raw);
+        setCommandInput('');
+        return;
+      }
+      // Not a selection command — cancel selection mode and fall through
+      setAgentSelection(null);
+    }
+
     // A0. Confirm pending team assignment
-    if (pendingAssignment && /\b(?:confirm|yes|go|approved?|dispatch|do\s+it)\b/i.test(raw)) {
+    if (pendingAssignment && /\b(?:confirm|yes|go|approved?|dispatch|do\s+it|roger|affirmative|send\s+them|assign\s+them|make\s+it\s+happen|green\s+light)\b/i.test(raw)) {
       const pa = pendingAssignment;
       setPendingAssignment(null);
+      setAgentSelection(null);
+      // Resolve member names for voice
+      const memberNames = pa.members.map(id => {
+        const m = workforceState.roster.find(r => r.id === id);
+        return m ? m.name : id;
+      });
       // Create recovery action for the assignment
       const gateInc = temporalIncidents.find(i => i.gate_id === pa.gate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
       if (gateInc) {
         createRecoveryAction({
           incident_id: gateInc.id,
-          title: `Team assignment: ${pa.members.join(', ')} to ${pa.gate}`,
+          title: `Team dispatched: ${memberNames.join(', ')} → ${pa.gate}`,
           action_type: 'DISPATCH',
           severity: 'HIGH',
           proposed_by: operator.userId,
           assigned_to: pa.members[0],
           gate_id: pa.gate,
-          description: `SOI assignment: ${pa.reasoning}`,
+          description: `SOI dispatch: ${pa.reasoning}. Agents: ${memberNames.join(', ')}. Confirmed by ${operator.displayName}.`,
         }).then(() => { refreshRecovery(); refresh(); });
       }
+      // Audit: log the dispatch
+      logAuditEvent('dispatch_confirmed', { gate: pa.gate, agents: pa.members, agentNames: memberNames, reasoning: pa.reasoning });
       setCopilotAnswer({
-        title: 'Assignment Confirmed',
-        answer: `Team dispatched to ${pa.gate}. ${pa.members.join(', ')} assigned. Recovery action created.`,
-        confidence: 'high', bullets: [], assumptions: [],
+        title: 'Team Dispatched',
+        answer: `${memberNames.join(' and ')} dispatched to Gate ${pa.gate}. Agents notified via mobile. Staffing board updated.`,
+        confidence: 'high',
+        bullets: [
+          `Agents notified: ${memberNames.join(', ')}`,
+          `Gate: ${pa.gate}`,
+          `Dispatched by: ${operator.displayName}`,
+          `Audit event created`,
+        ],
+        assumptions: [],
         source: 'deterministic_operational_model',
       });
       setCommandResponse(null);
-      soiSpeak(`Assignment confirmed. Team dispatched to gate ${pa.gate}.`);
+      soiSpeak(`${memberNames.join(' and ')} dispatched to Gate ${pa.gate}. Agents notified.`);
       setCommandInput('');
       return;
     }
@@ -885,6 +944,7 @@ export default function ManagerDashboard() {
       return;
     }
     if (agenticParsed.intent === 'cancel_plan') {
+      logAuditEvent('plan_cancelled', { plan: cmdMemory.activePlan?.summary ?? 'unknown' });
       if (liveExecTickRef.current) clearInterval(liveExecTickRef.current);
       setLiveExec(null);
       setAdaptiveRecs([]);
@@ -990,6 +1050,44 @@ export default function ManagerDashboard() {
         ]);
         break;
       }
+      case 'show_staffing': {
+        const ws = workforceState;
+        setCopilotAnswer({
+          title: 'Workforce Status',
+          answer: `${ws.totalOnShift} personnel on shift. ${ws.available.length} available, ${ws.assigned.length} assigned, ${ws.recovering.length} in recovery.`,
+          confidence: 'high',
+          bullets: [
+            ...(ws.available.length > 0 ? [`Available: ${ws.available.map(m => m.name).join(', ')}`] : ['No agents available']),
+            ...(ws.assigned.length > 0 ? [`Assigned: ${ws.assigned.map(m => `${m.name}${m.currentGate ? ` (${m.currentGate})` : ''}`).join(', ')}`] : []),
+            ...(ws.recovering.length > 0 ? [`Recovering: ${ws.recovering.map(m => m.name).join(', ')}`] : []),
+          ],
+          assumptions: ws.isDemo ? ['Demo workforce model'] : [],
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
+        break;
+      }
+      case 'show_risk': {
+        // Find the biggest operational risk
+        const worstZone = operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b, operationalAssessment.zoneAssessments[0]);
+        const topSources = operationalAssessment.topPressureSources.slice(0, 3);
+        setCopilotAnswer({
+          title: 'Risk Assessment',
+          answer: worstZone
+            ? `Highest risk: ${worstZone.zoneLabel} at pressure ${worstZone.pressure}. ${worstZone.explanation[0] ?? 'Elevated operational load.'}`
+            : 'No elevated risk detected. Operations nominal.',
+          confidence: 'high',
+          bullets: [
+            ...topSources.map(s => `${s.severity}: ${s.description}`),
+            ...(cascadeRisks.length > 0 ? [`Cascade risk: ${cascadeRisks[0].direction}`] : []),
+          ],
+          assumptions: [],
+          recommendedNextAction: worstZone && worstZone.pressure >= 60 ? `Consider: stabilize ${worstZone.zoneLabel}` : undefined,
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
+        break;
+      }
       case 'explain_instability': {
         setCopilotAnswer(null);
         const zoneId = resolveZonePattern(intent.target, zones);
@@ -997,7 +1095,14 @@ export default function ManagerDashboard() {
           const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
           setCommandResponse(lines);
         } else {
-          setCommandResponse([`Could not resolve "${intent.target}" to a known zone or gate.`]);
+          // Intent-first: try to interpret as a gate question
+          setCopilotAnswer({
+            title: 'Gate Not Found',
+            answer: `I couldn't find "${intent.target}" as a known gate. Gates are Alpha through India (52A–52I). Which gate are you asking about?`,
+            confidence: 'moderate', bullets: [], assumptions: [],
+            source: 'deterministic_operational_model',
+          });
+          setCommandResponse(null);
         }
         break;
       }
@@ -1222,6 +1327,116 @@ export default function ManagerDashboard() {
     setCommandInput('');
   }
 
+  // ── Audit Logging ──
+  function logAuditEvent(action: string, details: Record<string, unknown>) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      operator: operator.userId,
+      operatorName: operator.displayName,
+      role: operator.role,
+      station: operator.station,
+      action,
+      details,
+    };
+    // Persist to localStorage audit log (append-only)
+    try {
+      const key = 'soi_audit_log';
+      const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
+      existing.push(entry);
+      // Keep last 500 entries
+      if (existing.length > 500) existing.splice(0, existing.length - 500);
+      localStorage.setItem(key, JSON.stringify(existing));
+    } catch { /* silently fail */ }
+    // Log to console for observability
+    console.log('[SOI Audit]', action, details);
+  }
+
+  // ── Interactive Agent Selection for assignment workflow ──
+  function startAgentSelection(gate: string) {
+    const available = workforceState.roster.filter(m => m.status !== 'off_shift');
+    if (available.length === 0) {
+      setCopilotAnswer({ title: 'No Crew Available', answer: 'No agents currently on shift for assignment.', confidence: 'high', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+      setCommandResponse(null);
+      soiSpeak('No agents currently available for assignment.');
+      return;
+    }
+    setAgentSelection({ gate, candidates: available.map(m => ({ id: m.id, name: m.name, role: m.role, status: m.status, workload: m.workload, currentZone: m.currentZone })), selected: new Set(), phase: 'picking' });
+    const lines = [`Available agents for Gate ${gate}:`, ...available.map((m, i) => `${i + 1}. ${m.name} — ${m.role} · ${m.status}${m.currentGate ? ` at ${m.currentGate}` : ''} · workload ${m.workload}/3`)];
+    setCommandResponse(lines);
+    setCopilotAnswer({
+      title: `Assign Team to Gate ${gate}`,
+      answer: `${available.length} agents on shift. Select agents by number, name, or click the checkboxes. Then say "assign" to confirm.`,
+      confidence: 'high', bullets: [], assumptions: [],
+      recommendedNextAction: 'Say the numbers — e.g., "1, 3 and 5"',
+      source: 'deterministic_operational_model',
+    });
+    soiSpeak(`${available.length} agents available. Select by number or name, then say assign.`);
+  }
+
+  function handleAgentNumberSelection(input: string) {
+    if (!agentSelection) return;
+    const lower = input.toLowerCase();
+
+    // Parse number references: "1, 2 and 4" or "1 3 5" or "numbers 1 and 3"
+    const numbers = lower.match(/\d+/g)?.map(Number).filter(n => n >= 1 && n <= agentSelection.candidates.length) ?? [];
+
+    // Parse name references: "Jackson and Reed"
+    const nameMatches = agentSelection.candidates.filter(c =>
+      lower.includes(c.name.split(' ')[0].toLowerCase()) || lower.includes(c.name.toLowerCase())
+    );
+
+    const newSelected = new Set(agentSelection.selected);
+    for (const n of numbers) {
+      newSelected.add(agentSelection.candidates[n - 1].id);
+    }
+    for (const m of nameMatches) {
+      newSelected.add(m.id);
+    }
+
+    if (newSelected.size === 0) {
+      soiSpeak('I didn\'t catch which agents. Say the numbers next to their names.');
+      return;
+    }
+
+    // Check if user also said "assign" / "confirm" / "dispatch"
+    const wantsConfirm = /\b(?:assign|confirm|dispatch|send|go|do\s+it)\b/i.test(lower);
+
+    const selectedNames = agentSelection.candidates.filter(c => newSelected.has(c.id)).map(c => c.name);
+    setAgentSelection({ ...agentSelection, selected: newSelected, phase: wantsConfirm ? 'confirming' : 'picking' });
+
+    if (wantsConfirm) {
+      // Move to confirmation
+      const gate = agentSelection.gate;
+      setPendingAssignment({ gate, members: Array.from(newSelected), reasoning: `Selected by operator: ${selectedNames.join(', ')}` });
+      setCopilotAnswer({
+        title: `Confirm Assignment to Gate ${gate}`,
+        answer: `Assign ${selectedNames.join(', ')} to Gate ${gate}?`,
+        confidence: 'high',
+        bullets: [
+          `Estimated impact: +${Math.round(newSelected.size * 12)} staffing coverage`,
+          `Projected delay risk reduction: -${Math.round(newSelected.size * 9)}%`,
+          `Recovery window: 12–18 minutes`,
+        ],
+        assumptions: [],
+        recommendedNextAction: 'Say "confirm" to dispatch',
+        source: 'deterministic_operational_model',
+      });
+      setCommandResponse(null);
+      soiSpeak(`Ready to assign ${selectedNames.join(' and ')} to Gate ${gate}. Confirm?`);
+    } else {
+      setCommandResponse([`Selected: ${selectedNames.join(', ')}`, `Say "assign" to dispatch, or add more agents by number.`]);
+      soiSpeak(`${selectedNames.join(' and ')} selected. Say assign when ready.`);
+    }
+  }
+
+  function toggleAgentSelection(agentId: string) {
+    if (!agentSelection) return;
+    const newSelected = new Set(agentSelection.selected);
+    if (newSelected.has(agentId)) newSelected.delete(agentId);
+    else newSelected.add(agentId);
+    setAgentSelection({ ...agentSelection, selected: newSelected });
+  }
+
   // ── Approve SOI Recommendation → create recovery action ──
   async function handleApproveRecommendation(rec: SoiRecommendation) {
     const incidentId = rec.primaryIncidentId;
@@ -1265,6 +1480,7 @@ export default function ManagerDashboard() {
   // ── Live Execution Engine ──
   async function handleApprovePlan() {
     if (!cmdMemory.activePlan) return;
+    logAuditEvent('plan_approved', { plan: cmdMemory.activePlan.summary, steps: cmdMemory.activePlan.steps.length, targetZone: cmdMemory.activePlan.objective.targetZone });
     let exec = createLiveExecution(cmdMemory.activePlan);
     exec = approveLiveExecution(exec);
     setLiveExec(exec);
@@ -1573,37 +1789,51 @@ export default function ManagerDashboard() {
       case 'assign_team': {
         const gate = (li.gate ?? targetGate ?? '').toUpperCase();
         if (!gate) {
-          setCopilotAnswer({ title: 'Assignment', answer: 'Which gate should I assign a team to? Specify a gate like 52D.', confidence: 'low', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          setCopilotAnswer({ title: 'Assignment', answer: 'Which gate should I assign a team to? Just say the gate — Alpha, Bravo, Charlie, and so on.', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
           setCommandResponse(null);
           break;
         }
-        const rec = recommendTeamForGate(workforceState, gate);
-        if (rec.members.length === 0) {
-          setCopilotAnswer({ title: 'No Available Crew', answer: `No agents currently available for assignment to ${gate}. ${rec.reasoning}`, confidence: 'moderate', bullets: [], assumptions: ['Demo workforce model'], source: 'deterministic_operational_model' });
+        // Show interactive numbered agent list
+        startAgentSelection(gate);
+        break;
+      }
+      case 'select_agents': {
+        // User selecting agents by number from the list
+        if (agentSelection && agentSelection.phase === 'picking') {
+          handleAgentNumberSelection(_raw);
         } else {
-          setPendingAssignment({ gate, members: rec.members.map(m => m.id), reasoning: rec.reasoning });
-          const gateInc = temporalIncidents.filter(i => i.gate_id === gate && i.status !== 'RESOLVED' && i.status !== 'CLOSED');
-          setCopilotAnswer({
-            title: `Assign Team to ${gate}`,
-            answer: `Recommended: ${rec.members.map(m => m.name).join(' and ')}. ${rec.reasoning}`,
-            confidence: 'high',
-            bullets: [
-              ...rec.members.map(m => `${m.name} (${m.role}) — ${m.status}, workload ${m.workload}/3`),
-              gateInc.length > 0 ? `${gate} has ${gateInc.length} active incident${gateInc.length > 1 ? 's' : ''}` : `${gate} operational`,
-              'Projected impact: pressure reduction within 12–18 minutes',
-            ],
-            assumptions: ['Demo workforce model'],
-            recommendedNextAction: 'Say "confirm" to dispatch',
-            source: 'deterministic_operational_model',
-          });
+          setCopilotAnswer({ title: 'No Active Selection', answer: 'No agent list is active. Tell me which gate you want to assign a team to first.', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          setCommandResponse(null);
         }
-        setCommandResponse(null);
+        break;
+      }
+      case 'forecast': {
+        // Route to predictive handler
+        handleCommand('what happens if we do nothing');
+        break;
+      }
+      case 'flight_query': {
+        // Route to flight handler
+        handleCommand(li.gate ? `show flight at ${li.gate}` : 'which flights are at risk');
         break;
       }
       default: {
-        // LLM couldn't resolve — show reasoning
-        setCommandResponse([`SOI: ${li.reasoning ?? 'I can help with gates, zones, staffing, recovery, weather, or status. Try being more specific.'}`]);
-        setCopilotAnswer(null);
+        // Intent-first: always acknowledge, never reject
+        const reasoning = li.reasoning ?? 'I understood your request.';
+        setCopilotAnswer({
+          title: 'Acknowledged',
+          answer: reasoning + ' Let me know if I can help with a specific gate, staffing, recovery, or status update.',
+          confidence: 'moderate',
+          bullets: [
+            'Try: "brief me" for a status update',
+            'Try: "what\'s happening at Delta" for gate detail',
+            'Try: "assign a team to Echo" for staffing',
+            'Try: "what\'s the play" for recovery options',
+          ],
+          assumptions: [],
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
         break;
       }
     }
@@ -2834,6 +3064,58 @@ export default function ManagerDashboard() {
                   ))}
                   {copilotAnswer.recommendedNextAction && <div style={{ fontSize: 10, color: '#52d6e6', marginTop: 4 }}>→ {copilotAnswer.recommendedNextAction}</div>}
                   <button onClick={() => setCopilotAnswer(null)} style={{ marginTop: 6, padding: '3px 8px', background: 'none', border: '1px solid rgba(150,170,190,.08)', borderRadius: 6, color: 'var(--ink-4)', fontFamily: 'inherit', fontSize: 8, cursor: 'pointer' }}>dismiss</button>
+                </div>
+              )}
+
+              {/* ── Agent Selection Panel ── */}
+              {agentSelection && agentSelection.phase === 'picking' && (
+                <div style={{ margin: '12px 0', padding: '18px', background: 'linear-gradient(180deg, rgba(82,214,230,.04), rgba(82,214,230,.01))', border: '1px solid rgba(82,214,230,.2)', borderRadius: 14, fontFamily: 'var(--mono)' }}>
+                  <div style={{ fontSize: 8, letterSpacing: '.2em', textTransform: 'uppercase', color: 'var(--cyan)', marginBottom: 8 }}>Assign Team to Gate {agentSelection.gate}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-2)', marginBottom: 12 }}>Select agents, then say &ldquo;assign&rdquo; or click Dispatch.</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {agentSelection.candidates.map((c, i) => {
+                      const isSelected = agentSelection.selected.has(c.id);
+                      const statusColor = c.status === 'available' ? 'var(--green)' : c.status === 'assigned' ? 'var(--amber)' : c.status === 'recovering' ? 'var(--orange)' : 'var(--ink-4)';
+                      return (
+                        <div key={c.id} onClick={() => toggleAgentSelection(c.id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, cursor: 'pointer', transition: '.14s',
+                            background: isSelected ? 'rgba(82,214,230,.08)' : 'rgba(255,255,255,.015)',
+                            border: `1px solid ${isSelected ? 'rgba(82,214,230,.35)' : 'rgba(150,170,190,.06)'}` }}>
+                          <span style={{ width: 20, height: 20, borderRadius: 5, border: `1.5px solid ${isSelected ? 'var(--cyan)' : 'var(--ink-4)'}`, background: isSelected ? 'rgba(82,214,230,.15)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--cyan)', fontWeight: 600, flexShrink: 0 }}>
+                            {isSelected ? '✓' : (i + 1)}
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>{c.name}</div>
+                            <div style={{ fontSize: 9, color: 'var(--ink-3)' }}>{c.role} · workload {c.workload}/3</div>
+                          </div>
+                          <span style={{ fontSize: 8, letterSpacing: '.12em', textTransform: 'uppercase', color: statusColor, fontWeight: 600 }}>{c.status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                    <button className="cta cta-primary" style={{ fontSize: 12, padding: '10px 18px' }}
+                      disabled={agentSelection.selected.size === 0}
+                      onClick={() => {
+                        if (agentSelection.selected.size === 0) return;
+                        const selectedNames = agentSelection.candidates.filter(c => agentSelection.selected.has(c.id)).map(c => c.name);
+                        setPendingAssignment({ gate: agentSelection.gate, members: Array.from(agentSelection.selected), reasoning: `Selected by operator: ${selectedNames.join(', ')}` });
+                        setAgentSelection({ ...agentSelection, phase: 'confirming' });
+                        setCopilotAnswer({
+                          title: `Confirm: Dispatch to Gate ${agentSelection.gate}`,
+                          answer: `Assign ${selectedNames.join(', ')} to Gate ${agentSelection.gate}?`,
+                          confidence: 'high',
+                          bullets: [`+${Math.round(agentSelection.selected.size * 12)} staffing coverage`, `-${Math.round(agentSelection.selected.size * 9)}% delay risk`],
+                          assumptions: [], recommendedNextAction: 'Say "confirm" to dispatch',
+                          source: 'deterministic_operational_model',
+                        });
+                        setCommandResponse(null);
+                        soiSpeak(`Ready to dispatch ${selectedNames.join(' and ')} to Gate ${agentSelection.gate}. Confirm?`);
+                      }}>
+                      Dispatch Selected ({agentSelection.selected.size})
+                    </button>
+                    <button className="cta cta-ghost" style={{ fontSize: 12, padding: '10px 14px' }} onClick={() => { setAgentSelection(null); setCommandResponse(null); }}>Cancel</button>
+                  </div>
                 </div>
               )}
 

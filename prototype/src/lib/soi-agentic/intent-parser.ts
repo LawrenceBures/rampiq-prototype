@@ -80,9 +80,14 @@ const MINIMIZE_DISRUPTION_PATTERNS = [
 
 const DISPATCH_PATTERNS = [
   /\bdispatch\b/,
-  /\bsend.*(?:agent|team|support|help)\b/,
+  /\bsend.*(?:agent|team|support|help|crew|people|someone|somebody|backup|reinforcement)\b/,
   /\bdeploy\b/,
-  /\bassign.*(?:to|at)\b/,
+  /\bassign\b/,
+  /\bget\s+(?:me\s+)?(?:a\s+)?team\b/,
+  /\bmove\s+(?:support|crew|people|agents?|someone)\s+(?:to|over|toward)\b/,
+  /\bput\s+(?:a\s+)?(?:team|crew|agents?|someone|people|bodies)\s+(?:at|on|to)\b/,
+  /\bneed\s+(?:a\s+)?(?:team|crew|help|support|agents?|people|bodies|someone)\s+(?:at|on|to|for|over)\b/,
+  /\bwho\s+can\s+(?:i|we)\s+send\b/,
 ];
 
 const OPTIMIZE_STAFFING_PATTERNS = [
@@ -107,11 +112,11 @@ const RESOLVE_CRITICALS_PATTERNS = [
 ];
 
 const EXECUTE_PATTERNS = [
-  /^(?:execute|approve|do\s+it|go|proceed|run\s+it|let'?s?\s+go|approve\s+it|send\s+it|dispatch\s+it|confirm|confirmed|yes\s+proceed|yes|affirmative)$/,
+  /^(?:execute|approve|do\s+it|go|proceed|run\s+it|let'?s?\s+go|approve\s+it|send\s+it|send\s+them|dispatch\s+it|confirm|confirmed|yes\s+proceed|yes|affirmative|roger|copy|make\s+it\s+happen|green\s+light|cleared|do\s+that|yep|yeah|sure|absolutely|assign\s+them|dispatch\s+them)$/,
   /\bexecute\s+(?:the\s+)?plan\b/,
-  /\bapprove\s+(?:the\s+)?(?:plan|execution|recovery|recommendation)\b/,
+  /\bapprove\s+(?:the\s+)?(?:plan|execution|recovery|recommendation|assignment|dispatch)\b/,
   /\brun\s+(?:the\s+)?plan\b/,
-  /\bdispatch\s+(?:the\s+)?(?:plan|recovery|it)\b/,
+  /\bdispatch\s+(?:the\s+)?(?:plan|recovery|it|them|team|crew)\b/,
   /\brecommendations?\s+approved\b/,
   /\bapprove\s+and\s+dispatch\b/,
 ];
