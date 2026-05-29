@@ -36,11 +36,19 @@ async function backdateAction(id: string, min: number) {
 }
 
 export async function clearDemoData(): Promise<void> {
-  const sb = getSupabase(); if (!sb) return;
-  await sb.from('rampiq_recovery_actions').delete().neq('id', '');
-  await sb.from('rampiq_incidents').delete().neq('id', '');
-  await sb.from('rampiq_events').delete().neq('id', '');
-  console.log('[demo] cleared all data');
+  const sb = getSupabase();
+  if (sb) {
+    await sb.from('rampiq_recovery_actions').delete().neq('id', '');
+    await sb.from('rampiq_incidents').delete().neq('id', '');
+    await sb.from('rampiq_events').delete().neq('id', '');
+  }
+  // Also clear localStorage fallback data
+  try {
+    localStorage.removeItem('soi_events');
+    localStorage.removeItem('soi_incidents');
+    localStorage.removeItem('soi_recovery_actions');
+  } catch { /* SSR safe */ }
+  console.log('[demo] cleared all data (Supabase + localStorage)');
 }
 
 /**

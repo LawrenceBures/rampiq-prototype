@@ -1050,10 +1050,10 @@ export default function ManagerDashboard() {
     }
     if (agenticParsed.intent === 'show_alternatives' && cmdMemory.activePlan) {
       const altPlan = buildAlternativePlan(
-        cmdMemory.activePlan.objective, operationalAssessment,
-        soiRecommendations, temporalIncidents, temporalRecoveryActions,
+        cmdMemory.activePlan.objective, assessmentRef.current,
+        recommendationsRef.current, temporalIncidents, temporalRecoveryActions,
       );
-      setCmdMemory(stagePlan(cmdMemory, altPlan, altPlan.objective, operationalAssessment));
+      setCmdMemory(stagePlan(cmdMemory, altPlan, altPlan.objective, assessmentRef.current));
       setCommandResponse(null);
       setCopilotAnswer(null);
       setCommandInput('');
@@ -1088,16 +1088,16 @@ export default function ManagerDashboard() {
         if (resolved) agenticParsed.targetZone = resolved;
       }
 
-      const objective = buildObjective(agenticParsed, operationalAssessment, zones);
+      const objective = buildObjective(agenticParsed, assessmentRef.current, effectiveZones);
       const plan = buildExecutionPlan(
-        objective, operationalAssessment,
-        soiRecommendations, temporalIncidents, temporalRecoveryActions,
+        objective, assessmentRef.current,
+        recommendationsRef.current, temporalIncidents, temporalRecoveryActions,
       );
 
       if (plan.steps.length === 0) {
         // Explain why no plan could be built
         const zoneLabel = objective.targetZoneLabel ?? objective.targetZone ?? 'the target area';
-        const za = objective.targetZone ? operationalAssessment.zoneAssessments.find(z => z.zoneId === objective.targetZone) : null;
+        const za = objective.targetZone ? assessmentRef.current.zoneAssessments.find(z => z.zoneId === objective.targetZone) : null;
         const reason = za
           ? za.unresolvedCount === 0
             ? `No active incidents at ${zoneLabel}. Zone is currently stable.`
@@ -1107,7 +1107,7 @@ export default function ManagerDashboard() {
         setCopilotAnswer(null);
       } else {
         const auth = authorizeExecution(plan.steps, operator.viewerRole as 'coordinator' | 'manager' | 'ops_director');
-        setCmdMemory(stagePlan(cmdMemory, plan, objective, operationalAssessment));
+        setCmdMemory(stagePlan(cmdMemory, plan, objective, assessmentRef.current));
         setCommandResponse(null);
         setCopilotAnswer(null);
         soiSpeak(`Recovery plan staged for ${objective.targetZoneLabel ?? objective.targetZone ?? 'target zone'}. ${plan.steps.length} steps. Say approve to execute.`);
@@ -1227,11 +1227,25 @@ export default function ManagerDashboard() {
         break;
       }
       case 'recommend_recovery': {
-        setCopilotAnswer(null);
-        if (soiRecommendations.length === 0) {
-          setCommandResponse(['No recovery recommendations at this time. Operation is within normal parameters.']);
+        const liveRecs = recommendationsRef.current;
+        if (liveRecs.length === 0) {
+          setCopilotAnswer({
+            title: 'Recovery Status',
+            answer: `Nothing flagged right now. Pressure at ${assessmentRef.current.globalPressure}. I'm monitoring.`,
+            confidence: 'high', bullets: [], assumptions: [],
+            source: 'deterministic_operational_model',
+          });
+          setCommandResponse(null);
         } else {
-          setView('intelligence');
+          setCopilotAnswer({
+            title: 'Recommended Play',
+            answer: `I'd prioritize: ${liveRecs[0].title}. ${liveRecs[0].summary}`,
+            confidence: 'high',
+            bullets: liveRecs.slice(0, 3).map((r, i) => `${i + 1}. ${r.title} — ${r.severity}, confidence ${r.confidence.score}%`),
+            assumptions: [],
+            recommendedNextAction: liveRecs[0].title,
+            source: 'deterministic_operational_model',
+          });
           setCommandResponse(null);
         }
         break;
@@ -1275,7 +1289,7 @@ export default function ManagerDashboard() {
       }
       case 'show_cascades': {
         setCopilotAnswer(null);
-        const cascades = operationalAssessment.zoneAssessments.filter(z => z.stability === 'critical' || z.stability === 'unstable');
+        const cascades = assessmentRef.current.zoneAssessments.filter(z => z.stability === 'critical' || z.stability === 'unstable');
         if (cascades.length === 0) {
           setCommandResponse(['No active cascades detected.']);
         } else {
@@ -1357,9 +1371,9 @@ export default function ManagerDashboard() {
         // F. Scenario simulation queries
         if (/\b(?:compare.*(?:option|recovery|scenario|intervention)|simulate.*(?:stab|recovery|intervention)|what\s+if.*(?:intervene|dispatch|reroute|reassign|delay|nothing)|(?:best|safest|fastest).*(?:recovery|option|move)|which.*(?:recovery|option|intervention).*(?:best|work))/i.test(raw)) {
           if (forecast) {
-            const scenarios = compareScenarios(selectedZoneId ?? undefined, operationalAssessment, forecast, cascadeRisks, recoveryConf, opProfile);
+            const scenarios = compareScenarios(selectedZoneId ?? undefined, assessmentRef.current, forecast, cascadeRisks, recoveryConf, opProfile);
             const bullets = scenarios.map(s => {
-              const tgt = s.outcomes.find(o => o.zoneId === (selectedZoneId ?? operationalAssessment.zoneAssessments[0]?.zoneId));
+              const tgt = s.outcomes.find(o => o.zoneId === (selectedZoneId ?? assessmentRef.current.zoneAssessments[0]?.zoneId));
               return `${s.label}: pressure ${tgt?.currentPressure ?? '?'} → ${tgt?.projectedPressure ?? '?'}, stabilize ~${s.overallStabilizationMin}m (${s.overallConfidence})`;
             });
             const best = scenarios.reduce((a, b) => {
@@ -1670,7 +1684,7 @@ export default function ManagerDashboard() {
         // Chain health monitoring
         let report: import('@/lib/soi-execution').ChainMonitorReport | null = null;
         if (cmdMemory.preExecutionAssessment) {
-          report = evaluateChainHealth(next, cmdMemory.preExecutionAssessment, operationalAssessment);
+          report = evaluateChainHealth(next, cmdMemory.preExecutionAssessment, assessmentRef.current);
           const recs = generateAdaptiveRecommendations(report, next);
           if (recs.length > 0) {
             setAdaptiveRecs(recs);
@@ -2074,12 +2088,13 @@ export default function ManagerDashboard() {
       default: {
         // Intent-first: give the best operational answer, never reject
         // Use the reasoning as a natural acknowledgement
-        const worst = operationalAssessment.zoneAssessments.length > 0
-          ? operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
+        const liveA = assessmentRef.current;
+        const worst = liveA.zoneAssessments.length > 0
+          ? liveA.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
           : null;
         const contextNote = worst && worst.pressure >= 40
           ? `Right now, ${worst.zoneLabel} is your main concern at pressure ${worst.pressure}.`
-          : `Operations are stable at pressure ${operationalAssessment.globalPressure}.`;
+          : `Operations at pressure ${liveA.globalPressure}.`;
         setCopilotAnswer({
           title: 'Copy',
           answer: `${li.reasoning ?? 'I hear you.'} ${contextNote}`,
