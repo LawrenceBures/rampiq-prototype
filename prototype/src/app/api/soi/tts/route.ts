@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid_text' }, { status: 400 });
   }
 
-  const voice = body.voice ?? 'onyx'; // calm, command-center voice
+  const voice = body.voice ?? 'ash'; // warm, confident, professional
 
   try {
     const res = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         input: body.text,
         voice,
         response_format: 'mp3',
-        speed: 0.95,
+        speed: 1.05,
       }),
     });
 

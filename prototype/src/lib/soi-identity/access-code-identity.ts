@@ -91,11 +91,31 @@ export function clearIdentity(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-export function generateGreeting(op: AuthenticatedOperator): string {
+export function generateGreeting(op: AuthenticatedOperator, operationalContext?: {
+  pressure: number;
+  stability: string;
+  activeIncidents: number;
+  activeRecoveries: number;
+  worstZone?: string;
+  worstZonePressure?: number;
+}): string {
   const hour = new Date().getHours();
   const timeOfDay = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const name = op.displayName.split(' ')[0] ?? op.displayName;
-  return `${timeOfDay}, ${name}. SOI is monitoring ${op.station} Eagle operations.`;
+
+  if (!operationalContext || operationalContext.pressure === 0) {
+    return `${timeOfDay}, ${name}. Operations are holding steady. I'm watching all gates.`;
+  }
+
+  const { pressure, activeIncidents, activeRecoveries, worstZone, worstZonePressure } = operationalContext;
+
+  if (pressure >= 70) {
+    return `${timeOfDay}, ${name}. Pressure is at ${pressure} — ${worstZone ? `${worstZone} is your priority at ${worstZonePressure}` : 'elevated across the board'}. ${activeIncidents} active incident${activeIncidents !== 1 ? 's' : ''}.${activeRecoveries > 0 ? ` ${activeRecoveries} recovery action${activeRecoveries !== 1 ? 's' : ''} running.` : ' No recovery started yet.'}`;
+  }
+  if (pressure >= 40) {
+    return `${timeOfDay}, ${name}. Pressure is moderate at ${pressure}. ${activeIncidents > 0 ? `${activeIncidents} incident${activeIncidents !== 1 ? 's' : ''} being managed.` : 'Operations are manageable.'} I'm watching for changes.`;
+  }
+  return `${timeOfDay}, ${name}. Everything is holding steady. Pressure at ${pressure}, no elevated concerns. I'll flag anything that needs attention.`;
 }
 
 export function getRoleLabel(op: AuthenticatedOperator): string {

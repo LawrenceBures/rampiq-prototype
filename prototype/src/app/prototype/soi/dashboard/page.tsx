@@ -474,6 +474,9 @@ export default function ManagerDashboard() {
   const [commandInput, setCommandInput] = useState('');
   const [commandResponse, setCommandResponse] = useState<string[] | null>(null);
   const [copilotAnswer, setCopilotAnswer] = useState<CopilotAnswer | null>(null);
+  const [chatHistory, setChatHistory] = useState<{ role: 'operator' | 'soi'; text: string }[]>([]);
+  const chatHistoryRef = useRef(chatHistory);
+  chatHistoryRef.current = chatHistory;
   const [conversationMemory, setConversationMemory] = useState<ConversationContext>(createEmptyContext());
   const [lastInferredFrom, setLastInferredFrom] = useState<string[]>([]);
   const [approvingRecId, setApprovingRecId] = useState<string | null>(null);
@@ -911,6 +914,8 @@ export default function ManagerDashboard() {
     const raw = normalizeNatoGates(rawInput);
     // Audit: log all commands
     logAuditEvent('command', { input: rawInput, normalized: raw });
+    // Record operator message in conversation history (keep last 8 exchanges = 16 messages)
+    setChatHistory(prev => [...prev, { role: 'operator' as const, text: rawInput }].slice(-16));
 
     // Context resolution: replace pronouns/references with last active gate/zone
     // "what about it" → "what about 52D" if Delta was last discussed
@@ -1463,7 +1468,7 @@ export default function ManagerDashboard() {
         fetch('/api/soi/llm-intent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: raw }),
+          body: JSON.stringify({ text: raw, history: chatHistoryRef.current.slice(-10).map(m => `${m.role === 'operator' ? 'Operator' : 'SOI'}: ${m.text.slice(0, 200)}`).join('\n') }),
         }).then(r => r.json()).then(data => {
           if (data.intent && data.intent.intent !== 'unknown') {
             routeLLMIntent(data.intent, raw);
@@ -1820,6 +1825,14 @@ export default function ManagerDashboard() {
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Record SOI responses in conversation history ──
+  useEffect(() => {
+    if (copilotAnswer && copilotAnswer.answer && copilotAnswer.title !== 'Processing') {
+      setChatHistory(prev => [...prev, { role: 'soi' as const, text: copilotAnswer.answer }].slice(-16));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [copilotAnswer?.answer]);
 
   // ── Speak copilot answers and command responses when TTS is on ──
   // Skips if a handler already called soiSpeak() this render cycle.
@@ -2857,7 +2870,16 @@ export default function ManagerDashboard() {
       setOperator(op);
       setShowAccessPrompt(false);
       setAccessError('');
-      const g = generateGreeting(op);
+      const liveA = assessmentRef.current;
+      const worstZ = liveA.zoneAssessments.length > 0 ? liveA.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b) : null;
+      const g = generateGreeting(op, {
+        pressure: liveA.globalPressure,
+        stability: liveA.globalStability,
+        activeIncidents: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
+        activeRecoveries: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
+        worstZone: worstZ?.zoneLabel,
+        worstZonePressure: worstZ?.pressure,
+      });
       setGreeting(g);
       if (ttsOn) soiSpeak(g);
       setTimeout(() => setGreeting(null), 12000);
@@ -3510,6 +3532,16 @@ export default function ManagerDashboard() {
                     <button className="dock-chip danger" onClick={() => handleCommand('stabilize worst zone')}>Escalate</button>
                   </div>
                 )}
+              </div>
+              {/* Always-visible quick prompts */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '8px 30px 0', opacity: 0.7 }}>
+                {['Brief me', "What's the play?", "Who's available?", 'Show pressure', "What's our risk?", 'Where should I focus?'].map(q => (
+                  <button key={q} onClick={() => handleCommand(q)}
+                    style={{ fontFamily: 'var(--mono)', fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase', padding: '5px 10px', borderRadius: 16, background: 'rgba(255,255,255,.02)', border: '1px solid var(--line)', color: 'var(--ink-3)', cursor: 'pointer', transition: '.14s', whiteSpace: 'nowrap' }}
+                    onMouseEnter={e => { (e.target as HTMLElement).style.borderColor = 'var(--cyan)'; (e.target as HTMLElement).style.color = 'var(--cyan)'; }}
+                    onMouseLeave={e => { (e.target as HTMLElement).style.borderColor = 'var(--line)'; (e.target as HTMLElement).style.color = 'var(--ink-3)'; }}
+                  >{q}</button>
+                ))}
               </div>
             </div>
           </main>

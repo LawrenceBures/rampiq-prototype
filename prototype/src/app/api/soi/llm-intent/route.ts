@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no_api_key', intent: null }, { status: 200 });
   }
 
-  let body: { text: string };
+  let body: { text: string; history?: string };
   try {
     body = await req.json();
   } catch {
@@ -101,6 +101,11 @@ export async function POST(req: NextRequest) {
   if (!body.text || typeof body.text !== 'string' || body.text.length > 500) {
     return NextResponse.json({ error: 'invalid_text' }, { status: 400 });
   }
+
+  // Build user message with conversation history for follow-up context
+  const userContent = body.history
+    ? `RECENT CONVERSATION:\n${body.history}\n\nCURRENT MESSAGE: ${body.text}`
+    : body.text;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -115,7 +120,7 @@ export async function POST(req: NextRequest) {
         max_tokens: 250,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: body.text },
+          { role: 'user', content: userContent },
         ],
         response_format: { type: 'json_object' },
       }),
