@@ -1036,8 +1036,22 @@ export default function ManagerDashboard() {
       return;
     }
 
+    // B0. Dispatch/assign intent → interactive agent selection (not agentic plan)
+    if (agenticParsed.intent === 'dispatch_recovery' && agenticParsed.targetGate) {
+      startAgentSelection(agenticParsed.targetGate);
+      setCommandInput('');
+      return;
+    }
+    if (agenticParsed.intent === 'dispatch_recovery' && !agenticParsed.targetGate) {
+      setCopilotAnswer({ title: 'Assignment', answer: 'Which gate should I assign a team to? Just say the gate — Alpha, Bravo, Charlie, and so on.', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+      setCommandResponse(null);
+      soiSpeak('Which gate should I assign a team to?');
+      setCommandInput('');
+      return;
+    }
+
     // B. Agentic execution intents (stabilize, prevent, reduce, dispatch, etc.)
-    if (agenticParsed.intent && !['execute_plan', 'cancel_plan', 'show_plan_status', 'show_alternatives', 'continue_recovery'].includes(agenticParsed.intent)) {
+    if (agenticParsed.intent && !['execute_plan', 'cancel_plan', 'show_plan_status', 'show_alternatives', 'continue_recovery', 'dispatch_recovery'].includes(agenticParsed.intent)) {
       // Resolve gate to zone if only gate was provided
       if (!agenticParsed.targetZone && agenticParsed.targetGate && zones.length > 0) {
         const resolved = resolveZonePattern(agenticParsed.targetGate, zones);
