@@ -143,12 +143,19 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json(memoryStore[idx]);
 }
 
-// DELETE /api/soi/events — reset (dev only)
+// DELETE /api/soi/events — wipe all operational data (dev/prototype)
 export async function DELETE() {
   const sb = getSupabase();
   if (sb) {
-    await sb.from('rampiq_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    return NextResponse.json({ ok: true });
+    // Delete in dependency order: recovery_actions → incidents → events
+    const r1 = await sb.from('rampiq_recovery_actions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const r2 = await sb.from('rampiq_incidents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const r3 = await sb.from('rampiq_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const errors = [r1.error, r2.error, r3.error].filter(Boolean);
+    if (errors.length > 0) {
+      console.error('[api/events DELETE] errors:', errors.map(e => e?.message));
+    }
+    return NextResponse.json({ ok: true, errors: errors.length });
   }
   memoryStore.length = 0;
   nextId = 1;

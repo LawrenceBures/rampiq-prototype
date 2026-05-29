@@ -933,14 +933,18 @@ export default function ManagerDashboard() {
       }
     }
 
-    // A-2. Clear/reset command — wipe all demo data
+    // A-2. Clear/reset command — wipe all demo data (server + client)
     if (/^(?:clear|reset|wipe|clear\s+all|reset\s+all|clear\s+data|start\s+fresh|clean\s+slate)$/i.test(raw.trim())) {
-      clearDemoData().then(() => {
+      Promise.all([
+        fetch('/api/soi/events', { method: 'DELETE' }).catch(() => {}),
+        clearDemoData(),
+        resetEvents(),
+      ]).then(() => {
         refresh();
         refreshIncidents();
-        setCopilotAnswer({ title: 'Cleared', answer: 'All operational data cleared. Starting fresh.', confidence: 'high', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+        setCopilotAnswer({ title: 'Cleared', answer: 'All operational data wiped. Starting fresh.', confidence: 'high', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
         setCommandResponse(null);
-        soiSpeak('Data cleared. Starting fresh.');
+        soiSpeak('All data cleared. Starting fresh.');
       });
       setCommandInput('');
       return;
@@ -3282,9 +3286,18 @@ export default function ManagerDashboard() {
                 setTimeout(() => { if (btn) btn.textContent = 'Seed'; }, 2000);
               }}>Seed</button>
               <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={async () => {
+                const btn = document.activeElement as HTMLButtonElement;
+                if (btn) btn.textContent = 'Clearing...';
+                // Server-side wipe (all 3 tables)
+                await fetch('/api/soi/events', { method: 'DELETE' }).catch(() => {});
+                // Client-side wipe (localStorage)
                 await clearDemoData();
+                await resetEvents();
                 refresh();
                 refreshIncidents();
+                setCopilotAnswer(null);
+                setCommandResponse(null);
+                if (btn) { btn.textContent = 'Cleared ✓'; setTimeout(() => { if (btn) btn.textContent = 'Clear'; }, 2000); }
               }}>Clear</button>
               <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={refresh}>Refresh</button>
             </div>
