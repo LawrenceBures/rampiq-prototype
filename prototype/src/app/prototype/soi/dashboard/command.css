@@ -502,16 +502,16 @@ body{
 }
 /* Edit-mode blocks */
 .env.editing .block{
-  padding-left:38px; cursor:grab; border:1px solid var(--line-2); border-radius:12px;
-  background:rgba(13,18,24,.7);
+  position:relative; padding-left:38px; cursor:grab; border:1px solid var(--line-2); border-radius:12px;
+  background:rgba(13,18,24,.7); transition:transform .15s, opacity .15s, box-shadow .15s;
 }
 .env.editing .block:hover{
   border-color:rgba(82,214,230,.32); background:rgba(15,22,30,.85);
   box-shadow:0 4px 16px rgba(0,0,0,.4);
 }
 /* Drag-and-drop states */
-.env.editing .block.dragging{ opacity:.35; border-color:rgba(82,214,230,.4); }
-.env.editing .block.drag-over{ border-color:rgba(82,214,230,.6); box-shadow:0 0 20px rgba(82,214,230,.15); }
+.env.editing .block.dragging{ opacity:.3; border-color:rgba(82,214,230,.4); transform:scale(.97); }
+.env.editing .block.drag-over{ border-color:rgba(82,214,230,.6); box-shadow:0 0 20px rgba(82,214,230,.2); background:rgba(82,214,230,.03); }
 .env.editing .block .drag-handle{
   position:absolute; left:10px; top:50%; transform:translateY(-50%);
   width:16px; display:flex; flex-direction:column; gap:3px; align-items:center;

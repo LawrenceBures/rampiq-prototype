@@ -222,9 +222,13 @@ export default function ManagerDashboard() {
   });
   const [savedSlots, setSavedSlots] = useState(layoutSlots); // snapshot for diff
   const [editMode, setEditMode] = useState(false);
-  const [leftRailOrder, setLeftRailOrder] = useState([0, 1, 2, 3]);
-  const [rightRailOrder, setRightRailOrder] = useState([0, 1, 2]);
-  const dragRef = useRef<{ rail: 'left' | 'right'; index: number } | null>(null);
+  const [leftRailOrder, setLeftRailOrder] = useState<number[]>(() => {
+    try { const s = localStorage.getItem('soi_left_rail_order'); return s ? JSON.parse(s) : [0, 1, 2, 3]; } catch { return [0, 1, 2, 3]; }
+  });
+  const [rightRailOrder, setRightRailOrder] = useState<number[]>(() => {
+    try { const s = localStorage.getItem('soi_right_rail_order'); return s ? JSON.parse(s) : [0, 1, 2]; } catch { return [0, 1, 2]; }
+  });
+  const [dragItem, setDragItem] = useState<{ rail: 'left' | 'right'; index: number } | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<{ rail: 'left' | 'right'; index: number } | null>(null);
   const [crisisMode, setCrisisMode] = useState(false);
   const [crisisSuggested, setCrisisSuggested] = useState(false);
@@ -314,6 +318,8 @@ export default function ManagerDashboard() {
   }
 
   function resetLayout() {
+    // Reset rail widget order
+    resetRailLayout();
     if (activeLayoutName === 'Default') {
       const slots = getRolePreset(activeRole);
       setLayoutSlots(slots);
@@ -369,12 +375,18 @@ export default function ManagerDashboard() {
     setGalleryTarget(null);
   }
 
-  // Drag-and-drop reorder for rail blocks
-  function handleDragStart(rail: 'left' | 'right', index: number) {
-    dragRef.current = { rail, index };
+  // Drag-and-drop reorder for rail blocks (uses useState for visual reactivity)
+  function handleDragStart(rail: 'left' | 'right', index: number, e: React.DragEvent) {
+    setDragItem({ rail, index });
+    // Set drag image to the block itself for clear visual
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', `${rail}:${index}`);
+    }
   }
   function handleDragOver(e: React.DragEvent, rail: 'left' | 'right', index: number) {
     e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
     setDragOverIndex({ rail, index });
   }
   function handleDragLeave() {
@@ -382,21 +394,33 @@ export default function ManagerDashboard() {
   }
   function handleDrop(rail: 'left' | 'right', index: number) {
     setDragOverIndex(null);
-    if (!dragRef.current || dragRef.current.rail !== rail) { dragRef.current = null; return; }
-    const fromIdx = dragRef.current.index;
-    dragRef.current = null;
+    if (!dragItem || dragItem.rail !== rail) { setDragItem(null); return; }
+    const fromIdx = dragItem.index;
+    setDragItem(null);
     if (fromIdx === index) return;
     const setOrder = rail === 'left' ? setLeftRailOrder : setRightRailOrder;
+    const lsKey = rail === 'left' ? 'soi_left_rail_order' : 'soi_right_rail_order';
     setOrder(prev => {
       const next = [...prev];
       const [removed] = next.splice(fromIdx, 1);
       next.splice(index, 0, removed);
+      try { localStorage.setItem(lsKey, JSON.stringify(next)); } catch { /* */ }
       return next;
     });
   }
   function handleDragEnd() {
-    dragRef.current = null;
+    setDragItem(null);
     setDragOverIndex(null);
+  }
+  function resetRailLayout() {
+    const defaultLeft = [0, 1, 2, 3];
+    const defaultRight = [0, 1, 2];
+    setLeftRailOrder(defaultLeft);
+    setRightRailOrder(defaultRight);
+    try {
+      localStorage.removeItem('soi_left_rail_order');
+      localStorage.removeItem('soi_right_rail_order');
+    } catch { /* */ }
   }
 
   function deleteLayout(name: LayoutName) {
@@ -3208,9 +3232,9 @@ export default function ManagerDashboard() {
               const LEFT_BLOCK_NAMES = ['op-snapshot', 'zone-health', 'staffing', 'recovery-status'];
               return leftRailOrder.map((blockIdx, renderIdx) => (
                 <div key={`left-${LEFT_BLOCK_NAMES[blockIdx]}`}
-                  className={`block${dragRef.current?.rail === 'left' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'left' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
+                  className={`block${dragItem?.rail === 'left' && dragItem.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'left' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
                   draggable={editMode}
-                  onDragStart={() => handleDragStart('left', renderIdx)}
+                  onDragStart={e => handleDragStart('left', renderIdx, e)}
                   onDragOver={e => handleDragOver(e, 'left', renderIdx)}
                   onDragLeave={handleDragLeave}
                   onDrop={() => handleDrop('left', renderIdx)}
@@ -3514,9 +3538,9 @@ export default function ManagerDashboard() {
               const RIGHT_BLOCK_NAMES = ['op-intel', 'recovery-conf', 'recommended-next'];
               return rightRailOrder.map((blockIdx, renderIdx) => (
                 <div key={`right-${RIGHT_BLOCK_NAMES[blockIdx]}`}
-                  className={`block${dragRef.current?.rail === 'right' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'right' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
+                  className={`block${dragItem?.rail === 'right' && dragItem.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'right' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
                   draggable={editMode}
-                  onDragStart={() => handleDragStart('right', renderIdx)}
+                  onDragStart={e => handleDragStart('right', renderIdx, e)}
                   onDragOver={e => handleDragOver(e, 'right', renderIdx)}
                   onDragLeave={handleDragLeave}
                   onDrop={() => handleDrop('right', renderIdx)}
