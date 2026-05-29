@@ -64,7 +64,7 @@ export function generateBriefing(
     ).join('; ');
     sections.push({
       heading: 'Situation',
-      content: `${pressuredZones.length} area${pressuredZones.length > 1 ? 's' : ''} under pressure: ${zoneDesc}.${stableZones.length > 0 ? ` ${stableZones.length} stable.` : ' No stable zones.'}`,
+      content: `${pressuredZones.length} gate area${pressuredZones.length > 1 ? 's' : ''} under pressure: ${zoneDesc}.${stableZones.length > 0 ? ` ${stableZones.length} stable.` : ' No stable gates.'}`,
     });
   }
 

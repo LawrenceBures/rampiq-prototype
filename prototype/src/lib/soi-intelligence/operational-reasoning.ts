@@ -93,8 +93,8 @@ export function assessOperation(
 
   const critZones = zoneAssessments.filter(z => z.stability === 'critical' || z.stability === 'unstable');
   const summary = critZones.length === 0
-    ? `Operation is ${globalStability}. ${activeIncidents.length} active incidents across ${zoneAssessments.length} zones.`
-    : `${critZones.length} zone${critZones.length > 1 ? 's' : ''} under pressure: ${critZones.map(z => z.zoneLabel).join(', ')}. ${activeIncidents.length} active incidents. ${topPressureSources.length > 0 ? topPressureSources[0].description : ''}`;
+    ? `Operation is ${globalStability}. ${activeIncidents.length} active incidents across ${zoneAssessments.length} gate areas.`
+    : `${critZones.length} gate area${critZones.length > 1 ? 's' : ''} under pressure: ${critZones.map(z => z.zoneLabel).join(', ')}. ${activeIncidents.length} active incidents. ${topPressureSources.length > 0 ? topPressureSources[0].description : ''}`;
 
   return {
     timestamp: now.toISOString(),
@@ -235,7 +235,7 @@ export function assessZone(
     : 0;
 
   if (explanation.length === 0) {
-    explanation.push(zoneIncidents.length === 0 ? 'No active incidents. Zone is stable.' : `${zoneIncidents.length} active incident${zoneIncidents.length > 1 ? 's' : ''} under management.`);
+    explanation.push(zoneIncidents.length === 0 ? 'No active incidents. Gates stable.' : `${zoneIncidents.length} active incident${zoneIncidents.length > 1 ? 's' : ''} under management.`);
   }
 
   return {

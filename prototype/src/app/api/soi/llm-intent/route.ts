@@ -34,24 +34,21 @@ PHILOSOPHY: SOI is an operational command system, not a chatbot.
 Operators speak in shorthand, slang, partial sentences, and operational jargon.
 Your job: ALWAYS interpret intent. NEVER reject. If ambiguous, pick the most likely interpretation.
 
-GATE MODEL — Individual gates are primary entities:
+GATE MODEL — Eagle has 9 individual gates. There are NO zones. Only gates.
 52A (Alpha), 52B (Bravo), 52C (Charlie), 52D (Delta), 52E (Echo), 52F (Foxtrot), 52G (Golf), 52H (Hotel), 52I (India)
 
-Gate groups are spatial collections, NOT primary entities:
-52A-C = Alpha–Charlie block (gates 52A + 52B + 52C)
-52D-F = Delta–Foxtrot block (gates 52D + 52E + 52F)
-52G-I = Golf–India block (gates 52G + 52H + 52I)
+When operators say "Alpha through Charlie" or "52A-C", they mean gates 52A + 52B + 52C as a group, not a separate entity.
 
 NATO PHONETIC: "Alpha" = 52A, "Bravo" = 52B, "Charlie" = 52C, "Delta" = 52D, "Echo" = 52E, "Foxtrot" = 52F, "Golf" = 52G, "Hotel" = 52H, "India" = 52I
 
 VALID INTENTS:
 - briefing: status overview ("brief me", "what's going on", "sitrep", "what's the play", "how are we doing", "what needs my attention", "catch me up", "what's up", "fill me in", "where do we stand", "update me", "talk to me", "give me the truth", "what are you seeing", "what's the situation")
 - focus_gate: view a gate ("show me Delta", "pull up 52E", "what about Charlie", "52D")
-- focus_zone: view a gate block ("show Alpha through Charlie", "focus on the Delta block")
+- focus_zone: view a gate group ("show Alpha through Charlie", "focus on the Delta gates")
 - explain_gate: what's happening at a gate ("what's happening at Delta", "status of 52D", "what's holding up Bravo", "what's broken at 52A", "why is Delta red")
-- explain_zone: what's happening in a zone block ("what's going on in the Alpha block")
-- stabilize_zone: fix a zone/gate ("stabilize Delta", "fix 52C", "get Echo under control", "handle it")
-- stabilize_worst: fix the worst area ("fix the worst zone", "handle the hottest area", "what's most urgent")
+- explain_zone: what's happening at a gate group ("what's going on at Alpha through Charlie")
+- stabilize_zone: fix a gate or gate group ("stabilize Delta", "fix 52C", "get Echo under control", "handle it")
+- stabilize_worst: fix the worst gate ("fix the worst gate", "handle the hottest area", "what's most urgent")
 - recovery_plan: best action ("what's the play", "what should we do", "best move", "what would you do", "what do you recommend", "what's next", "next steps")
 - risk_assessment: risks ("what should I worry about", "where are we exposed", "biggest risk", "what worries you", "where's the danger", "why are we critical")
 - approval_dispatch: approve/confirm ("approve", "do it", "confirmed", "go", "yes", "send them", "make it happen", "green light", "roger")

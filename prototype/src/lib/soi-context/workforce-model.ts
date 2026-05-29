@@ -135,10 +135,10 @@ export function recommendTeamForGate(
 
   const members = sorted.slice(0, count);
   const reasoning = members.length >= count
-    ? `${members.map(m => m.name).join(' and ')} are available${members.some(m => m.currentZone === targetZone) ? ' in the target zone' : ''}.`
+    ? `${members.map(m => m.name).join(' and ')} are available${members.some(m => m.currentZone === targetZone) ? ' near the target gate' : ''}.`
     : members.length > 0
     ? `Only ${members.length} agent${members.length > 1 ? 's' : ''} available. Additional staffing may be needed.`
-    : 'No agents currently available. Consider overtime extension or cross-zone redeployment.';
+    : 'No agents currently available. Consider overtime extension or cross-gate redeployment.';
 
   return { members, reasoning };
 }

@@ -142,7 +142,7 @@ export function buildExecutionPlan(
       actionType: 'escalate',
       target: za.zoneId,
       reasoning: [
-        za.criticalCount > 2 ? `${za.criticalCount} critical incidents exceed zone capacity` : '',
+        za.criticalCount > 2 ? `${za.criticalCount} critical incidents exceed gate area capacity` : '',
         za.oldestUnresolvedMinutes > 45 ? `Oldest incident unresolved for ${za.oldestUnresolvedMinutes}m` : '',
       ].filter(Boolean),
       estimatedImpact: 'Bring leadership attention and additional resources',
@@ -209,7 +209,7 @@ export function buildExecutionPlan(
     estimatedPressureReduction: Math.round(pressureReduction),
     confidence,
     summary: steps.length === 0
-      ? `No actionable steps identified for ${za.zoneLabel}. Zone may already be under recovery.`
+      ? `No actionable steps identified for ${za.zoneLabel}. May already be under recovery.`
       : `${steps.length}-step recovery plan for ${za.zoneLabel}. Est. ${totalMinutes}m to stabilization. Pressure reduction: ~${Math.round(pressureReduction)} points.`,
     tradeoffs,
     assumptions,

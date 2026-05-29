@@ -858,9 +858,9 @@ const FALLBACK_TEAM_MEMBERS: TeamMember[] = [
 ];
 
 const FALLBACK_ZONES: Zone[] = [
-  { id: 'GATES-52ABC', label: 'Alpha–Charlie Block', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
-  { id: 'GATES-52DEF', label: 'Delta–Foxtrot Block', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
-  { id: 'GATES-52GHI', label: 'Golf–India Block', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
+  { id: 'GATES-52ABC', label: 'Gates Alpha–Charlie', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+  { id: 'GATES-52DEF', label: 'Gates Delta–Foxtrot', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+  { id: 'GATES-52GHI', label: 'Gates Golf–India', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
 ];
 
 const FALLBACK_SHIFT_STATUSES: ShiftStatusRecord[] = [
@@ -1437,7 +1437,7 @@ const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
     override_used: false, override_reason: null, override_by: null,
     status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
     notes: 'AM ramp crew covering Alpha through Charlie',
-    team_label: 'Ramp AM', zone_label: 'Alpha–Charlie Block', assigned_by_name: 'Martinez J.',
+    team_label: 'Ramp AM', zone_label: 'Gates Alpha–Charlie', assigned_by_name: 'Crew Chief 1',
   },
   {
     id: 'seed-ramp-pm', created_at: new Date(Date.now() - 3600000).toISOString(),
@@ -1448,7 +1448,7 @@ const FALLBACK_CREW_ASSIGNMENTS: CrewAssignment[] = [
     override_used: false, override_reason: null, override_by: null,
     status: 'ASSIGNED', acknowledged_at: null, acknowledged_by: null, completed_at: null, completed_by: null,
     notes: 'PM ramp crew covering Golf through India',
-    team_label: 'Ramp PM', zone_label: 'Golf–India Block', assigned_by_name: 'Okafor D.',
+    team_label: 'Ramp PM', zone_label: 'Gates Golf–India', assigned_by_name: 'Ramp Agent 3',
   },
 ];
 

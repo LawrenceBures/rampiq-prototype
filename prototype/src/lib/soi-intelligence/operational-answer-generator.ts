@@ -178,7 +178,7 @@ function answerRiskAssessment(q: RoutedQuestion, ctx: OperationalContext): Copil
   if (!worst || assessment.globalStability === 'stable') {
     return {
       title: 'Risk Check',
-      answer: `No elevated risk right now. All zones stable, pressure at ${assessment.globalPressure}. I'll flag anything that changes.`,
+      answer: `No elevated risk right now. All gates stable, pressure at ${assessment.globalPressure}. I'll flag anything that changes.`,
       confidence: 'high',
       bullets: [],
       assumptions: [],
@@ -248,7 +248,7 @@ function answerResourceQuestion(q: RoutedQuestion, ctx: OperationalContext): Cop
     if (affectedZones.length > 0) {
       return {
         title: `${q.resourceId}`,
-        answer: `${q.resourceId} is tied to ${affectedZones.length} pressured area${affectedZones.length > 1 ? 's' : ''}: ${affectedZones.map(z => z.zoneLabel).join(', ')}. Moving it would affect those zones.`,
+        answer: `${q.resourceId} is tied to ${affectedZones.length} pressured area${affectedZones.length > 1 ? 's' : ''}: ${affectedZones.map(z => z.zoneLabel).join(', ')}. Moving it would affect those gates.`,
         confidence: 'moderate',
         bullets: affectedZones.map(z => `${z.zoneLabel}: pressure ${z.pressure}, ${z.unresolvedCount} unresolved`),
         assumptions: [],
@@ -274,8 +274,8 @@ function answerResourceQuestion(q: RoutedQuestion, ctx: OperationalContext): Cop
   return {
     title: 'Resource Status',
     answer: equipSources.length > 0
-      ? `${equipSources.length} equipment issue${equipSources.length > 1 ? 's' : ''} contributing to pressure. ${stableZones.length > 0 ? `${stableZones.map(z => z.zoneLabel).join(', ')} may have spare capacity.` : 'All zones loaded — consider rebalancing.'}`
-      : `No equipment issues. ${stableZones.length > 0 ? `${stableZones.map(z => z.zoneLabel).join(', ')} have available capacity.` : 'All zones under pressure.'}`,
+      ? `${equipSources.length} equipment issue${equipSources.length > 1 ? 's' : ''} contributing to pressure. ${stableZones.length > 0 ? `${stableZones.map(z => z.zoneLabel).join(', ')} may have spare capacity.` : 'All gates loaded — consider rebalancing.'}`
+      : `No equipment issues. ${stableZones.length > 0 ? `${stableZones.map(z => z.zoneLabel).join(', ')} have available capacity.` : 'All gates under pressure.'}`,
     confidence: 'moderate',
     bullets: equipSources.map(ps => ps.description),
     assumptions: [],

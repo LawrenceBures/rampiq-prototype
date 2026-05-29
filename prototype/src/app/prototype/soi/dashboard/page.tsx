@@ -813,9 +813,9 @@ export default function ManagerDashboard() {
   // Each computation is independent — one failure must not block others.
   // Uses FALLBACK_ZONES if zones haven't loaded yet to prevent "0 zones" briefings.
   const FALLBACK_ZONES: Zone[] = [
-    { id: 'GATES-52ABC', label: 'Alpha–Charlie Block', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
-    { id: 'GATES-52DEF', label: 'Delta–Foxtrot Block', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
-    { id: 'GATES-52GHI', label: 'Golf–India Block', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
+    { id: 'GATES-52ABC', label: 'Gates Alpha–Charlie', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+    { id: 'GATES-52DEF', label: 'Gates Delta–Foxtrot', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+    { id: 'GATES-52GHI', label: 'Gates Golf–India', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
   ];
   const effectiveZones = zones.length > 0 ? zones : FALLBACK_ZONES;
 
@@ -1146,9 +1146,9 @@ export default function ManagerDashboard() {
         const za = objective.targetZone ? assessmentRef.current.zoneAssessments.find(z => z.zoneId === objective.targetZone) : null;
         const reason = za
           ? za.unresolvedCount === 0
-            ? `No active incidents at ${zoneLabel}. Zone is currently stable.`
+            ? `No active incidents at ${zoneLabel}. Currently stable.`
             : `Recovery actions already cover incidents at ${zoneLabel}. No additional steps needed.`
-          : `Unable to assess ${zoneLabel}. Zone data not available.`;
+          : `Unable to assess ${zoneLabel}. Gate data not available.`;
         setCommandResponse([reason]);
         setCopilotAnswer(null);
       } else {
@@ -1321,7 +1321,7 @@ export default function ManagerDashboard() {
         if (zoneId) {
           setSelectedZoneId(zoneId);
           setSelectedGateId(null);
-          setCommandResponse([`Focused on zone: ${zones.find(z => z.id === zoneId)?.label ?? zoneId}`]);
+          setCommandResponse([`Focused on: ${zones.find(z => z.id === zoneId)?.label ?? zoneId}`]);
         } else {
           setCommandResponse([`Could not resolve "${intent.zonePattern}" to a known zone or gate.`]);
         }
@@ -1340,7 +1340,7 @@ export default function ManagerDashboard() {
           setCommandResponse(['No active cascades detected.']);
         } else {
           setCommandResponse([
-            `${cascades.length} zone${cascades.length > 1 ? 's' : ''} under pressure:`,
+            `${cascades.length} gate area${cascades.length > 1 ? 's' : ''} under pressure:`,
             ...cascades.map(z => `· ${z.zoneLabel}: ${z.stability} (${z.unresolvedCount} incidents, pressure ${z.pressure}/100)`),
           ]);
         }
@@ -1900,7 +1900,7 @@ export default function ManagerDashboard() {
     if (pressure >= 80 && lastAlertedPressureRef.current < 80) {
       // Critical threshold crossed
       const worstZone = operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b);
-      soiSpeak(`Attention. System pressure has reached critical at ${pressure}. ${worstZone.zoneLabel} is the highest risk area. Recommend immediate intervention.`);
+      soiSpeak(`Attention. System pressure has reached critical at ${pressure}. ${worstZone.zoneLabel} has the highest pressure. Recommend immediate intervention.`);
       setCopilotAnswer({
         title: 'Pressure Alert — Critical',
         answer: `System pressure at ${pressure}/100. ${worstZone.zoneLabel} at ${worstZone.pressure}. Immediate action recommended.`,
@@ -1967,7 +1967,7 @@ export default function ManagerDashboard() {
       case 'focus_zone': {
         if (targetZone) {
           setSelectedZoneId(targetZone);
-          setCommandResponse([`Focused on zone: ${zones.find(z => z.id === targetZone)?.label ?? targetZone}`]);
+          setCommandResponse([`Focused on: ${zones.find(z => z.id === targetZone)?.label ?? targetZone}`]);
           setCopilotAnswer(null);
         }
         break;
@@ -2463,7 +2463,7 @@ export default function ManagerDashboard() {
         )}
         {!incidentsLoading && zoneScopedIncidents.length === 0 && (
           <div className="rq-quiet" style={{ padding: '24px 16px' }}>
-            {selectedZoneId ? 'No active incidents in this zone' : 'No active incidents'}
+            {selectedZoneId ? 'No active incidents at this gate' : 'No active incidents'}
           </div>
         )}
 
@@ -3212,7 +3212,7 @@ export default function ManagerDashboard() {
                 </div>,
                 // 1: Zone Health
                 <div key="zones">
-                  <div className="block-head"><span className="tac">Zone Health</span><span className="meta">{operationalAssessment.zoneAssessments.length} ACTIVE</span></div>
+                  <div className="block-head"><span className="tac">Gate Status</span><span className="meta">{operationalAssessment.zoneAssessments.reduce((sum, z) => sum + z.pressureSources.length, 0) || operationalAssessment.zoneAssessments.length * 3} GATES</span></div>
                   <div className="zone-row">
                     {operationalAssessment.zoneAssessments.map(za => {
                       const barClass = za.pressure >= 80 ? 'red' : za.pressure >= 60 ? 'orange' : za.pressure >= 40 ? 'amber' : 'cyan';
@@ -3388,7 +3388,7 @@ export default function ManagerDashboard() {
                           <div className="proj-item"><div className="pv c-cyan num">−{rec.preview.riskReducedBy}%</div><div className="pl">Pressure reduction</div></div>
                           <div className="proj-item"><div className="pv c-green num">−{Math.round(rec.preview.riskReducedBy * 1.5)}%</div><div className="pl">Cascade risk</div></div>
                           <div className="proj-item"><div className="pv num">{rec.estimatedStabilizationMinutes}<span style={{ fontSize: 12, color: 'var(--ink-3)' }}> min</span></div><div className="pl">Recovery window</div></div>
-                          <div className="proj-item"><div className="pv num">{operationalAssessment.zoneAssessments.filter(z => z.stability !== 'stable').length}</div><div className="pl">Zones affected</div></div>
+                          <div className="proj-item"><div className="pv num">{operationalAssessment.zoneAssessments.filter(z => z.stability !== 'stable').length}</div><div className="pl">Gate areas affected</div></div>
                         </div>
                       </div>
                       <div className="trade">

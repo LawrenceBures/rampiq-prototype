@@ -49,6 +49,7 @@ export function buildVoicePrompt(
   parts.push(`Incidents: ${data.operationalState.activeIncidents} active`);
   parts.push(`Recoveries: ${data.operationalState.activeRecoveries} active`);
   if (data.operationalState.zoneStates.length > 0) {
+    parts.push('Gate areas:');
     for (const z of data.operationalState.zoneStates) {
       parts.push(`  ${z.zone}: ${z.pressure} (${z.stability}), ${z.unresolved} unresolved`);
     }
