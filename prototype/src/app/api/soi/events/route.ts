@@ -148,9 +148,11 @@ export async function DELETE() {
   const sb = getSupabase();
   if (sb) {
     // Delete in dependency order: recovery_actions → incidents → events
-    const r1 = await sb.from('rampiq_recovery_actions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    const r2 = await sb.from('rampiq_incidents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    const r3 = await sb.from('rampiq_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    // Use gt filter on created_at to match all rows (more reliable than neq on UUID)
+    const epoch = '2000-01-01T00:00:00Z';
+    const r1 = await sb.from('rampiq_recovery_actions').delete().gt('created_at', epoch);
+    const r2 = await sb.from('rampiq_incidents').delete().gt('created_at', epoch);
+    const r3 = await sb.from('rampiq_events').delete().gt('created_at', epoch);
     const errors = [r1.error, r2.error, r3.error].filter(Boolean);
     if (errors.length > 0) {
       console.error('[api/events DELETE] errors:', errors.map(e => e?.message));

@@ -38,9 +38,9 @@ async function backdateAction(id: string, min: number) {
 export async function clearDemoData(): Promise<void> {
   const sb = getSupabase();
   if (sb) {
-    await sb.from('rampiq_recovery_actions').delete().neq('id', '');
-    await sb.from('rampiq_incidents').delete().neq('id', '');
-    await sb.from('rampiq_events').delete().neq('id', '');
+    await sb.from('rampiq_recovery_actions').delete().gt('created_at', '2000-01-01T00:00:00Z');
+    await sb.from('rampiq_incidents').delete().gt('created_at', '2000-01-01T00:00:00Z');
+    await sb.from('rampiq_events').delete().gt('created_at', '2000-01-01T00:00:00Z');
   }
   // Also clear localStorage fallback data (must match store.ts LS_KEY)
   try {

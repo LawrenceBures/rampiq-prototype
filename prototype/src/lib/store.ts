@@ -324,7 +324,7 @@ export async function postAuditEvent(audit: {
 export async function resetEvents(): Promise<void> {
   const sb = getSupabase();
   if (sb) {
-    const { error } = await sb.from('rampiq_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error } = await sb.from('rampiq_events').delete().gt('created_at', '2000-01-01T00:00:00Z');
     if (error) console.error('[store] delete error:', error.message);
   }
   lsWrite([]);
