@@ -462,8 +462,8 @@ export default function ManagerDashboard() {
   const [voiceState, setVoiceState] = useState<VoiceInputState>('idle');
   const [ttsState, setTtsState] = useState<TTSState>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [ttsOn, setTtsOn] = useState(true);
-  const [ttsMode, setTtsMode] = useState<TTSMode>('browser');
+  const [ttsOn, setTtsOn] = useState(false);
+  const [ttsMode, setTtsMode] = useState<TTSMode>('unavailable');
   const [ambientOn, setAmbientOn] = useState(false);
   const lastInputWasVoiceRef = useRef(false);
   const prevCopilotAnswerRef = useRef<string | null>(null);
@@ -783,20 +783,39 @@ export default function ManagerDashboard() {
   );
 
   // ── SOI Intelligence Core ──
-  let soiRecommendations: SoiRecommendation[] = [];
-  let dispatchPlan = { actions: [] as import('@/lib/soi-intelligence').RankedAction[], summary: '', totalEstimatedMinutes: 0 };
+  // Each computation is independent — one failure must not block others.
+  // Uses FALLBACK_ZONES if zones haven't loaded yet to prevent "0 zones" briefings.
+  const FALLBACK_ZONES: Zone[] = [
+    { id: 'GATES-52ABC', label: 'Alpha–Charlie Block', station: 'LAX', gate_ids: ['52A', '52B', '52C'], active: true },
+    { id: 'GATES-52DEF', label: 'Delta–Foxtrot Block', station: 'LAX', gate_ids: ['52D', '52E', '52F'], active: true },
+    { id: 'GATES-52GHI', label: 'Golf–India Block', station: 'LAX', gate_ids: ['52G', '52H', '52I'], active: true },
+  ];
+  const effectiveZones = zones.length > 0 ? zones : FALLBACK_ZONES;
+
   let operationalAssessment: import('@/lib/soi-intelligence').OperationalAssessment = {
     timestamp: new Date().toISOString(), zoneAssessments: [], globalPressure: 0,
     globalStability: 'stable', summary: '', topPressureSources: [],
   };
   try {
-    soiRecommendations = generateRecommendations(
-      temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf
-    );
-    dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
-    operationalAssessment = assessOperation(temporalEvents, temporalIncidents, temporalRecoveryActions, zones, asOf);
+    operationalAssessment = assessOperation(temporalEvents, temporalIncidents, temporalRecoveryActions, effectiveZones, asOf);
   } catch (err) {
-    console.error('[SOI Intelligence] derivation error:', err);
+    console.error('[SOI Intelligence] assessOperation error:', err);
+  }
+
+  let soiRecommendations: SoiRecommendation[] = [];
+  try {
+    soiRecommendations = generateRecommendations(
+      temporalEvents, temporalIncidents, temporalRecoveryActions, effectiveZones, asOf
+    );
+  } catch (err) {
+    console.error('[SOI Intelligence] generateRecommendations error:', err);
+  }
+
+  let dispatchPlan = { actions: [] as import('@/lib/soi-intelligence').RankedAction[], summary: '', totalEstimatedMinutes: 0 };
+  try {
+    dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
+  } catch (err) {
+    console.error('[SOI Intelligence] rankRecommendations error:', err);
   }
 
   // ── Flight Intelligence ──
@@ -981,7 +1000,7 @@ export default function ManagerDashboard() {
     }
 
     // A. Approval / confirmation / cancel (highest priority)
-    const agenticParsed = parseAgenticIntent(raw, zones);
+    const agenticParsed = parseAgenticIntent(raw, effectiveZones);
     if (agenticParsed.intent === 'execute_plan' && cmdMemory.activePlan) {
       handleApprovePlan();
       soiSpeak('Recovery chain approved and execution initiated.');
@@ -1054,7 +1073,7 @@ export default function ManagerDashboard() {
     if (agenticParsed.intent && !['execute_plan', 'cancel_plan', 'show_plan_status', 'show_alternatives', 'continue_recovery', 'dispatch_recovery'].includes(agenticParsed.intent)) {
       // Resolve gate to zone if only gate was provided
       if (!agenticParsed.targetZone && agenticParsed.targetGate && zones.length > 0) {
-        const resolved = resolveZonePattern(agenticParsed.targetGate, zones);
+        const resolved = resolveZonePattern(agenticParsed.targetGate, effectiveZones);
         if (resolved) agenticParsed.targetZone = resolved;
       }
 
@@ -1097,16 +1116,45 @@ export default function ManagerDashboard() {
     const intent = parseCommand(raw);
     switch (intent.type) {
       case 'summarize_operation': {
-        setCopilotAnswer(null);
+        // Build briefing from the SAME state that powers the visible dashboard
+        const activeIncs = temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED');
+        const activeRAs = temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED');
         const { briefing } = narrateBriefing(
           narrativeFeed, operationalAssessment, soiRecommendations, dispatchPlan, liveExec,
-          temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
-          temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
+          activeIncs.length, activeRAs.length,
         );
-        setCommandResponse([
-          briefing.title,
-          ...briefing.sections.map(s => `${s.heading}: ${s.content}`),
-        ]);
+
+        // Also build a copilotAnswer so voice reads a natural summary
+        const worstZone = operationalAssessment.zoneAssessments.length > 0
+          ? operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
+          : null;
+        const stabilityWord = operationalAssessment.globalStability === 'critical' ? 'critical'
+          : operationalAssessment.globalStability === 'unstable' ? 'unstable'
+          : operationalAssessment.globalStability === 'degrading' ? 'elevated'
+          : 'stable';
+        const pressureNote = operationalAssessment.globalPressure >= 60
+          ? `System pressure at ${operationalAssessment.globalPressure}. ${worstZone ? `${worstZone.zoneLabel} is the highest risk area at ${worstZone.pressure}.` : ''}`
+          : `System pressure at ${operationalAssessment.globalPressure}. Operations nominal.`;
+        const incNote = activeIncs.length > 0
+          ? `${activeIncs.length} active incident${activeIncs.length > 1 ? 's' : ''}.`
+          : 'No active incidents.';
+        const recNote = soiRecommendations.length > 0
+          ? `Top recommendation: ${soiRecommendations[0].title}.`
+          : '';
+
+        setCopilotAnswer({
+          title: `Operational Briefing — ${stabilityWord.charAt(0).toUpperCase() + stabilityWord.slice(1)}`,
+          answer: `${pressureNote} ${incNote} ${activeRAs.length} recovery action${activeRAs.length !== 1 ? 's' : ''} in progress. ${recNote}`,
+          confidence: 'high',
+          bullets: [
+            ...operationalAssessment.zoneAssessments.map(z => `${z.zoneLabel}: pressure ${z.pressure} (${z.stability})`),
+            ...activeIncs.slice(0, 3).map(i => `${i.severity}: ${i.title.slice(0, 60)}`),
+          ],
+          assumptions: [],
+          recommendedNextAction: soiRecommendations.length > 0 ? soiRecommendations[0].title : undefined,
+          source: 'deterministic_operational_model',
+        });
+        setCommandResponse(null);
         break;
       }
       case 'show_staffing': {
@@ -1149,7 +1197,7 @@ export default function ManagerDashboard() {
       }
       case 'explain_instability': {
         setCopilotAnswer(null);
-        const zoneId = resolveZonePattern(intent.target, zones);
+        const zoneId = resolveZonePattern(intent.target, effectiveZones);
         if (zoneId) {
           const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
           setCommandResponse(lines);
@@ -1196,7 +1244,7 @@ export default function ManagerDashboard() {
           }
           break;
         }
-        const zoneId = resolveZonePattern(intent.zonePattern, zones);
+        const zoneId = resolveZonePattern(intent.zonePattern, effectiveZones);
         if (zoneId) {
           setSelectedZoneId(zoneId);
           setSelectedGateId(null);
@@ -1360,7 +1408,7 @@ export default function ManagerDashboard() {
               activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
               activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
             };
-            const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
+            const result = answerOperationalQuestion(raw, opCtx, effectiveZones, conversationMemory, true);
             setCopilotAnswer(result.answer);
             setConversationMemory(result.updatedMemory);
             setLastInferredFrom(result.inferredFrom);
@@ -1374,7 +1422,7 @@ export default function ManagerDashboard() {
             activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
             activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
           };
-          const result = answerOperationalQuestion(raw, opCtx, zones, conversationMemory, true);
+          const result = answerOperationalQuestion(raw, opCtx, effectiveZones, conversationMemory, true);
           setCopilotAnswer(result.answer);
           setConversationMemory(result.updatedMemory);
           setLastInferredFrom(result.inferredFrom);
@@ -1649,18 +1697,19 @@ export default function ManagerDashboard() {
   }, []);
 
   // ── Voice input setup ──
-  // Check OpenAI TTS availability and enable TTS on mount
+  // Check OpenAI TTS availability on mount. TTS starts OFF — user enables via toggle.
   useEffect(() => {
-    enableTTS(); // TTS on by default
     checkOpenAITTS().then(available => {
-      setTtsMode(available ? 'openai' : (isTTSAvailable() ? 'browser' : 'unavailable'));
+      const mode = available ? 'openai' : (isTTSAvailable() ? 'browser' : 'unavailable');
+      setTtsMode(mode);
+      console.log('[SOI Voice] TTS mode resolved:', mode);
     });
     onOpenAISpeakingChange(speaking => {
       setTtsState(speaking ? 'speaking' : 'idle');
     });
   }, []);
 
-  /** Speak using best available TTS (OpenAI preferred, browser fallback).
+  /** Speak using OpenAI TTS (primary). Browser TTS only as explicit fallback after OpenAI failure.
    *  Sets handlerSpokeRef so the copilotAnswer useEffect won't double-speak. */
   const handlerSpokeRef = useRef(false);
   async function soiSpeak(text: string) {
@@ -1671,11 +1720,21 @@ export default function ManagerDashboard() {
       window.speechSynthesis.cancel();
     }
     stopOpenAI();
-    if (ttsMode === 'openai') {
+    // Always try OpenAI first regardless of ttsMode
+    try {
       const used = await speakWithOpenAI(text);
-      if (used) return;
+      if (used) {
+        console.log('[SOI Voice] OpenAI TTS');
+        return;
+      }
+    } catch { /* OpenAI failed, fall through */ }
+    // Browser fallback — only if OpenAI is truly unavailable
+    if (ttsMode === 'browser' && isTTSAvailable()) {
+      console.log('[SOI Voice] Browser fallback (OpenAI unavailable)');
+      speakDirect(text);
+    } else {
+      console.log('[SOI Voice] Speech suppressed — no TTS available');
     }
-    speakDirect(text);
   }
 
   useEffect(() => {
@@ -1789,10 +1848,10 @@ export default function ManagerDashboard() {
   // ── Route LLM-interpreted intents into SOI engines ──
   function routeLLMIntent(li: { intent: string; gate?: string; zone?: string; resource?: string; confidence: number; reasoning: string }, _raw: string) {
     // Resolve gate → zone
-    let targetZone = li.zone ? resolveZonePattern(li.zone, zones) ?? undefined : undefined;
+    let targetZone = li.zone ? resolveZonePattern(li.zone, effectiveZones) ?? undefined : undefined;
     const targetGate = li.gate?.toUpperCase();
     if (!targetZone && targetGate) {
-      targetZone = resolveZonePattern(targetGate, zones) ?? undefined;
+      targetZone = resolveZonePattern(targetGate, effectiveZones) ?? undefined;
     }
 
     // Update conversation context with LLM-resolved targets
@@ -1834,7 +1893,7 @@ export default function ManagerDashboard() {
       }
       case 'explain_gate':
       case 'explain_zone': {
-        const zoneId = targetZone ?? (targetGate ? resolveZonePattern(targetGate, zones) ?? undefined : undefined);
+        const zoneId = targetZone ?? (targetGate ? resolveZonePattern(targetGate, effectiveZones) ?? undefined : undefined);
         if (zoneId) {
           const lines = explainInstability(zoneId, zones, temporalEvents, temporalIncidents, temporalRecoveryActions, asOf);
           setCommandResponse(lines);
