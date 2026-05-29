@@ -62,7 +62,7 @@ export function narrateOperationalStability(
   if (assessment.globalStability === 'stable' && assessment.globalPressure < 20) {
     return {
       title: 'Operational stability restored',
-      narrative: `All zones reporting stable operational state. Global pressure at ${assessment.globalPressure}/100. No active escalation signals. Normal operations may resume.`,
+      narrative: `Operations stable. Pressure at ${assessment.globalPressure}. No escalation signals. Normal operations can continue.`,
       category: 'stabilization',
       severity: 'success',
     };

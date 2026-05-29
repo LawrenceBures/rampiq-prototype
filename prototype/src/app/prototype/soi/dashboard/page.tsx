@@ -801,6 +801,12 @@ export default function ManagerDashboard() {
   } catch (err) {
     console.error('[SOI Intelligence] assessOperation error:', err);
   }
+  // Keep a ref to the LATEST assessment so stale closures (voice handlers) always read current state
+  const assessmentRef = useRef(operationalAssessment);
+  assessmentRef.current = operationalAssessment;
+
+  // Debug: trace operational truth
+  console.log('[SOI Truth] pressure:', operationalAssessment.globalPressure, 'zones:', operationalAssessment.zoneAssessments.length, 'stability:', operationalAssessment.globalStability);
 
   let soiRecommendations: SoiRecommendation[] = [];
   try {
@@ -811,12 +817,17 @@ export default function ManagerDashboard() {
     console.error('[SOI Intelligence] generateRecommendations error:', err);
   }
 
+  const recommendationsRef = useRef(soiRecommendations);
+  recommendationsRef.current = soiRecommendations;
+
   let dispatchPlan = { actions: [] as import('@/lib/soi-intelligence').RankedAction[], summary: '', totalEstimatedMinutes: 0 };
   try {
     dispatchPlan = rankRecommendations(soiRecommendations, temporalIncidents, temporalRecoveryActions);
   } catch (err) {
     console.error('[SOI Intelligence] rankRecommendations error:', err);
   }
+  const dispatchPlanRef = useRef(dispatchPlan);
+  dispatchPlanRef.current = dispatchPlan;
 
   // ── Flight Intelligence ──
   const flightWorldMap = computeFlightWorld(temporalIncidents, temporalRecoveryActions, temporalEvents);
@@ -1116,42 +1127,43 @@ export default function ManagerDashboard() {
     const intent = parseCommand(raw);
     switch (intent.type) {
       case 'summarize_operation': {
-        // Build briefing from the SAME state that powers the visible dashboard
+        // Read from refs to ALWAYS get current state (prevents stale closure reads)
+        const liveAssessment = assessmentRef.current;
+        const liveRecs = recommendationsRef.current;
         const activeIncs = temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED');
         const activeRAs = temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED');
-        const { briefing } = narrateBriefing(
-          narrativeFeed, operationalAssessment, soiRecommendations, dispatchPlan, liveExec,
-          activeIncs.length, activeRAs.length,
-        );
 
-        // Also build a copilotAnswer so voice reads a natural summary
-        const worstZone = operationalAssessment.zoneAssessments.length > 0
-          ? operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
+        console.log('[SOI Briefing] source pressure:', liveAssessment.globalPressure, 'zones:', liveAssessment.zoneAssessments.length, 'incidents:', activeIncs.length, 'recs:', liveRecs.length);
+
+        const worstZone = liveAssessment.zoneAssessments.length > 0
+          ? liveAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
           : null;
-        const stabilityWord = operationalAssessment.globalStability === 'critical' ? 'critical'
-          : operationalAssessment.globalStability === 'unstable' ? 'unstable'
-          : operationalAssessment.globalStability === 'degrading' ? 'elevated'
-          : 'stable';
-        const pressureNote = operationalAssessment.globalPressure >= 60
-          ? `System pressure at ${operationalAssessment.globalPressure}. ${worstZone ? `${worstZone.zoneLabel} is the highest risk area at ${worstZone.pressure}.` : ''}`
-          : `System pressure at ${operationalAssessment.globalPressure}. Operations nominal.`;
+        const stabilityWord = liveAssessment.globalStability === 'critical' ? 'Critical'
+          : liveAssessment.globalStability === 'unstable' ? 'Unstable'
+          : liveAssessment.globalStability === 'degrading' ? 'Elevated'
+          : 'Stable';
+        const pressureNote = liveAssessment.globalPressure >= 60
+          ? `Pressure at ${liveAssessment.globalPressure}. ${worstZone ? `${worstZone.zoneLabel} is the highest risk at ${worstZone.pressure}.` : ''}`
+          : liveAssessment.globalPressure > 0
+          ? `Pressure at ${liveAssessment.globalPressure}. Operations manageable.`
+          : 'Waiting for operational data.';
         const incNote = activeIncs.length > 0
           ? `${activeIncs.length} active incident${activeIncs.length > 1 ? 's' : ''}.`
           : 'No active incidents.';
-        const recNote = soiRecommendations.length > 0
-          ? `Top recommendation: ${soiRecommendations[0].title}.`
+        const recNote = liveRecs.length > 0
+          ? `I'd prioritize: ${liveRecs[0].title}.`
           : '';
 
         setCopilotAnswer({
-          title: `Operational Briefing — ${stabilityWord.charAt(0).toUpperCase() + stabilityWord.slice(1)}`,
-          answer: `${pressureNote} ${incNote} ${activeRAs.length} recovery action${activeRAs.length !== 1 ? 's' : ''} in progress. ${recNote}`,
+          title: `Briefing — ${stabilityWord}`,
+          answer: `${pressureNote} ${incNote} ${activeRAs.length > 0 ? `${activeRAs.length} recovery action${activeRAs.length !== 1 ? 's' : ''} running.` : ''} ${recNote}`.trim(),
           confidence: 'high',
           bullets: [
-            ...operationalAssessment.zoneAssessments.map(z => `${z.zoneLabel}: pressure ${z.pressure} (${z.stability})`),
+            ...liveAssessment.zoneAssessments.map(z => `${z.zoneLabel}: pressure ${z.pressure} (${z.stability})`),
             ...activeIncs.slice(0, 3).map(i => `${i.severity}: ${i.title.slice(0, 60)}`),
           ],
           assumptions: [],
-          recommendedNextAction: soiRecommendations.length > 0 ? soiRecommendations[0].title : undefined,
+          recommendedNextAction: liveRecs.length > 0 ? liveRecs[0].title : undefined,
           source: 'deterministic_operational_model',
         });
         setCommandResponse(null);
@@ -1175,9 +1187,10 @@ export default function ManagerDashboard() {
         break;
       }
       case 'show_risk': {
-        // Find the biggest operational risk
-        const worstZone = operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b, operationalAssessment.zoneAssessments[0]);
-        const topSources = operationalAssessment.topPressureSources.slice(0, 3);
+        // Read from ref for current state
+        const riskAssessment = assessmentRef.current;
+        const worstZone = riskAssessment.zoneAssessments.length > 0 ? riskAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b) : null;
+        const topSources = riskAssessment.topPressureSources.slice(0, 3);
         setCopilotAnswer({
           title: 'Risk Assessment',
           answer: worstZone
@@ -1402,8 +1415,8 @@ export default function ManagerDashboard() {
           } else {
             // LLM couldn't interpret — fall back to deterministic copilot
             const opCtx = {
-              assessment: operationalAssessment,
-              recommendations: soiRecommendations,
+              assessment: assessmentRef.current,
+              recommendations: recommendationsRef.current,
               dispatchPlan,
               activeIncidentCount: temporalIncidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED').length,
               activeRecoveryCount: temporalRecoveryActions.filter(ra => ra.status === 'ACTIVE' || ra.status === 'ACKNOWLEDGED').length,
@@ -3164,8 +3177,9 @@ export default function ManagerDashboard() {
                   </div>
                 </div>,
               ];
+              const LEFT_BLOCK_NAMES = ['op-snapshot', 'zone-health', 'staffing', 'recovery-status'];
               return leftRailOrder.map((blockIdx, renderIdx) => (
-                <div key={blockIdx}
+                <div key={`left-${LEFT_BLOCK_NAMES[blockIdx]}`}
                   className={`block${dragRef.current?.rail === 'left' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'left' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
                   draggable={editMode}
                   onDragStart={() => handleDragStart('left', renderIdx)}
@@ -3469,8 +3483,9 @@ export default function ManagerDashboard() {
                   </div>
                 </div>,
               ];
+              const RIGHT_BLOCK_NAMES = ['op-intel', 'recovery-conf', 'recommended-next'];
               return rightRailOrder.map((blockIdx, renderIdx) => (
-                <div key={blockIdx}
+                <div key={`right-${RIGHT_BLOCK_NAMES[blockIdx]}`}
                   className={`block${dragRef.current?.rail === 'right' && dragRef.current.index === renderIdx ? ' dragging' : ''}${dragOverIndex?.rail === 'right' && dragOverIndex.index === renderIdx ? ' drag-over' : ''}`}
                   draggable={editMode}
                   onDragStart={() => handleDragStart('right', renderIdx)}
