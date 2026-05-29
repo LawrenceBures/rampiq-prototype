@@ -1062,9 +1062,9 @@ export default function ManagerDashboard() {
       return;
     }
     if (agenticParsed.intent === 'dispatch_recovery' && !agenticParsed.targetGate) {
-      setCopilotAnswer({ title: 'Assignment', answer: 'Which gate should I assign a team to? Just say the gate — Alpha, Bravo, Charlie, and so on.', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+      setCopilotAnswer({ title: 'Assignment', answer: 'Which gate do you need a team at? Just say the gate name.', confidence: 'moderate', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
       setCommandResponse(null);
-      soiSpeak('Which gate should I assign a team to?');
+      soiSpeak('Which gate do you need a team at?');
       setCommandInput('');
       return;
     }
@@ -2017,28 +2017,61 @@ export default function ManagerDashboard() {
         break;
       }
       case 'forecast': {
-        // Route to predictive handler
         handleCommand('what happens if we do nothing');
         break;
       }
       case 'flight_query': {
-        // Route to flight handler
         handleCommand(li.gate ? `show flight at ${li.gate}` : 'which flights are at risk');
         break;
       }
+      case 'repeat_last': {
+        // Repeat the last copilot answer
+        if (prevCopilotAnswerRef.current) {
+          soiSpeak(condenseForSpeech(prevCopilotAnswerRef.current));
+        } else {
+          soiSpeak('Nothing to repeat. Ask me something.');
+        }
+        break;
+      }
+      case 'followup_who': {
+        // "who?" — answer from last context (agents, crew, etc.)
+        if (agentSelection) {
+          const names = agentSelection.candidates.filter(c => agentSelection.selected.has(c.id)).map(c => c.name);
+          if (names.length > 0) {
+            setCopilotAnswer({ title: 'Selected Agents', answer: names.join(', '), confidence: 'high', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+          } else {
+            handleCommand('who is available');
+          }
+        } else {
+          handleCommand('who is available');
+        }
+        break;
+      }
+      case 'followup_why': {
+        // "why?" — explain from last context
+        if (conversationMemory.activeGate) {
+          handleCommand(`why is ${conversationMemory.activeGate} under pressure`);
+        } else if (conversationMemory.activeZone) {
+          handleCommand(`explain ${conversationMemory.activeZone}`);
+        } else {
+          handleCommand('why are we critical');
+        }
+        break;
+      }
       default: {
-        // Intent-first: always acknowledge, never reject
-        const reasoning = li.reasoning ?? 'I understood your request.';
+        // Intent-first: give the best operational answer, never reject
+        // Use the reasoning as a natural acknowledgement
+        const worst = operationalAssessment.zoneAssessments.length > 0
+          ? operationalAssessment.zoneAssessments.reduce((a, b) => a.pressure > b.pressure ? a : b)
+          : null;
+        const contextNote = worst && worst.pressure >= 40
+          ? `Right now, ${worst.zoneLabel} is your main concern at pressure ${worst.pressure}.`
+          : `Operations are stable at pressure ${operationalAssessment.globalPressure}.`;
         setCopilotAnswer({
-          title: 'Acknowledged',
-          answer: reasoning + ' Let me know if I can help with a specific gate, staffing, recovery, or status update.',
+          title: 'Copy',
+          answer: `${li.reasoning ?? 'I hear you.'} ${contextNote}`,
           confidence: 'moderate',
-          bullets: [
-            'Try: "brief me" for a status update',
-            'Try: "what\'s happening at Delta" for gate detail',
-            'Try: "assign a team to Echo" for staffing',
-            'Try: "what\'s the play" for recovery options',
-          ],
+          bullets: [],
           assumptions: [],
           source: 'deterministic_operational_model',
         });
