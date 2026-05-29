@@ -42,11 +42,10 @@ export async function clearDemoData(): Promise<void> {
     await sb.from('rampiq_incidents').delete().neq('id', '');
     await sb.from('rampiq_events').delete().neq('id', '');
   }
-  // Also clear localStorage fallback data
+  // Also clear localStorage fallback data (must match store.ts LS_KEY)
   try {
-    localStorage.removeItem('soi_events');
-    localStorage.removeItem('soi_incidents');
-    localStorage.removeItem('soi_recovery_actions');
+    localStorage.removeItem('soi_events_v2');
+    localStorage.removeItem('rampiq_events_v2'); // legacy key
   } catch { /* SSR safe */ }
   console.log('[demo] cleared all data (Supabase + localStorage)');
 }

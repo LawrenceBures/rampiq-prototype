@@ -909,6 +909,19 @@ export default function ManagerDashboard() {
       }
     }
 
+    // A-2. Clear/reset command — wipe all demo data
+    if (/^(?:clear|reset|wipe|clear\s+all|reset\s+all|clear\s+data|start\s+fresh|clean\s+slate)$/i.test(raw.trim())) {
+      clearDemoData().then(() => {
+        refresh();
+        refreshIncidents();
+        setCopilotAnswer({ title: 'Cleared', answer: 'All operational data cleared. Starting fresh.', confidence: 'high', bullets: [], assumptions: [], source: 'deterministic_operational_model' });
+        setCommandResponse(null);
+        soiSpeak('Data cleared. Starting fresh.');
+      });
+      setCommandInput('');
+      return;
+    }
+
     // A-1. Agent selection mode — intercept number/name input
     if (agentSelection && agentSelection.phase === 'picking') {
       // Check if input looks like agent selection (numbers, names, or "assign")
@@ -3209,8 +3222,8 @@ export default function ManagerDashboard() {
               ));
             })()}
 
-            {/* Dev controls */}
-            <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', paddingTop: 12 }}>
+            {/* Dev controls — always visible at bottom of rail */}
+            <div style={{ marginTop: 'auto', display: 'flex', gap: 4, flexWrap: 'wrap', paddingTop: 12, position: 'sticky', bottom: 0, background: 'var(--bg)', paddingBottom: 4, zIndex: 2 }}>
               <button className="cta cta-ghost" style={{ padding: '6px 10px', fontSize: 9, borderRadius: 6 }} onClick={async () => {
                 const btn = document.activeElement as HTMLButtonElement;
                 if (btn) btn.textContent = 'Seeding...';
