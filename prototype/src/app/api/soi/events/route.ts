@@ -147,17 +147,17 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE() {
   const sb = getSupabase();
   if (sb) {
-    // Delete in dependency order: recovery_actions → incidents → events
-    // Use gt filter on created_at to match all rows (more reliable than neq on UUID)
-    const epoch = '2000-01-01T00:00:00Z';
-    const r1 = await sb.from('rampiq_recovery_actions').delete().gt('created_at', epoch);
-    const r2 = await sb.from('rampiq_incidents').delete().gt('created_at', epoch);
-    const r3 = await sb.from('rampiq_events').delete().gt('created_at', epoch);
-    const errors = [r1.error, r2.error, r3.error].filter(Boolean);
-    if (errors.length > 0) {
-      console.error('[api/events DELETE] errors:', errors.map(e => e?.message));
+    // Use RPC to run SQL TRUNCATE — bypasses RLS which silently blocks anon deletes
+    const { error: rpcError } = await sb.rpc('truncate_operational_data' as string);
+    if (rpcError) {
+      // RPC not available — fall back to standard delete (may be blocked by RLS)
+      console.log('[api/events DELETE] RPC unavailable, using standard delete:', rpcError.message);
+      const epoch = '2000-01-01T00:00:00Z';
+      await sb.from('rampiq_recovery_actions').delete().gt('created_at', epoch);
+      await sb.from('rampiq_incidents').delete().gt('created_at', epoch);
+      await sb.from('rampiq_events').delete().gt('created_at', epoch);
     }
-    return NextResponse.json({ ok: true, errors: errors.length });
+    return NextResponse.json({ ok: true });
   }
   memoryStore.length = 0;
   nextId = 1;

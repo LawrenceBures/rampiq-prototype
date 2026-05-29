@@ -49,9 +49,14 @@ export async function fetchEvents(filters?: {
   severity?: string;
   event_type?: string;
 }): Promise<SoiEvent[]> {
+  // Apply clear cutoff — ignore events before the last "clear" action
+  let cutoff: string | null = null;
+  try { cutoff = localStorage.getItem('soi_clear_cutoff'); } catch { /* SSR */ }
+
   const sb = getSupabase();
   if (sb) {
     let query = sb.from('rampiq_events').select('*').order('created_at', { ascending: false });
+    if (cutoff) query = query.gt('created_at', cutoff);
     if (filters?.station) query = query.eq('station', filters.station);
     if (filters?.status) query = query.eq('operational_status', filters.status);
     if (filters?.severity) query = query.eq('severity', filters.severity);

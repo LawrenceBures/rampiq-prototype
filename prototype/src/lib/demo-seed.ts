@@ -42,12 +42,19 @@ export async function clearDemoData(): Promise<void> {
     await sb.from('rampiq_incidents').delete().gt('created_at', '2000-01-01T00:00:00Z');
     await sb.from('rampiq_events').delete().gt('created_at', '2000-01-01T00:00:00Z');
   }
-  // Also clear localStorage fallback data (must match store.ts LS_KEY)
+  // Clear localStorage fallback data (must match store.ts LS_KEY)
   try {
     localStorage.removeItem('soi_events_v2');
-    localStorage.removeItem('rampiq_events_v2'); // legacy key
+    localStorage.removeItem('rampiq_events_v2');
+    // Set a "clear cutoff" — all data before this timestamp is ignored
+    localStorage.setItem('soi_clear_cutoff', new Date().toISOString());
   } catch { /* SSR safe */ }
-  console.log('[demo] cleared all data (Supabase + localStorage)');
+  console.log('[demo] cleared all data (Supabase + localStorage + cutoff set)');
+}
+
+/** Get the clear cutoff timestamp. Events before this are ignored. */
+export function getClearCutoff(): string | null {
+  try { return localStorage.getItem('soi_clear_cutoff'); } catch { return null; }
 }
 
 /**

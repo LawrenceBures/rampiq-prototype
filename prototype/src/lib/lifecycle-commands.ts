@@ -553,12 +553,17 @@ export async function fetchActiveIncidents(station?: string): Promise<Incident[]
   const sb = getSupabase();
   if (!sb) return [];
 
+  // Apply clear cutoff — ignore incidents before last "clear" action
+  let cutoff: string | null = null;
+  try { cutoff = typeof window !== 'undefined' ? localStorage.getItem('soi_clear_cutoff') : null; } catch { /* SSR */ }
+
   let query = sb
     .from('rampiq_incidents')
     .select('*')
     .not('status', 'in', '("RESOLVED","CLOSED")')
     .order('created_at', { ascending: false });
 
+  if (cutoff) query = query.gt('created_at', cutoff);
   if (station) query = query.eq('station', station);
 
   const { data, error } = await query;
@@ -589,11 +594,18 @@ export async function fetchRecoveryActions(incidentId: string): Promise<Recovery
   const sb = getSupabase();
   if (!sb) return [];
 
-  const { data, error } = await sb
+  let cutoff: string | null = null;
+  try { cutoff = typeof window !== 'undefined' ? localStorage.getItem('soi_clear_cutoff') : null; } catch { /* SSR */ }
+
+  let query = sb
     .from('rampiq_recovery_actions')
     .select('*')
     .eq('incident_id', incidentId)
     .order('created_at', { ascending: true });
+
+  if (cutoff) query = query.gt('created_at', cutoff);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('[lifecycle] fetchRecoveryActions error:', error.message);
